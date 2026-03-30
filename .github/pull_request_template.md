@@ -22,3 +22,9 @@ Closes #<!-- issue number -->
 ## 📝 ADR
 - [ ] No architecture decisions made
 - [ ] ADR written: `docs/adr/ADR-XXX.md`
+
+<!--
+## Bypass Reason
+(Delete this section unless using emergency:bypass label)
+(Explain why this PR must skip phase gate enforcement)
+-->

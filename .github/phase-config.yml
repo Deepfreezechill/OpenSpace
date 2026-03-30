@@ -1,0 +1,78 @@
+# Phase Gate Dependency Configuration
+# =====================================
+# This file defines the dependency graph between project phases.
+# Milestone names in GitHub MUST match the phase names here exactly.
+#
+# Enforcement workflow reads this file on every PR event.
+# Changes to this file require a PR (enforced by branch protection).
+#
+# Dependency Graph:
+#
+#                 P0 (Emergency Hardening)
+#                / \
+#               /   \
+#              v     v
+#   P1 (Foundation)  P2 (Smart Sandbox)
+#      |                  |
+#      v                  |
+#   P3 (store.py)         |
+#      |                  |
+#      v                  |
+#   P4 (tool+mcp)         |
+#      |                  |
+#      v                  v
+#      P5 (evolver+grounding) <--+
+#         |
+#         v
+#      P6 (Production Readiness)
+#         |
+#         v
+#      P7 (Enforcement & Launch)
+
+phases:
+  "Phase 0 — Emergency Hardening":
+    prerequisites: []
+    description: "Stop the bleeding — critical security, error handling, env hygiene"
+
+  "Phase 1 — Foundation Architecture":
+    prerequisites:
+      - "Phase 0 — Emergency Hardening"
+    description: "Hexagonal skeleton, DI container, type system, CI foundation"
+
+  "Phase 2 — Smart Sandbox":
+    prerequisites:
+      - "Phase 0 — Emergency Hardening"
+    description: "E2B integration, capability leases, 9-stage pre-execution pipeline"
+
+  "Phase 3 — Extract store.py":
+    prerequisites:
+      - "Phase 1 — Foundation Architecture"
+    description: "Decompose store.py god-class into 7 focused modules"
+
+  "Phase 4 — Extract tool_layer + mcp_server":
+    prerequisites:
+      - "Phase 3 — Extract store.py"
+    description: "Decompose tool_layer.py (6 modules) and mcp_server.py (5 modules)"
+
+  "Phase 5 — Extract evolver + grounding":
+    prerequisites:
+      - "Phase 2 — Smart Sandbox"
+      - "Phase 4 — Extract tool_layer + mcp_server"
+    description: "Decompose evolver.py (9 modules) and grounding_agent.py (8 modules)"
+
+  "Phase 6 — Production Readiness":
+    prerequisites:
+      - "Phase 5 — Extract evolver + grounding"
+    description: "Observability, SLOs, deployment architecture, DX polish"
+
+  "Phase 7 — Enforcement & Launch":
+    prerequisites:
+      - "Phase 6 — Production Readiness"
+    description: "Eight-eyes integration, SkillGuard, launch checklist"
+
+# Escape hatch configuration
+escape_hatch:
+  label: "emergency:bypass"
+  require_reason: true
+  reason_pattern: "## Bypass Reason"
+  min_reason_length: 10

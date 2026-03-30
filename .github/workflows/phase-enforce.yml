@@ -1,0 +1,424 @@
+# ============================================================================
+# Phase Gate Enforcement — Fail-Closed PR Merge Guard
+# ============================================================================
+#
+# PURPOSE: Block merges for PRs that reference issues in phases whose
+#          prerequisites are not yet complete. If this Action crashes or
+#          fails to report a status, the merge is BLOCKED (fail-closed).
+#
+# PATTERN LINEAGE:
+#   - eight-eyes/circuit_breaker.py  → retry + fail-closed design
+#   - squad-audit/squad-label-enforce.yml → structured PR comments
+#   - squad-audit/squad-promote.yml → prerequisite validation gates
+#
+# REQUIRED: Branch protection must require this check ("Phase Gate Enforcement")
+# ============================================================================
+
+name: Phase Gate Enforcement
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: write
+
+# Concurrency: cancel in-flight runs for the same PR
+concurrency:
+  group: phase-enforce-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  enforce:
+    name: "Phase Gate Enforcement"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (for phase-config.yml)
+        uses: actions/checkout@v4
+
+      - name: Install js-yaml
+        run: npm install js-yaml@4 --no-save --silent 2>/dev/null
+
+      - name: Load phase configuration
+        id: config
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const yaml = require('js-yaml');
+            const configPath = '.github/phase-config.yml';
+
+            if (!fs.existsSync(configPath)) {
+              core.setFailed('FAIL-CLOSED: .github/phase-config.yml not found. Cannot enforce phase gates.');
+              return;
+            }
+
+            try {
+              const raw = fs.readFileSync(configPath, 'utf8');
+              const config = yaml.load(raw);
+
+              // Validate structure
+              if (!config.phases || typeof config.phases !== 'object') {
+                core.setFailed('FAIL-CLOSED: phase-config.yml missing "phases" key.');
+                return;
+              }
+
+              // Check for circular dependencies
+              const visited = new Set();
+              const visiting = new Set();
+              function detectCycle(phase) {
+                if (visiting.has(phase)) return true;
+                if (visited.has(phase)) return false;
+                visiting.add(phase);
+                const prereqs = config.phases[phase]?.prerequisites || [];
+                for (const p of prereqs) {
+                  if (!config.phases[p]) {
+                    core.setFailed(`FAIL-CLOSED: Phase "${phase}" has unknown prerequisite "${p}"`);
+                    return true;
+                  }
+                  if (detectCycle(p)) return true;
+                }
+                visiting.delete(phase);
+                visited.add(phase);
+                return false;
+              }
+
+              for (const phase of Object.keys(config.phases)) {
+                if (detectCycle(phase)) {
+                  core.setFailed(`FAIL-CLOSED: Circular dependency detected involving "${phase}"`);
+                  return;
+                }
+              }
+
+              core.setOutput('config', JSON.stringify(config));
+              core.info('✅ Phase configuration loaded and validated');
+            } catch (err) {
+              core.setFailed(`FAIL-CLOSED: Failed to parse phase-config.yml: ${err.message}`);
+            }
+
+      - name: Enforce phase gates
+        if: steps.config.outputs.config
+        uses: actions/github-script@v7
+        env:
+          PHASE_CONFIG: ${{ steps.config.outputs.config }}
+        with:
+          script: |
+            // =================================================================
+            // ENFORCEMENT ENGINE — Fail-closed by design
+            // =================================================================
+            //
+            // If ANY step throws an unhandled exception, the Action fails,
+            // no status is reported, and the merge is blocked.
+            // This is intentional. We retry API calls, but logic errors = deny.
+            // =================================================================
+
+            const MAX_RETRIES = 3;
+            const RETRY_DELAYS = [1000, 3000, 5000]; // ms
+
+            // Retry wrapper (from eight-eyes circuit breaker pattern)
+            async function withRetry(fn, label) {
+              let lastErr;
+              for (let i = 0; i <= MAX_RETRIES; i++) {
+                try {
+                  return await fn();
+                } catch (err) {
+                  lastErr = err;
+                  if (i < MAX_RETRIES) {
+                    const delay = RETRY_DELAYS[i] || 5000;
+                    core.warning(`[retry ${i + 1}/${MAX_RETRIES}] ${label}: ${err.message} — retrying in ${delay}ms`);
+                    await new Promise(r => setTimeout(r, delay));
+                  }
+                }
+              }
+              throw new Error(`${label} failed after ${MAX_RETRIES} retries: ${lastErr.message}`);
+            }
+
+            // ---- Load config (via env to avoid string interpolation attacks) ----
+            const config = JSON.parse(process.env.PHASE_CONFIG);
+            const phaseConfig = config.phases;
+            const escapeHatch = config.escape_hatch || {};
+            const pr = context.payload.pull_request;
+            const prBody = (pr.body || '') + ' ' + (pr.title || '');
+
+            // Audit log accumulator
+            const audit = {
+              pr_number: pr.number,
+              pr_title: pr.title,
+              timestamp: new Date().toISOString(),
+              run_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              checks: [],
+              verdict: null,
+            };
+
+            function addCheck(name, passed, detail) {
+              const icon = passed ? '✅' : '❌';
+              audit.checks.push({ name, passed, detail, icon });
+              core.info(`${icon} ${name}: ${detail}`);
+            }
+
+            // ---- LAYER 4: Escape hatch (check first — may short-circuit) ----
+            const prLabels = pr.labels.map(l => l.name);
+            const bypassLabel = escapeHatch.label || 'emergency:bypass';
+            const hasBypassLabel = prLabels.includes(bypassLabel);
+
+            if (hasBypassLabel) {
+              const reasonPattern = escapeHatch.reason_pattern || '## Bypass Reason';
+              const reasonIdx = (pr.body || '').indexOf(reasonPattern);
+              if (reasonIdx === -1) {
+                addCheck('Emergency bypass', false, `Label \`${bypassLabel}\` present but no "${reasonPattern}" section in PR body. Both keys required.`);
+                // Don't short-circuit — fall through to fail
+              } else {
+                const reasonText = (pr.body || '').slice(reasonIdx + reasonPattern.length).trim().split('\n')[0];
+                if (!reasonText || reasonText.length < 10) {
+                  addCheck('Emergency bypass', false, 'Bypass reason too short (min 10 chars). Explain WHY this bypass is necessary.');
+                } else {
+                  addCheck('Emergency bypass', true, `OVERRIDE ACTIVE: "${reasonText.slice(0, 100)}"`);
+
+                  // Short-circuit: bypass granted
+                  audit.verdict = 'BYPASS';
+                  audit.bypass_reason = reasonText;
+
+                  const auditComment = formatAuditComment(audit);
+                  await postAuditComment(auditComment);
+                  core.warning(`⚠️ EMERGENCY BYPASS: ${reasonText.slice(0, 100)}`);
+                  return; // Exit with success
+                }
+              }
+            }
+
+            // ---- LAYER 1: Issue linkage ----
+            const issuePattern = /(?:closes?|fixes?|resolves?)\s+#(\d+)/gi;
+            const issueMatches = [...prBody.matchAll(issuePattern)];
+            const linkedIssueNumbers = [...new Set(issueMatches.map(m => parseInt(m[1])))];
+
+            if (linkedIssueNumbers.length === 0) {
+              addCheck('Issue linkage', false,
+                'No linked issues found. PR must contain "Closes #N", "Fixes #N", or "Resolves #N".');
+              audit.verdict = 'FAIL';
+              const auditComment = formatAuditComment(audit);
+              await postAuditComment(auditComment);
+              core.setFailed('Phase gate: No linked issues');
+              return;
+            }
+
+            addCheck('Issue linkage', true, `Linked issues: ${linkedIssueNumbers.map(n => '#' + n).join(', ')}`);
+
+            // ---- Fetch linked issues ----
+            const linkedIssues = [];
+            for (const num of linkedIssueNumbers) {
+              try {
+                const issue = await withRetry(() =>
+                  github.rest.issues.get({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: num,
+                  }),
+                  `Fetch issue #${num}`
+                );
+                linkedIssues.push(issue.data);
+              } catch (err) {
+                addCheck('Issue fetch', false, `Failed to fetch #${num}: ${err.message}`);
+              }
+            }
+
+            if (linkedIssues.length === 0) {
+              addCheck('Issue fetch', false, 'Could not fetch any linked issues');
+              audit.verdict = 'FAIL';
+              const auditComment = formatAuditComment(audit);
+              await postAuditComment(auditComment);
+              core.setFailed('Phase gate: Failed to fetch linked issues');
+              return;
+            }
+
+            // ---- LAYER 2: Milestone check ----
+            const issuesWithMilestones = linkedIssues.filter(i => i.milestone);
+            const issuesWithoutMilestones = linkedIssues.filter(i => !i.milestone);
+
+            if (issuesWithoutMilestones.length > 0) {
+              const nums = issuesWithoutMilestones.map(i => '#' + i.number).join(', ');
+              addCheck('Milestone assignment', false,
+                `Issues without milestones: ${nums}. Every issue must be in a phase milestone.`);
+              audit.verdict = 'FAIL';
+              const auditComment = formatAuditComment(audit);
+              await postAuditComment(auditComment);
+              core.setFailed(`Phase gate: Issues ${nums} have no milestone`);
+              return;
+            }
+
+            // Validate milestone names match config
+            const milestoneNames = [...new Set(issuesWithMilestones.map(i => i.milestone.title))];
+            const unknownMilestones = milestoneNames.filter(m => !phaseConfig[m]);
+
+            if (unknownMilestones.length > 0) {
+              addCheck('Milestone validation', false,
+                `Unknown milestones: ${unknownMilestones.join(', ')}. Must match a phase in phase-config.yml.`);
+              audit.verdict = 'FAIL';
+              const auditComment = formatAuditComment(audit);
+              await postAuditComment(auditComment);
+              core.setFailed(`Phase gate: Unknown milestones: ${unknownMilestones.join(', ')}`);
+              return;
+            }
+
+            addCheck('Milestone assignment', true, `All issues in known phases: ${milestoneNames.join(', ')}`);
+
+            // ---- LAYER 3: Phase prerequisite check ----
+            const allMilestones = await withRetry(() =>
+              github.rest.issues.listMilestones({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'all',
+                per_page: 100,
+              }),
+              'Fetch all milestones'
+            );
+
+            const milestoneMap = {};
+            for (const ms of allMilestones.data) {
+              milestoneMap[ms.title] = ms;
+            }
+
+            let allPrereqsMet = true;
+            const prereqDetails = [];
+
+            for (const phaseName of milestoneNames) {
+              const phase = phaseConfig[phaseName];
+              const prereqs = phase.prerequisites || [];
+
+              if (prereqs.length === 0) {
+                prereqDetails.push(`**${phaseName}**: No prerequisites (✅)`);
+                continue;
+              }
+
+              for (const prereqName of prereqs) {
+                const prereqMs = milestoneMap[prereqName];
+
+                if (!prereqMs) {
+                  prereqDetails.push(`**${prereqName}**: Milestone not found (❌)`);
+                  allPrereqsMet = false;
+                  continue;
+                }
+
+                const total = prereqMs.open_issues + prereqMs.closed_issues;
+                if (total === 0) {
+                  prereqDetails.push(`**${prereqName}**: Empty milestone — no tasks defined (❌)`);
+                  allPrereqsMet = false;
+                  continue;
+                }
+
+                if (prereqMs.open_issues > 0) {
+                  const pct = Math.round((prereqMs.closed_issues / total) * 100);
+                  prereqDetails.push(
+                    `**${prereqName}**: ${prereqMs.open_issues} open of ${total} (${pct}% done) (❌)`
+                  );
+                  allPrereqsMet = false;
+                } else {
+                  prereqDetails.push(`**${prereqName}**: ${total}/${total} complete (✅)`);
+                }
+              }
+            }
+
+            addCheck('Phase prerequisites', allPrereqsMet,
+              prereqDetails.join(' | '));
+
+            // ---- VERDICT ----
+            if (allPrereqsMet) {
+              audit.verdict = 'PASS';
+              const auditComment = formatAuditComment(audit);
+              await postAuditComment(auditComment);
+              core.info('✅ Phase gate: All prerequisites met. Merge allowed.');
+            } else {
+              audit.verdict = 'FAIL';
+              const auditComment = formatAuditComment(audit);
+              await postAuditComment(auditComment);
+              core.setFailed('Phase gate: Prerequisites not met. See PR comment for details.');
+            }
+
+            // ---- AUDIT HELPERS ----
+
+            function formatAuditComment(audit) {
+              const icon = audit.verdict === 'PASS' ? '✅' :
+                           audit.verdict === 'BYPASS' ? '⚠️' : '🚫';
+              const color = audit.verdict === 'PASS' ? 'green' :
+                            audit.verdict === 'BYPASS' ? 'orange' : 'red';
+
+              let body = `## 🔒 Phase Gate Enforcement — ${icon} ${audit.verdict}\n\n`;
+              body += `| Check | Result | Detail |\n|-------|--------|--------|\n`;
+
+              for (const check of audit.checks) {
+                const detail = check.detail.length > 120
+                  ? check.detail.slice(0, 117) + '...'
+                  : check.detail;
+                body += `| ${check.name} | ${check.icon} | ${detail} |\n`;
+              }
+
+              body += `\n**Verdict:** ${audit.verdict}`;
+              if (audit.bypass_reason) {
+                body += ` — Reason: "${audit.bypass_reason.slice(0, 200)}"`;
+              }
+              body += `\n**Timestamp:** ${audit.timestamp}`;
+              body += `\n**Run:** [View workflow run](${audit.run_url})`;
+
+              if (audit.verdict === 'FAIL') {
+                body += `\n\n---\n`;
+                body += `> **How to fix:** Ensure all prerequisite phases are complete, `;
+                body += `or add \`emergency:bypass\` label with a \`## Bypass Reason\` section in the PR body.\n`;
+              }
+
+              if (audit.verdict === 'BYPASS') {
+                body += `\n\n---\n`;
+                body += `> ⚠️ **This merge bypassed phase gate enforcement.** `;
+                body += `The bypass reason has been recorded for audit purposes.\n`;
+              }
+
+              return body;
+            }
+
+            async function postAuditComment(body) {
+              // Find existing enforcement comment and update it (don't spam)
+              const marker = '## 🔒 Phase Gate Enforcement';
+              try {
+                const comments = await withRetry(() =>
+                  github.rest.issues.listComments({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: pr.number,
+                    per_page: 100,
+                  }),
+                  'Fetch PR comments'
+                );
+
+                const existing = comments.data.find(c =>
+                  c.user.login === 'github-actions[bot]' &&
+                  c.body.startsWith(marker)
+                );
+
+                if (existing) {
+                  await withRetry(() =>
+                    github.rest.issues.updateComment({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      comment_id: existing.id,
+                      body: body,
+                    }),
+                    'Update audit comment'
+                  );
+                } else {
+                  await withRetry(() =>
+                    github.rest.issues.createComment({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: pr.number,
+                      body: body,
+                    }),
+                    'Create audit comment'
+                  );
+                }
+              } catch (err) {
+                // Audit comment failure does NOT block the enforcement decision.
+                // The status check result is what matters for merge blocking.
+                core.warning(`Failed to post audit comment: ${err.message}`);
+              }
+            }
