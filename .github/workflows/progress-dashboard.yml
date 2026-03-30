@@ -1,0 +1,89 @@
+name: Progress Dashboard
+on:
+  schedule:
+    - cron: '0 8 * * 1,4'  # Monday & Thursday at 8 AM UTC
+  workflow_dispatch:
+
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate progress report
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const milestones = await github.rest.issues.listMilestones({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'all',
+              sort: 'created',
+              direction: 'asc'
+            });
+
+            let totalOpen = 0, totalClosed = 0;
+            let phaseLines = [];
+
+            for (const ms of milestones.data) {
+              const total = ms.open_issues + ms.closed_issues;
+              if (total === 0) continue;
+              const pct = Math.round((ms.closed_issues / total) * 100);
+              totalOpen += ms.open_issues;
+              totalClosed += ms.closed_issues;
+
+              const bar = '█'.repeat(Math.floor(pct / 5)) + '░'.repeat(20 - Math.floor(pct / 5));
+              const status = ms.open_issues === 0 ? '✅ DONE' : `⏳ ${ms.open_issues} left`;
+              phaseLines.push(`| ${ms.title} | ${bar} ${pct}% | ${ms.closed_issues}/${total} | ${status} |`);
+            }
+
+            const grandTotal = totalOpen + totalClosed;
+            const overallPct = grandTotal > 0 ? Math.round((totalClosed / grandTotal) * 100) : 0;
+            const overallBar = '█'.repeat(Math.floor(overallPct / 5)) + '░'.repeat(20 - Math.floor(overallPct / 5));
+
+            const report = `# 📊 OpenSpace Upgrade — Progress Dashboard
+
+> Auto-generated: ${new Date().toISOString().split('T')[0]} | [View Project Board](https://github.com/users/Deepfreezechill/projects/1)
+
+## Overall: ${overallPct}% Complete
+\`\`\`
+${overallBar} ${overallPct}%  (${totalClosed}/${grandTotal} tasks)
+\`\`\`
+
+## Phase Breakdown
+| Phase | Progress | Done/Total | Status |
+|-------|----------|------------|--------|
+${phaseLines.join('\n')}
+
+## Velocity
+- **This week:** Check [closed issues](https://github.com/${context.repo.owner}/${context.repo.repo}/issues?q=is%3Aclosed+sort%3Aupdated-desc)
+- **Target:** ~12-15 tasks/week for 6-month completion
+
+---
+*Updated automatically Mon & Thu. Run manually: Actions → Progress Dashboard → Run workflow*`;
+
+            // Find or create the dashboard issue
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'dashboard',
+              state: 'open'
+            });
+
+            if (existing.data.length > 0) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body: report
+              });
+              console.log(`Updated dashboard issue #${existing.data[0].number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '📊 Project Progress Dashboard',
+                body: report,
+                labels: ['dashboard']
+              });
+              // Pin it
+              console.log(`Created dashboard issue #${created.data.number}`);
+            }
