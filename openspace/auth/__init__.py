@@ -1,0 +1,1 @@
+"""OpenSpace authentication module."""

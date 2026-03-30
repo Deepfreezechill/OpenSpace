@@ -848,18 +848,80 @@ async def upload_skill(
         return _json_error(e, status="error", traceback=traceback.format_exc(limit=5))
 
 def run_mcp_server() -> None:
-    """Console-script entry point for ``openspace-mcp``."""
+    """Console-script entry point for ``openspace-mcp``.
+
+    For HTTP transports (SSE, streamable-http), bearer token auth is
+    REQUIRED.  Set OPENSPACE_MCP_BEARER_TOKEN in the environment.
+    The server refuses to start without it (fail-closed).
+
+    For stdio transport, auth is not applicable (local process IPC).
+    """
     import argparse
 
+    import uvicorn
+
+    from openspace.auth.bearer import (
+        BEARER_TOKEN_ENV,
+        BearerTokenMiddleware,
+        get_bearer_token,
+        validate_token_strength,
+    )
+
     parser = argparse.ArgumentParser(description="OpenSpace MCP Server")
-    parser.add_argument("--transport", choices=["stdio", "sse"], default="stdio")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse", "streamable-http"],
+        default="stdio",
+    )
     parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--host", type=str, default="127.0.0.1")
     args = parser.parse_args()
 
-    if args.transport == "sse":
-        mcp.run(transport="sse", sse_params={"port": args.port})
-    else:
+    if args.transport == "stdio":
         mcp.run(transport="stdio")
+        return
+
+    # --- HTTP transports: enforce bearer token auth (fail-closed) ---
+    token = get_bearer_token()
+    if not token:
+        logger.critical(
+            "FAIL-CLOSED: %s not set. Refusing to start %s transport "
+            "without authentication. Set the environment variable or "
+            "use --transport stdio for local-only access.",
+            BEARER_TOKEN_ENV,
+            args.transport,
+        )
+        sys.exit(1)
+
+    token_ok, reason = validate_token_strength(token)
+    if not token_ok:
+        logger.critical("FAIL-CLOSED: %s — %s", BEARER_TOKEN_ENV, reason)
+        sys.exit(1)
+
+    if args.transport == "sse":
+        starlette_app = mcp.sse_app()
+    else:
+        starlette_app = mcp.streamable_http_app()
+
+    authed_app = BearerTokenMiddleware(starlette_app, token)
+
+    logger.info(
+        "Starting MCP server with bearer auth on %s:%d (%s transport)",
+        args.host,
+        args.port,
+        args.transport,
+    )
+
+    config = uvicorn.Config(
+        authed_app,
+        host=args.host,
+        port=args.port,
+        log_level="info",
+    )
+    server = uvicorn.Server(config)
+    import anyio
+
+    anyio.run(server.serve)
 
 
 if __name__ == "__main__":
