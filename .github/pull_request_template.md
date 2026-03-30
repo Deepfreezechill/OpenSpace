@@ -24,7 +24,9 @@ Closes #<!-- issue number -->
 - [ ] ADR written: `docs/adr/ADR-XXX.md`
 
 <!--
-## Bypass Reason
-(Delete this section unless using emergency:bypass label)
-(Explain why this PR must skip phase gate enforcement)
+To use emergency bypass: uncomment the section below, fill in the reason,
+and add the `emergency:bypass` label. Reason must be 30+ characters.
+
+## ⚠️ Bypass Reason
+(Explain why this PR must skip phase gate enforcement — minimum 30 characters)
 -->

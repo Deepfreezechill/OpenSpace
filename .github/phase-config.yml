@@ -74,5 +74,8 @@ phases:
 escape_hatch:
   label: "emergency:bypass"
   require_reason: true
-  reason_pattern: "## Bypass Reason"
-  min_reason_length: 10
+  reason_pattern: "## ⚠️ Bypass Reason"
+  min_reason_length: 30
+  # Only these GitHub usernames can invoke emergency bypass
+  allowed_actors:
+    - "Deepfreezechill"

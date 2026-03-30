@@ -35,10 +35,10 @@ jobs:
 
             // Extract bypass reason from PR body
             const body = pr.body || '';
-            const reasonIdx = body.indexOf('## Bypass Reason');
+            const reasonIdx = body.indexOf('## ⚠️ Bypass Reason');
             let reason = '(No reason provided)';
             if (reasonIdx !== -1) {
-              reason = body.slice(reasonIdx + '## Bypass Reason'.length).trim().split('\n')[0];
+              reason = body.slice(reasonIdx + '## ⚠️ Bypass Reason'.length).trim().split('\n')[0];
             }
 
             // Create audit issue

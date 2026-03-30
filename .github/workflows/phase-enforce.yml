@@ -36,8 +36,10 @@ jobs:
     name: "Phase Gate Enforcement"
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (for phase-config.yml)
+      - name: Checkout BASE branch (not PR — prevents self-modification attack)
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
 
       - name: Install js-yaml
         run: npm install js-yaml@4 --no-save --silent 2>/dev/null
@@ -165,26 +167,39 @@ jobs:
             const hasBypassLabel = prLabels.includes(bypassLabel);
 
             if (hasBypassLabel) {
-              const reasonPattern = escapeHatch.reason_pattern || '## Bypass Reason';
-              const reasonIdx = (pr.body || '').indexOf(reasonPattern);
-              if (reasonIdx === -1) {
-                addCheck('Emergency bypass', false, `Label \`${bypassLabel}\` present but no "${reasonPattern}" section in PR body. Both keys required.`);
-                // Don't short-circuit — fall through to fail
+              // KEY 1: Actor must be in allowlist
+              const allowedActors = escapeHatch.allowed_actors || [];
+              const actor = context.actor;
+              if (allowedActors.length > 0 && !allowedActors.includes(actor)) {
+                addCheck('Emergency bypass', false, `Actor @${actor} is not authorized to invoke bypass. Allowed: ${allowedActors.join(', ')}`);
+                // Fall through to normal enforcement (deny)
               } else {
-                const reasonText = (pr.body || '').slice(reasonIdx + reasonPattern.length).trim().split('\n')[0];
-                if (!reasonText || reasonText.length < 10) {
-                  addCheck('Emergency bypass', false, 'Bypass reason too short (min 10 chars). Explain WHY this bypass is necessary.');
+                // KEY 2: Reason pattern must be present (not inside HTML comments)
+                const reasonPattern = escapeHatch.reason_pattern || '## ⚠️ Bypass Reason';
+                const minLength = escapeHatch.min_reason_length || 30;
+                // Strip HTML comments before searching to prevent template placeholder match
+                const bodyNoComments = (pr.body || '').replace(/<!--[\s\S]*?-->/g, '');
+                const reasonIdx = bodyNoComments.indexOf(reasonPattern);
+                if (reasonIdx === -1) {
+                  addCheck('Emergency bypass', false, `Label \`${bypassLabel}\` present but no "${reasonPattern}" section in PR body (outside HTML comments). Both keys required.`);
+                  // Don't short-circuit — fall through to fail
                 } else {
-                  addCheck('Emergency bypass', true, `OVERRIDE ACTIVE: "${reasonText.slice(0, 100)}"`);
+                  const reasonText = bodyNoComments.slice(reasonIdx + reasonPattern.length).trim().split('\n')[0];
+                  if (!reasonText || reasonText.length < minLength) {
+                    addCheck('Emergency bypass', false, `Bypass reason too short (${(reasonText || '').length}/${minLength} chars). Explain WHY this bypass is necessary.`);
+                  } else {
+                    addCheck('Emergency bypass', true, `OVERRIDE by @${actor}: "${reasonText.slice(0, 100)}"`);
 
-                  // Short-circuit: bypass granted
-                  audit.verdict = 'BYPASS';
-                  audit.bypass_reason = reasonText;
+                    // Short-circuit: bypass granted
+                    audit.verdict = 'BYPASS';
+                    audit.bypass_reason = reasonText;
+                    audit.bypass_actor = actor;
 
-                  const auditComment = formatAuditComment(audit);
-                  await postAuditComment(auditComment);
-                  core.warning(`⚠️ EMERGENCY BYPASS: ${reasonText.slice(0, 100)}`);
-                  return; // Exit with success
+                    const auditComment = formatAuditComment(audit);
+                    await postAuditComment(auditComment);
+                    core.warning(`⚠️ EMERGENCY BYPASS by @${actor}: ${reasonText.slice(0, 100)}`);
+                    return; // Exit with success
+                  }
                 }
               }
             }
