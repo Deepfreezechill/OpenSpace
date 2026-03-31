@@ -197,6 +197,20 @@ def _get_store():
     return _standalone_store
 
 
+def _is_auto_import_enabled() -> bool:
+    """Check whether cloud auto-import is enabled in SkillConfig.
+
+    Returns ``False`` (safe default) if the config is unavailable or the
+    flag is not explicitly set to ``True``.  This ensures that untrusted
+    cloud skills are never imported without an explicit opt-in.
+    """
+    if _openspace_instance and _openspace_instance.is_initialized():
+        gc = getattr(_openspace_instance, "_grounding_config", None)
+        if gc and gc.skills:
+            return gc.skills.auto_import_enabled
+    return False
+
+
 def _get_cloud_client():
     """Get a OpenSpaceClient instance (raises CloudError if not configured)."""
     from openspace.cloud.auth import get_openspace_auth
@@ -320,7 +334,14 @@ async def _cloud_search_and_import(task: str, limit: int = 8) -> List[Dict[str, 
     that stage 2 has a larger pool to choose from.  The two BM25 passes
     are NOT redundant — stage 1 filters thousands of cloud candidates down
     to a manageable import set; stage 2 makes the final task-specific choice.
+
+    Returns an empty list immediately when ``auto_import_enabled`` is
+    ``False`` (the default) — untrusted cloud code is never imported
+    without an explicit opt-in.
     """
+    if not _is_auto_import_enabled():
+        logger.debug("Cloud auto-import is disabled (auto_import_enabled=False)")
+        return []
     try:
         from openspace.cloud.search import (
             SkillSearchEngine, build_cloud_candidates,
@@ -380,7 +401,12 @@ async def _cloud_search_and_import(task: str, limit: int = 8) -> List[Dict[str, 
 
 
 async def _do_import_cloud_skill(skill_id: str, target_dir: Optional[str] = None) -> Dict[str, Any]:
-    """Download a cloud skill and register it locally."""
+    """Download a cloud skill and register it locally.
+
+    Refuses to proceed when ``auto_import_enabled`` is ``False``.
+    """
+    if not _is_auto_import_enabled():
+        return {"status": "blocked", "reason": "auto_import_enabled is False"}
     client = _get_cloud_client()
 
     if target_dir:
@@ -622,7 +648,7 @@ async def search_skills(
 
         _AUTO_IMPORT_MAX = 3
         import_summary: List[Dict[str, Any]] = []
-        if auto_import:
+        if auto_import and _is_auto_import_enabled():
             cloud_results = [
                 r for r in results
                 if r.get("source") == "cloud"

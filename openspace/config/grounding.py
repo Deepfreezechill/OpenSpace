@@ -221,6 +221,14 @@ class SkillConfig(BaseModel):
         2, ge=1, le=20,
         description="Maximum number of skills to inject per task"
     )
+    auto_import_enabled: bool = Field(
+        False,
+        description=(
+            "Allow automatic import of cloud skills. "
+            "Disabled by default — importing untrusted code is a "
+            "supply-chain risk until a trust-tier system is in place."
+        ),
+    )
 
 
 class GroundingConfig(BaseModel):
