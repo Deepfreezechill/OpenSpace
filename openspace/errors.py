@@ -116,6 +116,11 @@ def handle_mcp_exception(
 ) -> str:
     """One-liner for MCP except blocks: log full traceback, return safe JSON.
 
+    For :class:`~openspace.domain.exceptions.OpenSpaceError` instances,
+    uses ``client_message`` (never the raw message) and ``error_code``
+    from the exception.  For all other exceptions, sanitizes via
+    :func:`sanitize_error`.
+
     Usage::
 
         except Exception as e:
@@ -130,5 +135,21 @@ def handle_mcp_exception(
         exc,
         exc_info=True,
     )
+
+    # Prefer domain exception's safe client_message when available
+    try:
+        from openspace.domain.exceptions import OpenSpaceError as _OSE
+        from openspace.domain.exceptions import map_to_mcp_error_code
+
+        if isinstance(exc, _OSE):
+            safe_msg = exc.client_message
+            error_code = exc.error_code
+            return safe_error_response(error_code, safe_msg, correlation_id=cid)
+
+        # Use centralized mapping for builtin exceptions too
+        error_code = map_to_mcp_error_code(exc)
+    except ImportError:
+        pass
+
     safe_msg = sanitize_error(exc)
     return safe_error_response(error_code, safe_msg, correlation_id=cid)
