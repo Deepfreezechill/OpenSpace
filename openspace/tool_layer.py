@@ -16,6 +16,7 @@ from openspace.recording import RecordingManager
 from openspace.skill_engine import SkillRegistry, ExecutionAnalyzer, SkillStore
 from openspace.skill_engine.evolver import SkillEvolver
 from openspace.utils.logging import Logger
+from openspace.app.container import AppContainer
 
 logger = Logger.get_logger(__name__)
 
@@ -76,8 +77,48 @@ class OpenSpaceConfig:
 
 
 class OpenSpace:
-    def __init__(self, config: Optional[OpenSpaceConfig] = None):
+    """High-level SkillGuard orchestration facade.
+
+    Supports two creation paths:
+
+    **Legacy** (backward-compatible)::
+
+        cs = OpenSpace(config=OpenSpaceConfig(...))
+        await cs.initialize()
+
+    **Container-based** (Phase 1 seam — Phase 4 wires initialize)::
+
+        container = await build_container(config, llm=..., ...)
+        cs = OpenSpace.from_container(container, config=config)
+        await cs.initialize()  # still constructs services internally
+
+    .. warning::
+
+        In Phase 1, ``initialize()`` does **not** resolve services from
+        the container.  The container is stored for use by callers that
+        need typed access (via public properties) and will be fully
+        wired in Phase 4.  Do **not** assume that injecting services
+        into the container enforces them at runtime until Phase 4.
+
+    Parameters
+    ----------
+    config:
+        Application config.  Defaults to ``OpenSpaceConfig()``.
+    container:
+        Optional :class:`AppContainer`.  In Phase 1 the container is
+        stored for property access only — ``initialize()`` still
+        constructs services internally.  Phase 4 will wire
+        ``initialize()`` to resolve services from the container.
+    """
+
+    def __init__(
+        self,
+        config: Optional[OpenSpaceConfig] = None,
+        *,
+        container: Optional[AppContainer] = None,
+    ):
         self.config = config or OpenSpaceConfig()
+        self._container = container or AppContainer()
         
         self._llm_client: Optional[LLMClient] = None
         self._grounding_client: Optional[GroundingClient] = None
@@ -97,6 +138,62 @@ class OpenSpace:
         self._task_done.set()  # Initially not running, so "done"
         
         logger.debug("OpenSpace instance created")
+
+    # ── Factory methods ───────────────────────────────────────────────
+
+    @classmethod
+    def from_container(
+        cls,
+        container: AppContainer,
+        config: Optional[OpenSpaceConfig] = None,
+    ) -> "OpenSpace":
+        """Create an OpenSpace instance backed by an AppContainer.
+
+        .. note::
+
+            Phase 1 only stores the container for property access.
+            ``initialize()`` still constructs its own services.
+            Phase 4 will wire ``initialize()`` to resolve from the
+            container, making injected services authoritative.
+        """
+        return cls(config=config, container=container)
+
+    # ── Public property accessors (replace private field access) ──────
+
+    @property
+    def container(self) -> AppContainer:
+        """The underlying :class:`AppContainer`."""
+        return self._container
+
+    @property
+    def llm_client(self) -> Optional[LLMClient]:
+        """The LLM client, or ``None`` if not initialized."""
+        return self._llm_client
+
+    @property
+    def grounding_client(self) -> Optional[GroundingClient]:
+        """The grounding client, or ``None`` if not initialized."""
+        return self._grounding_client
+
+    @property
+    def grounding_config(self) -> Any:
+        """The grounding configuration object."""
+        return self._grounding_config
+
+    @property
+    def skill_registry(self) -> Optional[SkillRegistry]:
+        """The skill registry, or ``None`` if skills are disabled."""
+        return self._skill_registry
+
+    @property
+    def skill_store(self) -> Optional[SkillStore]:
+        """The skill persistence store, or ``None`` if not initialized."""
+        return self._skill_store
+
+    @property
+    def skill_evolver(self) -> Optional[SkillEvolver]:
+        """The skill evolution engine, or ``None`` if not initialized."""
+        return self._skill_evolver
     
     async def initialize(self) -> None:
         if self._initialized:
