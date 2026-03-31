@@ -308,7 +308,7 @@ class CapabilityLeaseResolverPort(Protocol):
         self,
         capability: str,
         *,
-        trust_tier: str = "basic",
+        trust_tier: str = "T1",
         ttl_seconds: int = 300,
     ) -> Optional[CapabilityLease]: ...
 
@@ -316,7 +316,7 @@ class CapabilityLeaseResolverPort(Protocol):
 
     async def validate(self, lease_id: str) -> bool: ...
 
-    def list_active(self, *, granted_to: Optional[str] = None) -> List[CapabilityLease]: ...
+    async def list_active(self, *, granted_to: Optional[str] = None) -> List[CapabilityLease]: ...
 
 
 __all__ = [
