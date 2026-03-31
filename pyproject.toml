@@ -15,48 +15,47 @@ authors = [
 
 dependencies = [
     "litellm>=1.70.0,<1.82.7",  # pinned to avoid PYSEC-2026-2 supply-chain compromise (1.82.7/1.82.8 were malicious)
-    "python-dotenv>=1.0.0",
-    "openai>=1.0.0",
-    "jsonschema>=4.25.0",
-    "mcp>=1.0.0",
-    "anthropic>=0.71.0",
-    "pillow>=12.0.0",
-    "numpy>=1.24.0",
-    "colorama>=0.4.6",
-    "flask>=3.1.0",
-    "pyautogui>=0.9.54",
-    "pydantic>=2.12.0",
-    "requests>=2.32.0",
+    "python-dotenv>=1.0.0,<2",
+    "openai>=1.0.0,<3",
+    "jsonschema>=4.25.0,<5",
+    "mcp>=1.0.0,<2",
+    "anthropic>=0.71.0,<1",
+    "pillow>=11.0.0,<13",
+    "numpy>=1.24.0,<3",
+    "colorama>=0.4.6,<1",
+    "flask>=3.1.0,<4",
+    "pyautogui>=0.9.54,<1",
+    "pydantic>=2.12.0,<3",
+    "requests>=2.32.0,<3",
 ]
 
 [project.optional-dependencies]
 macos = [
-    "pyobjc-core>=12.0",
-    "pyobjc-framework-cocoa>=12.0",
-    "pyobjc-framework-quartz>=12.0",
-    "atomacos>=3.2.0",
+    "pyobjc-core>=12.0,<13",
+    "pyobjc-framework-cocoa>=12.0,<13",
+    "pyobjc-framework-quartz>=12.0,<13",
+    "atomacos>=3.2.0,<4",
 ]
 
 linux = [
-    "python-xlib>=0.33",
-    "pyatspi>=2.38.0",
-    "numpy>=1.24.0",
+    "python-xlib>=0.33,<1",
+    "pyatspi>=2.38.0,<3",
+    "numpy>=1.24.0,<3",
 ]
 
 windows = [
-    "pywinauto>=0.6.8",
-    "pywin32>=306",
-    "PyGetWindow>=0.0.9",
+    "pywinauto>=0.6.8,<1",
+    "pywin32>=306,<400",
+    "PyGetWindow>=0.0.9,<1",
 ]
 
 dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-timeout>=2.2.0",
-    "pytest-cov>=4.0.0",
-    "black>=23.0.0",
-    "flake8>=6.0.0",
-    "mypy>=1.0.0",
+    "pytest>=7.0.0,<10",
+    "pytest-asyncio>=0.21.0,<2",
+    "pytest-timeout>=2.2.0,<3",
+    "pytest-cov>=4.0.0,<8",
+    "ruff>=0.5.0,<1",
+    "mypy>=1.0.0,<2",
 ]
 
 all = [

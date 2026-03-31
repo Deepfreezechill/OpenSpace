@@ -75,3 +75,22 @@ jobs:
 
       - name: Run mypy
         run: mypy openspace/ --ignore-missing-imports
+
+  dependency-audit:
+    name: Dependency Audit (pip-audit)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@28f21682f6f6fde8a77ac25de0efcc18b57a0971 # v5
+        with:
+          python-version: "3.13"
+
+      - name: Install pip-audit
+        run: pip install "pip-audit>=2.7.0,<3"
+
+      - name: Audit dependencies
+        run: |
+          pip install -e ".[dev]" --quiet
+          pip-audit --strict --desc on
