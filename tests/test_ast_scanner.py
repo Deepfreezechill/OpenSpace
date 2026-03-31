@@ -186,10 +186,11 @@ class TestSeverityLevels:
         hits = [f for f in findings if f.pattern_name == "socket_import"]
         assert all(f.severity == Severity.HIGH for f in hits)
 
-    def test_env_access_is_medium(self):
+    def test_env_access_is_high(self):
+        """Upgraded to HIGH in EPIC 0.3b (secret isolation)."""
         findings = scan_code("import os\nos.environ")
         hits = [f for f in findings if f.pattern_name == "env_access"]
-        assert all(f.severity == Severity.MEDIUM for f in hits)
+        assert all(f.severity == Severity.HIGH for f in hits)
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +267,7 @@ class TestCheckCodeSafety:
 
     def test_medium_only_allowed(self):
         """MEDIUM-severity findings do NOT block execution."""
-        is_safe, findings = check_code_safety("import os\nos.environ")
+        is_safe, findings = check_code_safety("getattr(os, 'path')")
         assert is_safe is True
 
     def test_multiple_findings_returned(self):

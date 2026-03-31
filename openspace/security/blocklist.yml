@@ -89,17 +89,24 @@ patterns:
 
   - name: env_access
     description: "Environment variable access may leak secrets"
-    severity: MEDIUM
+    severity: HIGH
     ast_type: Attribute
     targets:
       - os.environ
 
   - name: env_getenv
     description: "os.getenv() may leak secret environment variables"
-    severity: MEDIUM
+    severity: HIGH
     ast_type: Call
     targets:
       - os.getenv
+
+  - name: env_environ_get
+    description: "os.environ.get() may leak secret environment variables"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - os.environ.get
 
   - name: sensitive_file_open
     description: "Opening /proc or /etc files may leak system information"
