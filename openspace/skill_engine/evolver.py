@@ -228,12 +228,6 @@ class SkillEvolver:
         The global semaphore is NOT acquired here — it is managed at the
         trigger-method level so the concurrency limit covers the whole batch.
         """
-        try:
-            from gdpval_bench.token_tracker import set_call_source, reset_call_source
-            _src_tok = set_call_source("evolver")
-        except ImportError:
-            _src_tok = None
-
         evo_type = ctx.suggestion.evolution_type
         try:
             if evo_type == EvolutionType.FIX:
@@ -249,9 +243,6 @@ class SkillEvolver:
             targets = "+".join(ctx.suggestion.target_skill_ids) or "(new)"
             logger.error(f"Evolution failed [{evo_type.value}] target={targets}: {e}")
             return None
-        finally:
-            if _src_tok is not None:
-                reset_call_source(_src_tok)
 
     # Trigger 1: post-analysis
     async def process_analysis(
@@ -577,12 +568,6 @@ class SkillEvolver:
         The confirmation prompt and response are recorded to
         ``conversations.jsonl`` under agent_name="SkillEvolver.confirm".
         """
-        try:
-            from gdpval_bench.token_tracker import set_call_source, reset_call_source
-            _src_tok = set_call_source("evolver")
-        except ImportError:
-            _src_tok = None
-
         from openspace.recording import RecordingManager
 
         analysis_ctx = self._format_analysis_context(recent_analyses)
@@ -633,9 +618,6 @@ class SkillEvolver:
         except Exception as e:
             logger.warning(f"LLM confirmation failed, defaulting to skip: {e}")
             return False
-        finally:
-            if _src_tok is not None:
-                reset_call_source(_src_tok)
 
     @staticmethod
     def _parse_confirmation(response: str) -> bool:

@@ -299,16 +299,8 @@ class ToolQualityManager:
         """
         Evaluate tool description quality using LLM.
         """
-        try:
-            from gdpval_bench.token_tracker import set_call_source, reset_call_source
-            _src_tok = set_call_source("quality")
-        except ImportError:
-            _src_tok = None
-
         if not self._llm_client:
             logger.debug("LLM client not available for description evaluation")
-            if _src_tok is not None:
-                reset_call_source(_src_tok)
             return None
         
         record = self.get_record(tool)
@@ -473,9 +465,6 @@ Respond with JSON only:
         except Exception as e:
             logger.error(f"Description evaluation failed for {tool.name}: {e}")
             return None
-        finally:
-            if _src_tok is not None:
-                reset_call_source(_src_tok)
 
     # Quality-Aware Ranking
     def adjust_ranking(

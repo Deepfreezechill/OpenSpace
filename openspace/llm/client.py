@@ -202,12 +202,6 @@ async def _summarize_tool_result(
 ) -> str:
     """Use LLM to summarize large tool results."""
     try:
-        from gdpval_bench.token_tracker import set_call_source, reset_call_source
-        _src_tok = set_call_source("summarizer")
-    except ImportError:
-        _src_tok = None
-
-    try:
         logger.info(f"Summarizing tool result from '{tool_name}': {len(content):,} chars")
         
         # Pre-truncate if content is too large for the model (leave room for prompt + output)
@@ -252,9 +246,6 @@ Concise summary:"""
     except Exception as e:
         logger.warning(f"Summarization failed for '{tool_name}': {e}")
         return None
-    finally:
-        if _src_tok is not None:
-            reset_call_source(_src_tok)
 
 
 async def _tool_result_to_message_async(
