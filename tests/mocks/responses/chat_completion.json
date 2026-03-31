@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-mock-001",
+  "object": "chat.completion",
+  "created": 1700000000,
+  "model": "mock-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "This is a deterministic mock response."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 8,
+    "total_tokens": 18
+  }
+}

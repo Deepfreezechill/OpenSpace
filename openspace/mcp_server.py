@@ -22,7 +22,6 @@ import json
 import logging
 import os
 import sys
-import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -476,8 +475,10 @@ def _json_ok(data: Any) -> str:
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 
-def _json_error(error: Any, **extra) -> str:
-    return json.dumps({"error": str(error), **extra}, ensure_ascii=False)
+def _json_error(error_msg: str, *, error_code: str = "VALIDATION_ERROR") -> str:
+    """Return a structured error for validation / not-found cases."""
+    from openspace.errors import safe_error_response
+    return safe_error_response(error_code, error_msg)
 
 
 # MCP Tools (4 tools)
@@ -556,8 +557,8 @@ async def execute_task(
         return _json_ok(formatted)
 
     except Exception as e:
-        logger.error(f"execute_task failed: {e}", exc_info=True)
-        return _json_error(e, status="error", traceback=traceback.format_exc(limit=5))
+        from openspace.errors import handle_mcp_exception, EXECUTION_ERROR
+        return handle_mcp_exception(e, tool_name="execute_task", error_code=EXECUTION_ERROR)
 
 
 @mcp.tool()
@@ -642,11 +643,12 @@ async def search_skills(
                         cr["auto_imported"] = True
                         cr["local_path"] = imp_result.get("local_path", "")
                 except Exception as imp_err:
-                    logger.warning(f"auto_import failed for {cr['skill_id']}: {imp_err}")
+                    logger.warning(f"auto_import failed for {cr['skill_id']}: {imp_err}",
+                                   exc_info=True)
                     import_summary.append({
                         "skill_id": cr["skill_id"],
                         "import_status": "error",
-                        "error": str(imp_err),
+                        "error": "Cloud skill import failed",
                     })
 
         output: Dict[str, Any] = {"results": results, "count": len(results)}
@@ -655,8 +657,8 @@ async def search_skills(
         return _json_ok(output)
 
     except Exception as e:
-        logger.error(f"search_skills failed: {e}", exc_info=True)
-        return _json_error(e)
+        from openspace.errors import handle_mcp_exception, EXECUTION_ERROR
+        return handle_mcp_exception(e, tool_name="search_skills", error_code=EXECUTION_ERROR)
 
 
 @mcp.tool()
@@ -698,19 +700,19 @@ async def fix_skill(
         skill_path = Path(skill_dir)
         skill_md = skill_path / "SKILL.md"
         if not skill_md.exists():
-            return _json_error(f"SKILL.md not found in {skill_dir}")
+            return _json_error("SKILL.md not found in the specified skill directory", error_code="SKILL_NOT_FOUND")
 
         openspace = await _get_openspace()
         registry = openspace._skill_registry
         if not registry:
-            return _json_error("SkillRegistry not initialized")
+            return _json_error("SkillRegistry not initialized", error_code="INTERNAL_ERROR")
         if not openspace._skill_evolver:
-            return _json_error("Skill evolution is not enabled")
+            return _json_error("Skill evolution is not enabled", error_code="INTERNAL_ERROR")
 
         # Step 1: Register the skill (idempotent)
         meta = registry.register_skill_dir(skill_path)
         if not meta:
-            return _json_error(f"Failed to register skill from {skill_dir}")
+            return _json_error("Failed to register skill from the specified directory", error_code="SKILL_NOT_FOUND")
 
         store = _get_store()
         await store.sync_from_registry([meta])
@@ -718,12 +720,12 @@ async def fix_skill(
         # Step 2: Load record + content
         rec = store.load_record(meta.skill_id)
         if not rec:
-            return _json_error(f"Failed to load skill record for {meta.skill_id}")
+            return _json_error("Failed to load skill record", error_code="SKILL_NOT_FOUND")
 
         evolver = openspace._skill_evolver
         content = evolver._load_skill_content(rec)
         if not content:
-            return _json_error(f"Cannot load content for skill: {meta.skill_id}")
+            return _json_error("Cannot load content for the specified skill", error_code="SKILL_NOT_FOUND")
 
         # Step 3: Run FIX evolution
         recent = store.load_analyses(skill_id=meta.skill_id, limit=5)
@@ -773,8 +775,8 @@ async def fix_skill(
         })
 
     except Exception as e:
-        logger.error(f"fix_skill failed: {e}", exc_info=True)
-        return _json_error(e, status="error", traceback=traceback.format_exc(limit=5))
+        from openspace.errors import handle_mcp_exception, EXECUTION_ERROR
+        return handle_mcp_exception(e, tool_name="fix_skill", error_code=EXECUTION_ERROR)
 
 
 @mcp.tool()
@@ -818,7 +820,7 @@ async def upload_skill(
     try:
         skill_path = Path(skill_dir)
         if not (skill_path / "SKILL.md").exists():
-            return _json_error(f"SKILL.md not found in {skill_dir}")
+            return _json_error("SKILL.md not found in the specified skill directory", error_code="SKILL_NOT_FOUND")
 
         # Read pre-saved metadata (written by execute_task/fix_skill)
         meta = _read_upload_meta(skill_path)
@@ -844,8 +846,8 @@ async def upload_skill(
         return _json_ok(result)
 
     except Exception as e:
-        logger.error(f"upload_skill failed: {e}", exc_info=True)
-        return _json_error(e, status="error", traceback=traceback.format_exc(limit=5))
+        from openspace.errors import handle_mcp_exception, EXECUTION_ERROR
+        return handle_mcp_exception(e, tool_name="upload_skill", error_code=EXECUTION_ERROR)
 
 def run_mcp_server() -> None:
     """Console-script entry point for ``openspace-mcp``.

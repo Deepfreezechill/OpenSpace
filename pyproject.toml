@@ -52,6 +52,8 @@ windows = [
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
+    "pytest-timeout>=2.2.0",
+    "pytest-cov>=4.0.0",
     "black>=23.0.0",
     "flake8>=6.0.0",
     "mypy>=1.0.0",
@@ -91,4 +93,55 @@ openspace = [
     "local_server/config.json",
     "local_server/README.md",
     "security/blocklist.yml",
+]
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+timeout = 30
+filterwarnings = [
+    "ignore::DeprecationWarning:litellm.*",
+    "ignore::DeprecationWarning:openai.*",
+    "ignore::pydantic.warnings.PydanticDeprecatedSince20",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
+markers = [
+    "unit: fast isolated tests (no I/O, no network)",
+    "integration: tests that touch real services or filesystem",
+    "contract: tests that validate API contracts",
+    "property: property-based tests (hypothesis)",
+    "statistical: tests with statistical assertions",
+    "e2e: end-to-end tests",
+    "slow: tests that take > 5 seconds",
+]
+
+# ---------------------------------------------------------------------------
+# coverage
+# ---------------------------------------------------------------------------
+
+[tool.coverage.run]
+source = ["openspace"]
+omit = [
+    "openspace/__main__.py",
+    "openspace/dashboard_server.py",
+    "openspace/local_server/*",
+    "openspace/platforms/*",
+    "openspace/recording/*",
+    "tests/*",
+]
+
+[tool.coverage.report]
+fail_under = 3
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+    "\\.\\.\\.",
 ]

@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-mock-003",
+  "object": "chat.completion",
+  "created": 1700000000,
+  "model": "mock-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"task_completed\": true, \"execution_note\": \"Task executed successfully using the skill.\", \"skill_judgments\": [{\"skill_id\": \"test_skill__imp_12345678\", \"skill_applied\": true, \"note\": \"Skill was applied correctly.\"}], \"evolution_suggestions\": []}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 50,
+    "completion_tokens": 40,
+    "total_tokens": 90
+  }
+}
