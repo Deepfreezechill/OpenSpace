@@ -319,6 +319,30 @@ class CapabilityLeaseResolverPort(Protocol):
     async def list_active(self, *, granted_to: Optional[str] = None) -> List[CapabilityLease]: ...
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Phase 2 — Filesystem Broker (EPIC 2.2)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@runtime_checkable
+class FilesystemBrokerPort(Protocol):
+    """Port for policy-enforced filesystem access (EPIC 2.2).
+
+    Provides jailed path resolution, read/write enforcement,
+    deny-list checking, and TOCTOU-safe file operations.
+    """
+
+    def resolve(self, path: str) -> "Path": ...
+
+    def check_read(self, path: str) -> "Path": ...
+
+    def check_write(self, path: str, size_bytes: int = 0) -> "Path": ...
+
+    def open_read(self, path: str) -> int: ...
+
+    def open_write(self, path: str, size_bytes: int = 0) -> int: ...
+
+
 __all__ = [
     "AgentExecutorPort",
     "AnalysisPort",
