@@ -73,6 +73,14 @@ openspace-download-skill = "openspace.cloud.cli.download_skill:main"
 openspace-upload-skill = "openspace.cloud.cli.upload_skill:main"
 openspace-dashboard = "openspace.dashboard_server:main"
 
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]  # line length handled separately
+
 [tool.setuptools]
 packages = {find = {where = ["."], include = ["openspace*"]}}
 
@@ -82,4 +90,5 @@ openspace = [
     "config/*.json.example",
     "local_server/config.json",
     "local_server/README.md",
+    "security/blocklist.yml",
 ]
