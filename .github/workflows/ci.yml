@@ -50,7 +50,8 @@ jobs:
             --timeout=30 \
             --cov=openspace \
             --cov-report=term-missing \
-            --cov-report=xml
+            --cov-report=xml \
+            --cov-fail-under=20
 
       - name: Upload coverage report
         uses: actions/upload-artifact@bbbca2dafaf7f97fd117779653c6fb65339ca750 # v4
