@@ -29,7 +29,7 @@ class MCPClient:
     def __init__(
         self,
         config: str | dict[str, Any] | None = None,
-        sandbox: bool = False,
+        sandbox: bool = True,
         sandbox_options: SandboxOptions | None = None,
         timeout: float = 30.0,
         sse_read_timeout: float = 300.0,
@@ -94,7 +94,7 @@ class MCPClient:
     def from_dict(
         cls,
         config: dict[str, Any],
-        sandbox: bool = False,
+        sandbox: bool = True,
         sandbox_options: SandboxOptions | None = None,
         timeout: float = 30.0,
         sse_read_timeout: float = 300.0,
@@ -118,7 +118,7 @@ class MCPClient:
 
     @classmethod
     def from_config_file(
-        cls, filepath: str, sandbox: bool = False, sandbox_options: SandboxOptions | None = None,
+        cls, filepath: str, sandbox: bool = True, sandbox_options: SandboxOptions | None = None,
         timeout: float = 30.0, sse_read_timeout: float = 300.0,
         max_retries: int = 3, retry_interval: float = 2.0,
     ) -> "MCPClient":

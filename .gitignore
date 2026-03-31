@@ -77,3 +77,4 @@ frontend/node_modules
 # Coverage
 .coverage
 htmlcov/
+coverage.xml

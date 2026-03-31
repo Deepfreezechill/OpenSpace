@@ -99,7 +99,7 @@ Layered system — later files override earlier ones:
 |---------|-----------|-------------|
 | `shell` | `mode`, `timeout`, `conda_env`, `working_dir` | `"local"` (default) or `"server"`, command timeout (default: `60`s) |
 | `gui` | `mode`, `timeout`, `driver_type`, `screenshot_on_error` | Local/server mode, automation driver (default: `pyautogui`) |
-| `mcp` | `timeout`, `sandbox`, `eager_sessions` | Request timeout (`30`s), E2B sandbox, lazy/eager server init |
+| `mcp` | `timeout`, `sandbox`, `eager_sessions` | Request timeout (`30`s), E2B sandbox (**enforced by default**), lazy/eager server init |
 | `tool_search` | `search_mode`, `max_tools`, `enable_llm_filter` | `"hybrid"` (semantic + LLM), max tools to return (`40`), embedding cache |
 | `tool_quality` | `enabled`, `enable_persistence`, `evolve_interval` | Quality tracking, self-evolution every N calls (default: `5`) |
 | `skills` | `enabled`, `skill_dirs`, `max_select` | Directories to scan, max skills injected per task (default: `2`) |
@@ -110,6 +110,26 @@ Layered system — later files override earlier ones:
 |-------|-------------|---------|
 | `allow_shell_commands` | Enable shell execution | `true` |
 | `blocked_commands` | Platform-specific blacklists (common/linux/darwin/windows) | `rm -rf`, `shutdown`, `dd`, etc. |
-| `sandbox_enabled` | Enable sandboxing for all operations | `false` |
+| `sandbox_enabled` | Enable sandboxing for all operations | **`true`** |
 | Per-backend overrides | Shell, MCP, GUI, Web each have independent security policies | Inherit global |
+
+### E2B Sandbox Configuration
+
+Sandbox execution is **enforced by default** for all stdio-based MCP servers. This prevents
+untrusted skill code from executing directly on the host.
+
+| Setting | Source | Description |
+|---------|--------|-------------|
+| `E2B_API_KEY` | **Environment variable** (required) | API key from [e2b.dev](https://e2b.dev). Never passed via config. |
+| `mcp.sandbox` | `config_grounding.json` | Default: `true`. Controls sandbox enforcement for MCP backend. |
+| `sandbox_enabled` | `config_security.json` | Default: `true`. Global and per-backend sandbox policy. |
+| `sandbox_template_id` | Config only | E2B sandbox template (default: `"base"`). |
+| `timeout` | Config only | Sandbox command timeout in seconds (default: `600`). |
+| `OPENSPACE_ALLOW_UNSANDBOXED` | Environment variable | Set to `1` to allow unsandboxed execution (dev only, **NOT recommended**). |
+
+**Fail-closed behavior:**
+- Missing `E2B_API_KEY` → startup fails (no silent fallback)
+- Missing E2B SDK → startup fails with install instructions
+- Invalid config → startup fails (no default-config fallback)
+- Sandbox start failure → execution aborted (no downgrade to direct execution)
 
