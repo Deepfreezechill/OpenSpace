@@ -1,0 +1,170 @@
+# SkillGuard — Dangerous API Blocklist
+#
+# Each pattern defines an AST node type to match and a list of targets.
+#   ast_type: Call      — function/method calls
+#   ast_type: Attribute — attribute access (without calling)
+#   ast_type: Import    — import / from-import statements
+#
+# severity: CRITICAL — code is rejected outright
+# severity: HIGH     — warning logged, allowed for now
+# severity: MEDIUM   — informational
+
+patterns:
+  - name: eval
+    description: "eval() can execute arbitrary code"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - eval
+
+  - name: exec
+    description: "exec() can execute arbitrary code"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - exec
+
+  - name: os_system
+    description: "os.system() executes shell commands"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - os.system
+
+  - name: os_popen
+    description: "os.popen() executes shell commands"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - os.popen
+
+  - name: subprocess
+    description: "subprocess module enables arbitrary command execution"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - subprocess.*
+
+  - name: subprocess_import
+    description: "Importing subprocess enables arbitrary command execution"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - subprocess.*
+
+  - name: dynamic_import
+    description: "__import__() allows dynamic, uncontrolled module loading"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - __import__
+
+  - name: socket
+    description: "Raw socket access can exfiltrate data or open back-doors"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - socket.*
+
+  - name: socket_import
+    description: "Importing socket enables raw network access"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - socket.*
+
+  - name: ctypes
+    description: "ctypes FFI can bypass Python's safety guarantees"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - ctypes.*
+
+  - name: ctypes_import
+    description: "Importing ctypes enables C FFI"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - ctypes.*
+
+  - name: env_access
+    description: "Environment variable access may leak secrets"
+    severity: MEDIUM
+    ast_type: Attribute
+    targets:
+      - os.environ
+
+  - name: env_getenv
+    description: "os.getenv() may leak secret environment variables"
+    severity: MEDIUM
+    ast_type: Call
+    targets:
+      - os.getenv
+
+  - name: sensitive_file_open
+    description: "Opening /proc or /etc files may leak system information"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - open
+
+  - name: compile_exec
+    description: "compile() with 'exec' mode enables arbitrary code execution"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - compile
+
+  - name: getattr_injection
+    description: "getattr() on modules can access private/dangerous attributes"
+    severity: MEDIUM
+    ast_type: Call
+    targets:
+      - getattr
+
+  - name: setattr_injection
+    description: "setattr() on modules can inject malicious attributes"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - setattr
+
+  - name: importlib
+    description: "importlib.import_module() bypasses static import analysis"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - importlib.import_module
+      - importlib.*
+
+  - name: importlib_import
+    description: "Importing importlib enables dynamic module loading"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - importlib.*
+
+  - name: pickle
+    description: "pickle deserialization can execute arbitrary code"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - pickle.loads
+      - pickle.load
+      - pickle.Unpickler
+
+  - name: pickle_import
+    description: "Importing pickle enables arbitrary code execution via deserialization"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - pickle.*
+
+  - name: globals_access
+    description: "globals()/locals()/vars() enable dynamic name resolution bypasses"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - globals
+      - locals
+      - vars
