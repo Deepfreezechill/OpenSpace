@@ -866,6 +866,7 @@ def run_mcp_server() -> None:
         get_bearer_token,
         validate_token_strength,
     )
+    from openspace.auth.rate_limit import RateLimitMiddleware
 
     parser = argparse.ArgumentParser(description="OpenSpace MCP Server")
     parser.add_argument(
@@ -903,17 +904,22 @@ def run_mcp_server() -> None:
     else:
         starlette_app = mcp.streamable_http_app()
 
-    authed_app = BearerTokenMiddleware(starlette_app, token)
+    # Middleware chain: request → BearerAuth → RateLimit → MCP app
+    # Auth is outermost: unauthenticated floods are rejected immediately
+    # (cheap hmac check) before any rate-limit state is created.
+    # This prevents memory DoS via fake tokens from unauthenticated requests.
+    rate_limited_app = RateLimitMiddleware(starlette_app)
+    protected_app = BearerTokenMiddleware(rate_limited_app, token)
 
     logger.info(
-        "Starting MCP server with bearer auth on %s:%d (%s transport)",
+        "Starting MCP server with bearer auth + rate limiting on %s:%d (%s transport)",
         args.host,
         args.port,
         args.transport,
     )
 
     config = uvicorn.Config(
-        authed_app,
+        protected_app,
         host=args.host,
         port=args.port,
         log_level="info",
