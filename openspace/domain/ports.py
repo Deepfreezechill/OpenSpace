@@ -367,14 +367,45 @@ class NetworkProxyPort(Protocol):
     async def shutdown(self) -> int: ...
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Phase 2 — Process Broker (EPIC 2.4)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@runtime_checkable
+class ProcessBrokerPort(Protocol):
+    """Port for policy-enforced process execution (EPIC 2.4).
+
+    Provides command allow/deny enforcement, shell control,
+    process tracking with concurrency limits, execution time bounds,
+    and dangerous syscall (link/symlink) restriction.
+    """
+
+    def check_command(self, command: str, args: list[str]) -> None: ...
+
+    def check_shell(self, shell_command: str) -> None: ...
+
+    def track_process(self, pid: int, command: str) -> None: ...
+
+    def release_process(self, pid: int) -> None: ...
+
+    @property
+    def active_count(self) -> int: ...
+
+    def check_syscall(self, syscall: str, *args: str) -> None: ...
+
+
 __all__ = [
     "AgentExecutorPort",
     "AnalysisPort",
     "AuthPort",
     "CapabilityLeaseResolverPort",
     "CloudSkillPort",
+    "FilesystemBrokerPort",
     "LLMClientPort",
+    "NetworkProxyPort",
     "PolicyEnginePort",
+    "ProcessBrokerPort",
     "SandboxPort",
     "SecretBrokerPort",
     "SkillEvolutionPort",
