@@ -529,3 +529,81 @@ class TestSecurityRegressions:
                     max_connections=0,
                 ),
             )
+
+
+class TestSecurityRegressionsR2:
+    """Regression tests for R2 /8eyes findings (apex rebinding + loopback SSRF)."""
+
+    # --- Apex DNS rebinding ---
+
+    def test_bare_nip_io_blocked(self) -> None:
+        """Bare 'nip.io' (no subdomain) must be blocked."""
+        with pytest.raises(DomainDeniedError, match="nip.io"):
+            check_domain_blocked("nip.io", [])
+
+    def test_bare_localtest_me_blocked(self) -> None:
+        """Bare 'localtest.me' resolves to 127.0.0.1 — must be blocked."""
+        with pytest.raises(DomainDeniedError, match="localtest.me"):
+            check_domain_blocked("localtest.me", [])
+
+    def test_bare_sslip_io_blocked(self) -> None:
+        with pytest.raises(DomainDeniedError, match="sslip.io"):
+            check_domain_blocked("sslip.io", [])
+
+    def test_bare_xip_io_blocked(self) -> None:
+        with pytest.raises(DomainDeniedError):
+            check_domain_blocked("xip.io", [])
+
+    def test_bare_traefik_me_blocked(self) -> None:
+        with pytest.raises(DomainDeniedError):
+            check_domain_blocked("traefik.me", [])
+
+    # --- Loopback / link-local SSRF ---
+
+    def test_ipv4_loopback_blocked(self) -> None:
+        """127.0.0.1 must be blocked even with allowed_domains=('*',)."""
+        with pytest.raises(DomainDeniedError, match="loopback"):
+            check_domain_blocked("127.0.0.1", [])
+
+    def test_ipv4_loopback_any_octet_blocked(self) -> None:
+        """Any 127.x.x.x address must be blocked."""
+        with pytest.raises(DomainDeniedError, match="loopback"):
+            check_domain_blocked("127.0.0.2", [])
+
+    def test_ipv6_loopback_blocked(self) -> None:
+        """::1 must be blocked."""
+        with pytest.raises(DomainDeniedError, match="loopback"):
+            check_domain_blocked("::1", [])
+
+    def test_bracketed_ipv6_loopback_blocked(self) -> None:
+        with pytest.raises(DomainDeniedError, match="loopback"):
+            check_domain_blocked("[::1]", [])
+
+    def test_ipv4_mapped_loopback_blocked(self) -> None:
+        """::ffff:127.0.0.1 must be blocked as loopback."""
+        with pytest.raises(DomainDeniedError, match="loopback"):
+            check_domain_blocked("::ffff:127.0.0.1", [])
+
+    def test_zero_address_blocked(self) -> None:
+        """0.0.0.0 must be blocked."""
+        with pytest.raises(DomainDeniedError, match="loopback"):
+            check_domain_blocked("0.0.0.0", [])
+
+    def test_ipv6_link_local_blocked(self) -> None:
+        """fe80::1 (link-local) must be blocked."""
+        with pytest.raises(DomainDeniedError, match="loopback"):
+            check_domain_blocked("fe80::1", [])
+
+    def test_ipv6_ula_blocked(self) -> None:
+        """fd00::1 (unique local address) must be blocked."""
+        with pytest.raises(DomainDeniedError, match="loopback"):
+            check_domain_blocked("fd00::1", [])
+
+    def test_legitimate_ip_not_blocked(self) -> None:
+        """Normal public IPs must NOT be blocked by the IP check."""
+        # Should not raise — no domain-level block either
+        check_domain_blocked("8.8.8.8", [])
+
+    def test_legitimate_domain_not_blocked(self) -> None:
+        """Normal domains must NOT be blocked."""
+        check_domain_blocked("github.com", [])

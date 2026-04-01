@@ -29,10 +29,15 @@ from openspace.sandbox.leases import NetworkCapability
 
 _DNS_REBINDING_PATTERNS: tuple[str, ...] = (
     "*.nip.io",
+    "nip.io",
     "*.sslip.io",
+    "sslip.io",
     "*.xip.io",
+    "xip.io",
     "*.traefik.me",
+    "traefik.me",
     "*.localtest.me",
+    "localtest.me",
 )
 
 # IPv4-mapped IPv6 equivalents of common metadata endpoints
@@ -43,6 +48,19 @@ _IPV6_METADATA_ALIASES: tuple[str, ...] = (
     "::ffff:6464:64c8",
     "[::ffff:169.254.169.254]",
     "[::ffff:a9fe:a9fe]",
+)
+
+# IP networks that must be blocked to prevent SSRF to local services.
+# Loopback, link-local, and unspecified addresses allow reaching localhost,
+# cloud-internal endpoints, and adjacent machines on the same network segment.
+_BLOCKED_IP_NETWORKS: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = (
+    ipaddress.IPv4Network("127.0.0.0/8"),       # IPv4 loopback
+    ipaddress.IPv6Network("::1/128"),            # IPv6 loopback
+    ipaddress.IPv4Network("0.0.0.0/8"),          # "this host" — often aliases localhost
+    ipaddress.IPv6Network("::/128"),             # IPv6 unspecified
+    ipaddress.IPv4Network("169.254.0.0/16"),     # IPv4 link-local (already caught by metadata)
+    ipaddress.IPv6Network("fe80::/10"),          # IPv6 link-local
+    ipaddress.IPv6Network("fc00::/7"),           # IPv6 unique-local (ULA, private)
 )
 
 
@@ -82,6 +100,21 @@ class ConnectionNotFoundError(NetworkPolicyError):
 # ---------------------------------------------------------------------------
 # #95 — Domain-Based Allow/Deny Enforcement
 # ---------------------------------------------------------------------------
+
+
+def _is_blocked_ip(host: str) -> bool:
+    """Return True if *host* is an IP in a blocked network (loopback, link-local, etc.)."""
+    cleaned = host.strip("[]")
+    try:
+        addr = ipaddress.ip_address(cleaned)
+    except ValueError:
+        return False
+
+    # Collapse IPv4-mapped IPv6 to plain IPv4 for network checks
+    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
+        addr = addr.ipv4_mapped
+
+    return any(addr in net for net in _BLOCKED_IP_NETWORKS)
 
 
 def _normalize_ip(host: str) -> Optional[str]:
@@ -136,8 +169,15 @@ def check_domain_blocked(domain: str, blocked_domains: list[str]) -> None:
 
     Block list is checked **first** (deny-before-allow), and includes
     cloud metadata endpoints by default.  Also checks against known DNS
-    rebinding services (nip.io, sslip.io, etc.) and IPv6 metadata aliases.
+    rebinding services (nip.io, sslip.io, etc.), IPv6 metadata aliases,
+    and loopback/link-local/ULA IP ranges.
     """
+    # Block loopback, link-local, ULA IPs before pattern matching
+    if _is_blocked_ip(domain):
+        raise DomainDeniedError(
+            f"Domain '{domain}' is a blocked IP address (loopback/link-local/ULA)"
+        )
+
     # Build extended block list: explicit + rebinding + IPv6 aliases
     extended = list(blocked_domains) + list(_DNS_REBINDING_PATTERNS) + list(_IPV6_METADATA_ALIASES)
 
