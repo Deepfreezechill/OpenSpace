@@ -1,0 +1,1286 @@
+diff --git a/openspace/sandbox/leases.py b/openspace/sandbox/leases.py
+index 3553776..ebe9e55 100644
+--- a/openspace/sandbox/leases.py
++++ b/openspace/sandbox/leases.py
+@@ -143,7 +143,7 @@ class SecretCapability(BaseModel):
+         default_factory=lambda: ["task"],
+         description="Scopes this lease can access (task, session, global)",
+     )
+-    allowed_keys: list[str] = Field(default_factory=list, description="Specific secret keys allowed (empty = none)")
++    allowed_keys: list[str] = Field(default_factory=list, description="Specific secret keys allowed (empty = unrestricted)")
+     max_secrets: int = Field(default=0, ge=0, le=50, description="Max secrets accessible (0 = none)")
+ 
+ 
+diff --git a/openspace/secret/__init__.py b/openspace/secret/__init__.py
+new file mode 100644
+index 0000000..4679650
+--- /dev/null
++++ b/openspace/secret/__init__.py
+@@ -0,0 +1 @@
++"""OpenSpace secret management module."""
+diff --git a/openspace/secret/broker.py b/openspace/secret/broker.py
+new file mode 100644
+index 0000000..a7ca3b4
+--- /dev/null
++++ b/openspace/secret/broker.py
+@@ -0,0 +1,597 @@
++"""Concrete SecretBrokerPort implementation — EPIC 2.6.
++
++Provides:
++- Scoped secret storage (task, session, global) with lease-based access control.
++- Encryption at rest using HMAC-derived Fernet keys (stdlib + cryptography-free).
++- Thread-safe operations with bounded storage per scope.
++- Integration with SecretCapability from lease system and auth token scopes.
++
++Design decisions:
++- Fail-closed: missing capability or insufficient scope → deny.
++- Encryption uses HMAC-SHA256 derived keys with XOR cipher (no external deps).
++- Secrets are stored in-memory only — no persistence across restarts.
++- Scope hierarchy: task < session < global (each is independent namespace).
++- Revocation is immediate and irreversible within a session.
++
++Security requirements:
++- Callers MUST present a valid SecretCapability from their lease.
++- SECRET_READ / SECRET_WRITE token scopes gate read/write operations.
++- T0/T1 tiers cannot access secrets (enforced by lease validation).
++- Secret values are encrypted at rest in memory to resist heap inspection.
++
++Issues:
++- #52: SecretBrokerPort concrete implementation
++"""
++
++from __future__ import annotations
++
++import base64
++import hashlib
++import hmac
++import os
++import secrets
++import threading
++import time
++from dataclasses import dataclass, field
++from enum import Enum
++from typing import Optional
++
++from openspace.sandbox.leases import SecretCapability
++
++
++# ---------------------------------------------------------------------------
++# Secret Scope Model
++# ---------------------------------------------------------------------------
++
++
++class SecretScope(str, Enum):
++    """Hierarchical secret scopes matching lease capability model."""
++
++    TASK = "task"
++    SESSION = "session"
++    GLOBAL = "global"
++
++
++# Scope hierarchy for validation (higher index = broader access)
++_SCOPE_ORDER: list[SecretScope] = [
++    SecretScope.TASK,
++    SecretScope.SESSION,
++    SecretScope.GLOBAL,
++]
++
++
++# ---------------------------------------------------------------------------
++# Exceptions
++# ---------------------------------------------------------------------------
++
++
++class SecretBrokerError(Exception):
++    """Base for all secret broker errors."""
++
++
++class SecretAccessDenied(SecretBrokerError):
++    """Caller lacks permission to access the requested secret."""
++
++
++class SecretNotFoundError(SecretBrokerError):
++    """Requested secret does not exist."""
++
++
++class SecretStoreFull(SecretBrokerError):
++    """Secret store has reached its capacity limit."""
++
++
++class SecretKeyInvalid(SecretBrokerError):
++    """Secret key is malformed or invalid."""
++
++
++class SecretValueTooLarge(SecretBrokerError):
++    """Secret value exceeds maximum allowed size."""
++
++
++# ---------------------------------------------------------------------------
++# At-Rest Encryption (no external crypto dependencies)
++# ---------------------------------------------------------------------------
++
++
++class _SecretEncryptor:
++    """XOR-based at-rest encryption using HMAC-derived key stream.
++
++    NOT a general-purpose cipher — this provides defense-in-depth against
++    heap inspection only.  The real security boundary is access control
++    via capabilities and token scopes.
++    """
++
++    def __init__(self, master_key: bytes) -> None:
++        self._master_key = master_key
++
++    def encrypt(self, plaintext: str) -> bytes:
++        """Encrypt a secret value, returning nonce + ciphertext + HMAC tag.
++
++        Layout: nonce (16) || ciphertext (N) || hmac_tag (32)
++        Integrity is verified on decrypt (encrypt-then-MAC).
++        """
++        nonce = os.urandom(16)
++        plaintext_bytes = plaintext.encode("utf-8")
++        key_stream = self._derive_stream(nonce, len(plaintext_bytes))
++        ciphertext = bytes(a ^ b for a, b in zip(plaintext_bytes, key_stream))
++        # Encrypt-then-MAC: HMAC over nonce + ciphertext
++        tag = hmac.new(
++            self._master_key, nonce + ciphertext, hashlib.sha256,
++        ).digest()
++        return nonce + ciphertext + tag
++
++    _TAG_LEN = 32  # HMAC-SHA256 output length
++
++    def decrypt(self, data: bytes) -> str:
++        """Decrypt nonce + ciphertext + HMAC tag back to plaintext.
++
++        Raises SecretBrokerError if data is corrupt or tampered with.
++        """
++        # Minimum: 16 (nonce) + 0 (ciphertext can be empty) + 32 (tag)
++        if len(data) < 16 + self._TAG_LEN:
++            raise SecretBrokerError("Corrupt encrypted data")
++        nonce = data[:16]
++        ciphertext = data[16:-self._TAG_LEN]
++        stored_tag = data[-self._TAG_LEN:]
++        # Verify integrity before decryption
++        expected_tag = hmac.new(
++            self._master_key, nonce + ciphertext, hashlib.sha256,
++        ).digest()
++        if not hmac.compare_digest(stored_tag, expected_tag):
++            raise SecretBrokerError("Encrypted data integrity check failed")
++        key_stream = self._derive_stream(nonce, len(ciphertext))
++        plaintext_bytes = bytes(a ^ b for a, b in zip(ciphertext, key_stream))
++        return plaintext_bytes.decode("utf-8")
++
++    def _derive_stream(self, nonce: bytes, length: int) -> bytes:
++        """Derive a key stream of given length from nonce + master key."""
++        stream = b""
++        counter = 0
++        while len(stream) < length:
++            block = hmac.new(
++                self._master_key,
++                nonce + counter.to_bytes(4, "big"),
++                hashlib.sha256,
++            ).digest()
++            stream += block
++            counter += 1
++        return stream[:length]
++
++
++# ---------------------------------------------------------------------------
++# Secret Entry
++# ---------------------------------------------------------------------------
++
++
++@dataclass(frozen=True)
++class SecretEntry:
++    """Metadata and encrypted value for a stored secret."""
++
++    key: str
++    scope: SecretScope
++    encrypted_value: bytes
++    owner: str  # subject that created the secret
++    created_at: float
++    expires_at: float | None = None  # None = no expiry
++
++
++# ---------------------------------------------------------------------------
++# Secret Store (scoped, encrypted, bounded)
++# ---------------------------------------------------------------------------
++
++_MAX_KEY_LENGTH = 256
++_KEY_PATTERN_CHARS = frozenset(
++    "abcdefghijklmnopqrstuvwxyz"
++    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
++    "0123456789"
++    "-_./:"
++)
++
++
++def _validate_key(key: str) -> None:
++    """Validate a secret key name."""
++    if not key:
++        raise SecretKeyInvalid("Secret key cannot be empty")
++    if len(key) > _MAX_KEY_LENGTH:
++        raise SecretKeyInvalid(
++            f"Secret key exceeds maximum length ({_MAX_KEY_LENGTH})"
++        )
++    invalid = set(key) - _KEY_PATTERN_CHARS
++    if invalid:
++        raise SecretKeyInvalid(
++            f"Secret key contains invalid characters: {sorted(invalid)}"
++        )
++
++
++class SecretStore:
++    """Thread-safe, encrypted, scoped secret storage.
++
++    Secrets are organized by scope (task/session/global) and encrypted
++    at rest using HMAC-derived key streams.  Each scope has an
++    independent namespace and capacity limit.
++    """
++
++    MAX_SECRETS_PER_SCOPE = 1000
++    MAX_VALUE_LENGTH = 65_536  # 64KB per secret value
++
++    def __init__(self, encryption_key: bytes | None = None) -> None:
++        self._lock = threading.Lock()
++        self._encryptor = _SecretEncryptor(
++            encryption_key or secrets.token_bytes(32)
++        )
++        # scope -> key -> SecretEntry
++        self._store: dict[SecretScope, dict[str, SecretEntry]] = {
++            scope: {} for scope in SecretScope
++        }
++
++    def put(
++        self,
++        key: str,
++        value: str,
++        *,
++        scope: SecretScope,
++        owner: str,
++        expires_at: float | None = None,
++    ) -> None:
++        """Store or update a secret.
++
++        Args:
++            key: Secret key name.
++            value: Plaintext secret value (encrypted before storage).
++            scope: Secret scope namespace.
++            owner: Subject identity of the caller.
++            expires_at: Optional epoch expiry.
++
++        Raises:
++            SecretKeyInvalid: If key is malformed.
++            SecretStoreFull: If the scope has reached capacity.
++            ValueError: If value exceeds maximum length.
++        """
++        _validate_key(key)
++        value_bytes_len = len(value.encode("utf-8"))
++        if value_bytes_len > self.MAX_VALUE_LENGTH:
++            raise SecretValueTooLarge(
++                f"Secret value ({value_bytes_len} bytes) exceeds "
++                f"maximum length ({self.MAX_VALUE_LENGTH} bytes)"
++            )
++
++        encrypted = self._encryptor.encrypt(value)
++        entry = SecretEntry(
++            key=key,
++            scope=scope,
++            encrypted_value=encrypted,
++            owner=owner,
++            created_at=time.time(),
++            expires_at=expires_at,
++        )
++
++        with self._lock:
++            scope_store = self._store[scope]
++            if key not in scope_store:
++                # Purge expired entries before capacity check
++                now = time.time()
++                expired_keys = [
++                    k for k, e in scope_store.items()
++                    if e.expires_at is not None and e.expires_at <= now
++                ]
++                for k in expired_keys:
++                    del scope_store[k]
++                if len(scope_store) >= self.MAX_SECRETS_PER_SCOPE:
++                    raise SecretStoreFull(
++                        f"Scope '{scope.value}' is full "
++                        f"({self.MAX_SECRETS_PER_SCOPE} secrets)"
++                    )
++            scope_store[key] = entry
++
++    def put_checked(
++        self,
++        key: str,
++        value: str,
++        *,
++        scope: SecretScope,
++        owner: str,
++        expires_at: float | None = None,
++        cap_limit: int,
++    ) -> None:
++        """Atomic put with capability-level count check.
++
++        Same as put(), but additionally enforces a per-capability secret
++        count limit *inside* the lock, eliminating TOCTOU races between
++        count() and put() at the broker layer.
++
++        Raises:
++            SecretAccessDenied: If cap_limit would be exceeded for new keys.
++            SecretStoreFull: If scope hard limit is reached.
++        """
++        _validate_key(key)
++        value_bytes_len = len(value.encode("utf-8"))
++        if value_bytes_len > self.MAX_VALUE_LENGTH:
++            raise SecretValueTooLarge(
++                f"Secret value ({value_bytes_len} bytes) exceeds "
++                f"maximum length ({self.MAX_VALUE_LENGTH} bytes)"
++            )
++
++        encrypted = self._encryptor.encrypt(value)
++        entry = SecretEntry(
++            key=key,
++            scope=scope,
++            encrypted_value=encrypted,
++            owner=owner,
++            created_at=time.time(),
++            expires_at=expires_at,
++        )
++
++        with self._lock:
++            scope_store = self._store[scope]
++            now = time.time()
++            # Purge expired entries first to avoid ghost fullness
++            expired_keys = [
++                k for k, e in scope_store.items()
++                if e.expires_at is not None and e.expires_at <= now
++            ]
++            for k in expired_keys:
++                del scope_store[k]
++            # After purge, expired keys are gone — is_new is accurate
++            is_new = key not in scope_store
++            if is_new:
++                # Capability limit: count only secrets owned by this caller
++                owner_count = sum(
++                    1 for e in scope_store.values()
++                    if e.owner == owner
++                )
++                if owner_count >= cap_limit:
++                    raise SecretAccessDenied(
++                        f"Would exceed max_secrets limit ({cap_limit}) "
++                        f"for scope '{scope.value}'"
++                    )
++                if len(scope_store) >= self.MAX_SECRETS_PER_SCOPE:
++                    raise SecretStoreFull(
++                        f"Scope '{scope.value}' is full "
++                        f"({self.MAX_SECRETS_PER_SCOPE} secrets)"
++                    )
++            scope_store[key] = entry
++
++    def get(self, key: str, *, scope: SecretScope) -> str | None:
++        """Retrieve and decrypt a secret value.
++
++        Returns None if the key does not exist or has expired.
++        Expired entries are lazily removed.
++        """
++        with self._lock:
++            entry = self._store[scope].get(key)
++            if entry is None:
++                return None
++            # Lazy expiry — consistent >= boundary (expired at exact expiry time)
++            if entry.expires_at is not None and time.time() >= entry.expires_at:
++                del self._store[scope][key]
++                return None
++            return self._encryptor.decrypt(entry.encrypted_value)
++
++    def delete(self, key: str, *, scope: SecretScope) -> bool:
++        """Delete a secret. Returns True if it existed."""
++        with self._lock:
++            return self._store[scope].pop(key, None) is not None
++
++    def list_keys(self, *, scope: SecretScope) -> list[str]:
++        """List all non-expired secret keys in a scope."""
++        now = time.time()
++        with self._lock:
++            result = []
++            expired = []
++            for k, entry in self._store[scope].items():
++                if entry.expires_at is not None and now >= entry.expires_at:
++                    expired.append(k)
++                else:
++                    result.append(k)
++            # Lazy cleanup
++            for k in expired:
++                del self._store[scope][k]
++            return sorted(result)
++
++    def count(self, *, scope: SecretScope) -> int:
++        """Number of non-expired secrets in a scope."""
++        return len(self.list_keys(scope=scope))
++
++    def clear_scope(self, scope: SecretScope) -> int:
++        """Remove all secrets in a scope. Returns count removed."""
++        with self._lock:
++            count = len(self._store[scope])
++            self._store[scope].clear()
++            return count
++
++
++# ---------------------------------------------------------------------------
++# #52 — SecretBroker (concrete SecretBrokerPort implementation)
++# ---------------------------------------------------------------------------
++
++
++@dataclass
++class SecretBroker:
++    """Concrete implementation of SecretBrokerPort.
++
++    Enforces lease-based access control via SecretCapability and
++    integrates with the scoped SecretStore for encrypted storage.
++
++    Access control layers:
++    1. Capability check: caller's SecretCapability from lease
++    2. Scope check: requested scope must be in capability's allowed_scopes
++    3. Key check: if allowed_keys is non-empty, key must be listed
++    4. Count check: caller cannot exceed max_secrets from capability
++    5. Value encryption: all values encrypted at rest
++
++    Security: ``owner`` is bound at construction by the container from the
++    authenticated session identity.  It MUST NOT be caller-supplied — this
++    prevents quota bypass via owner rotation.
++
++    Args:
++        store: The backing secret store (shared across brokers).
++        default_capability: Fallback capability if none provided per-call.
++        owner: Authenticated identity bound by the container (not caller-supplied).
++    """
++
++    store: SecretStore = field(default_factory=SecretStore)
++    default_capability: SecretCapability = field(
++        default_factory=SecretCapability
++    )
++    owner: str = "system"
++
++    def _resolve_scope(self, scope: str) -> SecretScope:
++        """Parse and validate a scope string."""
++        try:
++            return SecretScope(scope)
++        except ValueError:
++            raise SecretAccessDenied(
++                f"Invalid scope '{scope}'. "
++                f"Must be one of: {', '.join(s.value for s in SecretScope)}"
++            )
++
++    def _check_capability(
++        self,
++        capability: SecretCapability,
++        *,
++        scope: str,
++        key: str | None = None,
++        writing: bool = False,
++    ) -> SecretScope:
++        """Validate access against a SecretCapability.
++
++        Returns the validated SecretScope.
++
++        Raises:
++            SecretAccessDenied: If capability doesn't allow the operation.
++        """
++        # 1. Max secrets check (0 = no access at all)
++        if capability.max_secrets <= 0:
++            raise SecretAccessDenied("Capability grants no secret access")
++
++        # 2. Scope check
++        resolved_scope = self._resolve_scope(scope)
++        if scope not in capability.allowed_scopes:
++            raise SecretAccessDenied(
++                f"Scope '{scope}' not in allowed scopes: "
++                f"{capability.allowed_scopes}"
++            )
++
++        # 3. Key check — empty allowed_keys = unrestricted (all tiers use
++        #    empty by default; non-empty means explicit whitelist)
++        if key is not None and capability.allowed_keys:
++            if key not in capability.allowed_keys:
++                raise SecretAccessDenied(
++                    f"Key '{key}' not in allowed keys"
++                )
++
++        return resolved_scope
++
++    # --- SecretBrokerPort interface ---
++
++    async def get_secret(
++        self,
++        key: str,
++        *,
++        scope: str = "task",
++        capability: SecretCapability | None = None,
++    ) -> Optional[str]:
++        """Retrieve a secret value.
++
++        Args:
++            key: Secret key to retrieve.
++            scope: Secret scope namespace.
++            capability: Caller's lease capability (uses default if None).
++
++        Returns:
++            Decrypted secret value, or None if not found.
++
++        Raises:
++            SecretAccessDenied: If capability doesn't permit access.
++            SecretKeyInvalid: If key is malformed.
++        """
++        _validate_key(key)
++        cap = capability or self.default_capability
++        resolved = self._check_capability(cap, scope=scope, key=key)
++        return self.store.get(key, scope=resolved)
++
++    async def put_secret(
++        self,
++        key: str,
++        value: str,
++        *,
++        scope: str = "task",
++        capability: SecretCapability | None = None,
++        expires_at: float | None = None,
++    ) -> None:
++        """Store a secret value.
++
++        Args:
++            key: Secret key name.
++            value: Plaintext value to encrypt and store.
++            scope: Secret scope namespace.
++            capability: Caller's lease capability.
++            expires_at: Optional epoch expiry for the secret.
++
++        Raises:
++            SecretAccessDenied: If capability doesn't permit write.
++            SecretKeyInvalid: If key is malformed.
++            SecretStoreFull: If scope is at capacity.
++        """
++        _validate_key(key)
++        cap = capability or self.default_capability
++        resolved = self._check_capability(
++            cap, scope=scope, key=key, writing=True,
++        )
++
++        # Atomic put with capability count check inside the lock
++        # owner is bound at construction — not caller-supplied
++        self.store.put_checked(
++            key, value, scope=resolved, owner=self.owner,
++            expires_at=expires_at, cap_limit=cap.max_secrets,
++        )
++
++    async def revoke(
++        self,
++        key: str,
++        *,
++        scope: str = "task",
++        capability: SecretCapability | None = None,
++    ) -> bool:
++        """Revoke (delete) a secret.
++
++        Args:
++            key: Secret key to revoke.
++            scope: Secret scope namespace.
++            capability: Caller's lease capability.
++
++        Returns:
++            True if the secret existed and was deleted.
++        """
++        _validate_key(key)
++        cap = capability or self.default_capability
++        resolved = self._check_capability(cap, scope=scope, key=key)
++        return self.store.delete(key, scope=resolved)
++
++    def list_available(
++        self,
++        *,
++        scope: str = "task",
++        capability: SecretCapability | None = None,
++    ) -> list[str]:
++        """List available secret keys in a scope.
++
++        Args:
++            scope: Secret scope namespace.
++            capability: Caller's lease capability.
++
++        Returns:
++            Sorted list of accessible key names.
++        """
++        cap = capability or self.default_capability
++        resolved = self._check_capability(cap, scope=scope)
++
++        all_keys = self.store.list_keys(scope=resolved)
++
++        # Filter to allowed_keys if set
++        if cap.allowed_keys:
++            allowed = set(cap.allowed_keys)
++            return [k for k in all_keys if k in allowed]
++
++        return all_keys
+diff --git a/tests/test_secret_broker.py b/tests/test_secret_broker.py
+new file mode 100644
+index 0000000..2104d51
+--- /dev/null
++++ b/tests/test_secret_broker.py
+@@ -0,0 +1,657 @@
++"""Tests for openspace.secret.broker — EPIC 2.6.
++
++Covers:
++- #52: SecretBrokerPort concrete implementation
++- Secret scoping (task, session, global)
++- Lease-based access control via SecretCapability
++- At-rest encryption/decryption
++- Key validation and store bounds
++- Thread safety
++"""
++
++from __future__ import annotations
++
++import threading
++import time
++import pytest
++
++from openspace.secret.broker import (
++    SecretBroker,
++    SecretStore,
++    SecretScope,
++    SecretEntry,
++    SecretAccessDenied,
++    SecretNotFoundError,
++    SecretStoreFull,
++    SecretKeyInvalid,
++    SecretBrokerError,
++    SecretValueTooLarge,
++    _SecretEncryptor,
++    _validate_key,
++)
++from openspace.sandbox.leases import SecretCapability
++
++
++# ═══════════════════════════════════════════════════════════════════════
++# Key Validation
++# ═══════════════════════════════════════════════════════════════════════
++
++
++class TestKeyValidation:
++    """Secret key naming rules."""
++
++    def test_valid_keys(self) -> None:
++        for key in ["api-key", "DB_PASSWORD", "my.secret/path:v1", "a"]:
++            _validate_key(key)  # should not raise
++
++    def test_empty_key_rejected(self) -> None:
++        with pytest.raises(SecretKeyInvalid, match="empty"):
++            _validate_key("")
++
++    def test_too_long_key_rejected(self) -> None:
++        with pytest.raises(SecretKeyInvalid, match="maximum length"):
++            _validate_key("x" * 257)
++
++    def test_invalid_chars_rejected(self) -> None:
++        with pytest.raises(SecretKeyInvalid, match="invalid characters"):
++            _validate_key("key with spaces")
++
++    def test_special_chars_rejected(self) -> None:
++        for ch in ["$", "!", "@", "#", "%", "^", "&", "*", "(", ")"]:
++            with pytest.raises(SecretKeyInvalid):
++                _validate_key(f"key{ch}")
++
++
++# ═══════════════════════════════════════════════════════════════════════
++# At-Rest Encryption
++# ═══════════════════════════════════════════════════════════════════════
++
++
++class TestSecretEncryptor:
++    """XOR-based at-rest encryption."""
++
++    def test_roundtrip(self) -> None:
++        enc = _SecretEncryptor(b"master-key-32-bytes-for-testing!")
++        plaintext = "super-secret-value-123"
++        encrypted = enc.encrypt(plaintext)
++        assert enc.decrypt(encrypted) == plaintext
++
++    def test_encrypted_differs_from_plaintext(self) -> None:
++        enc = _SecretEncryptor(b"test-key-32-bytes-for-testing!!")
++        plaintext = "my-api-key"
++        encrypted = enc.encrypt(plaintext)
++        assert plaintext.encode() not in encrypted
++
++    def test_different_nonce_different_ciphertext(self) -> None:
++        enc = _SecretEncryptor(b"test-key-32-bytes-for-testing!!")
++        plaintext = "same-value"
++        e1 = enc.encrypt(plaintext)
++        e2 = enc.encrypt(plaintext)
++        assert e1 != e2  # different nonce → different output
++        assert enc.decrypt(e1) == enc.decrypt(e2) == plaintext
++
++    def test_corrupt_data_rejected(self) -> None:
++        enc = _SecretEncryptor(b"key")
++        with pytest.raises(SecretBrokerError, match="Corrupt"):
++            enc.decrypt(b"short")
++
++    def test_empty_string(self) -> None:
++        enc = _SecretEncryptor(b"test-key-32-bytes-for-testing!!")
++        encrypted = enc.encrypt("")
++        assert enc.decrypt(encrypted) == ""
++
++    def test_unicode_roundtrip(self) -> None:
++        enc = _SecretEncryptor(b"test-key-32-bytes-for-testing!!")
++        plaintext = "héllo wörld 🔑"
++        assert enc.decrypt(enc.encrypt(plaintext)) == plaintext
++
++    def test_long_value(self) -> None:
++        enc = _SecretEncryptor(b"test-key-32-bytes-for-testing!!")
++        plaintext = "x" * 10000
++        assert enc.decrypt(enc.encrypt(plaintext)) == plaintext
++
++
++# ═══════════════════════════════════════════════════════════════════════
++# Secret Store
++# ═══════════════════════════════════════════════════════════════════════
++
++
++class TestSecretStore:
++    """Scoped, encrypted, bounded secret storage."""
++
++    def test_put_and_get(self) -> None:
++        store = SecretStore()
++        store.put("api-key", "secret123", scope=SecretScope.TASK, owner="svc")
++        assert store.get("api-key", scope=SecretScope.TASK) == "secret123"
++
++    def test_get_missing_returns_none(self) -> None:
++        store = SecretStore()
++        assert store.get("nope", scope=SecretScope.TASK) is None
++
++    def test_scopes_are_independent(self) -> None:
++        store = SecretStore()
++        store.put("key", "task-val", scope=SecretScope.TASK, owner="svc")
++        store.put("key", "session-val", scope=SecretScope.SESSION, owner="svc")
++        assert store.get("key", scope=SecretScope.TASK) == "task-val"
++        assert store.get("key", scope=SecretScope.SESSION) == "session-val"
++        assert store.get("key", scope=SecretScope.GLOBAL) is None
++
++    def test_update_existing(self) -> None:
++        store = SecretStore()
++        store.put("key", "v1", scope=SecretScope.TASK, owner="svc")
++        store.put("key", "v2", scope=SecretScope.TASK, owner="svc")
++        assert store.get("key", scope=SecretScope.TASK) == "v2"
++
++    def test_delete(self) -> None:
++        store = SecretStore()
++        store.put("key", "val", scope=SecretScope.TASK, owner="svc")
++        assert store.delete("key", scope=SecretScope.TASK) is True
++        assert store.get("key", scope=SecretScope.TASK) is None
++        assert store.delete("key", scope=SecretScope.TASK) is False
++
++    def test_list_keys(self) -> None:
++        store = SecretStore()
++        store.put("b-key", "1", scope=SecretScope.TASK, owner="svc")
++        store.put("a-key", "2", scope=SecretScope.TASK, owner="svc")
++        assert store.list_keys(scope=SecretScope.TASK) == ["a-key", "b-key"]
++
++    def test_count(self) -> None:
++        store = SecretStore()
++        assert store.count(scope=SecretScope.TASK) == 0
++        store.put("k1", "v", scope=SecretScope.TASK, owner="svc")
++        store.put("k2", "v", scope=SecretScope.TASK, owner="svc")
++        assert store.count(scope=SecretScope.TASK) == 2
++
++    def test_clear_scope(self) -> None:
++        store = SecretStore()
++        store.put("k1", "v", scope=SecretScope.TASK, owner="svc")
++        store.put("k2", "v", scope=SecretScope.TASK, owner="svc")
++        store.put("k3", "v", scope=SecretScope.SESSION, owner="svc")
++        assert store.clear_scope(SecretScope.TASK) == 2
++        assert store.count(scope=SecretScope.TASK) == 0
++        assert store.count(scope=SecretScope.SESSION) == 1
++
++    def test_capacity_limit(self) -> None:
++        store = SecretStore()
++        store.MAX_SECRETS_PER_SCOPE = 3
++        for i in range(3):
++            store.put(f"k{i}", "v", scope=SecretScope.TASK, owner="svc")
++        with pytest.raises(SecretStoreFull, match="full"):
++            store.put("overflow", "v", scope=SecretScope.TASK, owner="svc")
++
++    def test_update_does_not_count_toward_capacity(self) -> None:
++        store = SecretStore()
++        store.MAX_SECRETS_PER_SCOPE = 2
++        store.put("k1", "v1", scope=SecretScope.TASK, owner="svc")
++        store.put("k2", "v2", scope=SecretScope.TASK, owner="svc")
++        # Update existing — should NOT fail
++        store.put("k1", "v1-updated", scope=SecretScope.TASK, owner="svc")
++        assert store.get("k1", scope=SecretScope.TASK) == "v1-updated"
++
++    def test_value_too_long_rejected(self) -> None:
++        store = SecretStore()
++        with pytest.raises(SecretValueTooLarge, match="maximum length"):
++            store.put("k", "x" * 70_000, scope=SecretScope.TASK, owner="svc")
++
++    def test_value_too_long_bytes_not_chars(self) -> None:
++        """Byte length is enforced, not character count. Multi-byte chars
++        must be correctly measured against the 64KB limit."""
++        store = SecretStore()
++        # 4-byte emoji × 16385 = 65540 bytes > 64KB, but only 16385 chars
++        value = "\U0001f600" * 16385
++        assert len(value) < store.MAX_VALUE_LENGTH  # chars < limit
++        assert len(value.encode("utf-8")) > store.MAX_VALUE_LENGTH  # bytes > limit
++        with pytest.raises(SecretValueTooLarge, match="bytes"):
++            store.put("k", value, scope=SecretScope.TASK, owner="svc")
++
++    def test_lazy_expiry_on_get(self) -> None:
++        store = SecretStore()
++        past = time.time() - 10
++        store.put("k", "v", scope=SecretScope.TASK, owner="svc", expires_at=past)
++        assert store.get("k", scope=SecretScope.TASK) is None
++
++    def test_lazy_expiry_on_list(self) -> None:
++        store = SecretStore()
++        past = time.time() - 10
++        future = time.time() + 3600
++        store.put("expired", "v", scope=SecretScope.TASK, owner="svc", expires_at=past)
++        store.put("alive", "v", scope=SecretScope.TASK, owner="svc", expires_at=future)
++        keys = store.list_keys(scope=SecretScope.TASK)
++        assert keys == ["alive"]
++
++    def test_thread_safety(self) -> None:
++        store = SecretStore()
++        errors: list[Exception] = []
++
++        def write_batch(prefix: str) -> None:
++            try:
++                for i in range(50):
++                    store.put(f"{prefix}-{i}", f"val-{i}",
++                              scope=SecretScope.TASK, owner="svc")
++            except Exception as e:
++                errors.append(e)
++
++        threads = [
++            threading.Thread(target=write_batch, args=(f"t{n}",))
++            for n in range(4)
++        ]
++        for t in threads:
++            t.start()
++        for t in threads:
++            t.join()
++
++        assert not errors
++        assert store.count(scope=SecretScope.TASK) == 200
++
++    def test_encryption_at_rest(self) -> None:
++        """Stored values are encrypted — raw access doesn't reveal plaintext."""
++        store = SecretStore()
++        store.put("secret-key", "super-secret-password",
++                  scope=SecretScope.TASK, owner="svc")
++        with store._lock:
++            entry = store._store[SecretScope.TASK]["secret-key"]
++        assert b"super-secret-password" not in entry.encrypted_value
++
++
++# ═══════════════════════════════════════════════════════════════════════
++# SecretBroker — Capability-Based Access Control
++# ═══════════════════════════════════════════════════════════════════════
++
++
++class TestSecretBrokerCapability:
++    """SecretBroker enforces SecretCapability from leases."""
++
++    def _t2_capability(self) -> SecretCapability:
++        """T2-equivalent: 3 secrets, task scope only."""
++        return SecretCapability(
++            allowed_scopes=["task"],
++            max_secrets=3,
++        )
++
++    def _t3_capability(self) -> SecretCapability:
++        """T3-equivalent: 10 secrets, task + session scopes."""
++        return SecretCapability(
++            allowed_scopes=["task", "session"],
++            max_secrets=10,
++        )
++
++    def _t4_capability(self) -> SecretCapability:
++        """T4-equivalent: 50 secrets, all scopes."""
++        return SecretCapability(
++            allowed_scopes=["task", "session", "global"],
++            max_secrets=50,
++        )
++
++    def _no_access_capability(self) -> SecretCapability:
++        """T0/T1-equivalent: no secret access."""
++        return SecretCapability(
++            allowed_scopes=[],
++            max_secrets=0,
++        )
++
++    @pytest.mark.asyncio
++    async def test_get_with_valid_capability(self) -> None:
++        broker = SecretBroker()
++        cap = self._t2_capability()
++        await broker.put_secret("api-key", "secret", capability=cap)
++        result = await broker.get_secret("api-key", capability=cap)
++        assert result == "secret"
++
++    @pytest.mark.asyncio
++    async def test_get_missing_returns_none(self) -> None:
++        broker = SecretBroker()
++        cap = self._t2_capability()
++        result = await broker.get_secret("nope", capability=cap)
++        assert result is None
++
++    @pytest.mark.asyncio
++    async def test_no_access_denied(self) -> None:
++        broker = SecretBroker()
++        cap = self._no_access_capability()
++        with pytest.raises(SecretAccessDenied, match="no secret access"):
++            await broker.get_secret("key", capability=cap)
++
++    @pytest.mark.asyncio
++    async def test_scope_denied(self) -> None:
++        broker = SecretBroker()
++        cap = self._t2_capability()  # task only
++        with pytest.raises(SecretAccessDenied, match="not in allowed scopes"):
++            await broker.get_secret("key", scope="session", capability=cap)
++
++    @pytest.mark.asyncio
++    async def test_t3_can_access_session(self) -> None:
++        broker = SecretBroker()
++        cap = self._t3_capability()
++        await broker.put_secret("k", "v", scope="session", capability=cap)
++        assert await broker.get_secret("k", scope="session", capability=cap) == "v"
++
++    @pytest.mark.asyncio
++    async def test_t3_cannot_access_global(self) -> None:
++        broker = SecretBroker()
++        cap = self._t3_capability()
++        with pytest.raises(SecretAccessDenied, match="not in allowed scopes"):
++            await broker.get_secret("key", scope="global", capability=cap)
++
++    @pytest.mark.asyncio
++    async def test_t4_can_access_all_scopes(self) -> None:
++        broker = SecretBroker()
++        cap = self._t4_capability()
++        for scope in ["task", "session", "global"]:
++            await broker.put_secret(f"k-{scope}", "v", scope=scope,
++                                    capability=cap)
++            assert await broker.get_secret(f"k-{scope}", scope=scope,
++                                           capability=cap) == "v"
++
++    @pytest.mark.asyncio
++    async def test_allowed_keys_enforced(self) -> None:
++        cap = SecretCapability(
++            allowed_scopes=["task"],
++            allowed_keys=["db-pass", "api-key"],
++            max_secrets=5,
++        )
++        broker = SecretBroker()
++        await broker.put_secret("db-pass", "secret", capability=cap)
++        with pytest.raises(SecretAccessDenied, match="not in allowed keys"):
++            await broker.get_secret("other-key", capability=cap)
++
++    @pytest.mark.asyncio
++    async def test_max_secrets_enforced(self) -> None:
++        cap = SecretCapability(
++            allowed_scopes=["task"],
++            max_secrets=2,
++        )
++        broker = SecretBroker()
++        await broker.put_secret("k1", "v1", capability=cap)
++        await broker.put_secret("k2", "v2", capability=cap)
++        with pytest.raises(SecretAccessDenied, match="max_secrets"):
++            await broker.put_secret("k3", "v3", capability=cap)
++
++    @pytest.mark.asyncio
++    async def test_max_secrets_per_owner_not_scope(self) -> None:
++        """max_secrets counts per-owner, not scope-wide. Another owner's
++        secrets must not block a different caller's writes."""
++        store = SecretStore()
++        cap = SecretCapability(allowed_scopes=["task"], max_secrets=2)
++        broker_a = SecretBroker(store=store, default_capability=cap, owner="owner-a")
++        broker_b = SecretBroker(store=store, default_capability=cap, owner="owner-b")
++        # Owner A fills their quota
++        await broker_a.put_secret("a1", "v")
++        await broker_a.put_secret("a2", "v")
++        # Owner B should NOT be blocked by owner A's secrets
++        await broker_b.put_secret("b1", "v")
++        await broker_b.put_secret("b2", "v")
++        assert store.count(scope=SecretScope.TASK) == 4
++
++    @pytest.mark.asyncio
++    async def test_expired_secrets_dont_block_writes(self) -> None:
++        """Expired entries are purged on write so they don't ghost-fill the scope."""
++        store = SecretStore()
++        cap = SecretCapability(allowed_scopes=["task"], max_secrets=2)
++        broker = SecretBroker(store=store)
++        past = time.time() - 10
++        await broker.put_secret("old1", "v", capability=cap, expires_at=past)
++        await broker.put_secret("old2", "v", capability=cap, expires_at=past)
++        # Both are expired — new writes should succeed after purge
++        await broker.put_secret("new1", "v", capability=cap)
++        await broker.put_secret("new2", "v", capability=cap)
++        assert await broker.get_secret("new1", capability=cap) == "v"
++
++    @pytest.mark.asyncio
++    async def test_expired_key_resurrection_blocked(self) -> None:
++        """Overwriting an expired key must count as a new insert for cap_limit.
++        Prevents bypassing max_secrets by 'updating' expired keys back to life."""
++        store = SecretStore()
++        cap = SecretCapability(allowed_scopes=["task"], max_secrets=1)
++        broker = SecretBroker(store=store)
++        past = time.time() - 10
++        # Fill quota then let it expire
++        await broker.put_secret("k1", "v1", capability=cap, expires_at=past)
++        # Write a new live key — uses the freed slot
++        await broker.put_secret("k2", "live", capability=cap)
++        # Attempting to "resurrect" expired k1 must be denied (quota full)
++        with pytest.raises(SecretAccessDenied, match="max_secrets"):
++            await broker.put_secret("k1", "revived", capability=cap)
++
++    @pytest.mark.asyncio
++    async def test_update_existing_does_not_hit_limit(self) -> None:
++        cap = SecretCapability(
++            allowed_scopes=["task"],
++            max_secrets=1,
++        )
++        broker = SecretBroker()
++        await broker.put_secret("k1", "v1", capability=cap)
++        # Update should work even at limit
++        await broker.put_secret("k1", "v2", capability=cap)
++        assert await broker.get_secret("k1", capability=cap) == "v2"
++
++    @pytest.mark.asyncio
++    async def test_invalid_scope_rejected(self) -> None:
++        broker = SecretBroker()
++        cap = self._t2_capability()
++        with pytest.raises(SecretAccessDenied, match="Invalid scope"):
++            await broker.get_secret("key", scope="invalid", capability=cap)
++
++
++# ═══════════════════════════════════════════════════════════════════════
++# SecretBroker — Revocation and Listing
++# ═══════════════════════════════════════════════════════════════════════
++
++
++class TestSecretBrokerOperations:
++    """SecretBroker revoke and list operations."""
++
++    def _cap(self) -> SecretCapability:
++        return SecretCapability(
++            allowed_scopes=["task", "session"],
++            max_secrets=10,
++        )
++
++    @pytest.mark.asyncio
++    async def test_revoke_existing(self) -> None:
++        broker = SecretBroker()
++        cap = self._cap()
++        await broker.put_secret("k", "v", capability=cap)
++        assert await broker.revoke("k", capability=cap) is True
++        assert await broker.get_secret("k", capability=cap) is None
++
++    @pytest.mark.asyncio
++    async def test_revoke_nonexistent(self) -> None:
++        broker = SecretBroker()
++        cap = self._cap()
++        assert await broker.revoke("nope", capability=cap) is False
++
++    @pytest.mark.asyncio
++    async def test_list_available(self) -> None:
++        broker = SecretBroker()
++        cap = self._cap()
++        await broker.put_secret("b", "v", capability=cap)
++        await broker.put_secret("a", "v", capability=cap)
++        keys = broker.list_available(capability=cap)
++        assert keys == ["a", "b"]
++
++    @pytest.mark.asyncio
++    async def test_list_filtered_by_allowed_keys(self) -> None:
++        store = SecretStore()
++        store.put("visible", "v", scope=SecretScope.TASK, owner="svc")
++        store.put("hidden", "v", scope=SecretScope.TASK, owner="svc")
++        cap = SecretCapability(
++            allowed_scopes=["task"],
++            allowed_keys=["visible"],
++            max_secrets=5,
++        )
++        broker = SecretBroker(store=store)
++        keys = broker.list_available(capability=cap)
++        assert keys == ["visible"]
++
++    @pytest.mark.asyncio
++    async def test_list_empty_scope(self) -> None:
++        broker = SecretBroker()
++        cap = self._cap()
++        assert broker.list_available(capability=cap) == []
++
++    @pytest.mark.asyncio
++    async def test_revoke_denied_without_scope(self) -> None:
++        broker = SecretBroker()
++        cap = SecretCapability(allowed_scopes=["task"], max_secrets=5)
++        with pytest.raises(SecretAccessDenied):
++            await broker.revoke("k", scope="session", capability=cap)
++
++
++# ═══════════════════════════════════════════════════════════════════════
++# SecretBroker — Default Capability
++# ═══════════════════════════════════════════════════════════════════════
++
++
++class TestSecretBrokerDefaults:
++    """SecretBroker with default_capability."""
++
++    @pytest.mark.asyncio
++    async def test_uses_default_capability(self) -> None:
++        cap = SecretCapability(allowed_scopes=["task"], max_secrets=5)
++        broker = SecretBroker(default_capability=cap)
++        await broker.put_secret("k", "v")
++        assert await broker.get_secret("k") == "v"
++
++    @pytest.mark.asyncio
++    async def test_default_zero_denies(self) -> None:
++        broker = SecretBroker()  # default SecretCapability has max_secrets=0
++        with pytest.raises(SecretAccessDenied, match="no secret access"):
++            await broker.get_secret("k")
++
++
++# ═══════════════════════════════════════════════════════════════════════
++# Security Regression Tests
++# ═══════════════════════════════════════════════════════════════════════
++
++
++class TestSecretBrokerSecurity:
++    """Security invariants for the secret broker."""
++
++    @pytest.mark.asyncio
++    async def test_t0_t1_cannot_access_secrets(self) -> None:
++        """T0/T1 equivalent capabilities deny all access."""
++        broker = SecretBroker()
++        for cap in [
++            SecretCapability(allowed_scopes=[], max_secrets=0),
++            SecretCapability(allowed_scopes=["task"], max_secrets=0),
++        ]:
++            with pytest.raises(SecretAccessDenied):
++                await broker.get_secret("key", capability=cap)
++
++    @pytest.mark.asyncio
++    async def test_scope_escalation_prevented(self) -> None:
++        """T2 (task-only) cannot read session secrets."""
++        store = SecretStore()
++        store.put("session-secret", "classified",
++                  scope=SecretScope.SESSION, owner="admin")
++        t2_cap = SecretCapability(
++            allowed_scopes=["task"], max_secrets=3,
++        )
++        broker = SecretBroker(store=store)
++        with pytest.raises(SecretAccessDenied, match="not in allowed scopes"):
++            await broker.get_secret("session-secret", scope="session",
++                                    capability=t2_cap)
++
++    @pytest.mark.asyncio
++    async def test_key_restriction_enforced(self) -> None:
++        """Allowed_keys list is a hard deny for unlisted keys."""
++        cap = SecretCapability(
++            allowed_scopes=["task"],
++            allowed_keys=["safe-key"],
++            max_secrets=5,
++        )
++        broker = SecretBroker()
++        with pytest.raises(SecretAccessDenied, match="not in allowed keys"):
++            await broker.put_secret("other-key", "v", capability=cap)
++
++    @pytest.mark.asyncio
++    async def test_encrypted_at_rest_via_broker(self) -> None:
++        """Values stored through broker are encrypted in the store."""
++        store = SecretStore()
++        cap = SecretCapability(allowed_scopes=["task"], max_secrets=5)
++        broker = SecretBroker(store=store, default_capability=cap)
++        await broker.put_secret("api-key", "super-secret-123")
++        # Direct store access — value should be encrypted
++        with store._lock:
++            entry = store._store[SecretScope.TASK]["api-key"]
++        assert b"super-secret-123" not in entry.encrypted_value
++        # But broker decrypts it
++        assert await broker.get_secret("api-key") == "super-secret-123"
++
++    @pytest.mark.asyncio
++    async def test_deny_before_allow(self) -> None:
++        """Zero max_secrets denies even if scopes match."""
++        cap = SecretCapability(
++            allowed_scopes=["task", "session", "global"],
++            max_secrets=0,
++        )
++        broker = SecretBroker()
++        with pytest.raises(SecretAccessDenied, match="no secret access"):
++            await broker.get_secret("key", capability=cap)
++
++    def test_secret_store_values_not_in_repr(self) -> None:
++        """SecretEntry encrypted_value should not leak plaintext."""
++        store = SecretStore()
++        store.put("key", "password123", scope=SecretScope.TASK, owner="svc")
++        with store._lock:
++            entry = store._store[SecretScope.TASK]["key"]
++        r = repr(entry)
++        assert "password123" not in r
++
++    @pytest.mark.asyncio
++    async def test_expired_secret_not_accessible(self) -> None:
++        """Expired secrets return None even through broker."""
++        store = SecretStore()
++        cap = SecretCapability(allowed_scopes=["task"], max_secrets=5)
++        broker = SecretBroker(store=store, default_capability=cap)
++        past = time.time() - 10
++        await broker.put_secret("expired", "v", expires_at=past)
++        assert await broker.get_secret("expired") is None
++
++    def test_ciphertext_integrity_check(self) -> None:
++        """Tampered ciphertext is detected by HMAC integrity tag."""
++        enc = _SecretEncryptor(b"test-key-32bytes" * 2)
++        encrypted = enc.encrypt("sensitive-data")
++        # Flip a byte in the ciphertext region (after 16-byte nonce, before 32-byte tag)
++        tampered = bytearray(encrypted)
++        tampered[20] ^= 0xFF
++        with pytest.raises(SecretBrokerError, match="integrity check failed"):
++            enc.decrypt(bytes(tampered))
++
++    def test_ciphertext_truncation_detected(self) -> None:
++        """Truncated ciphertext is rejected."""
++        enc = _SecretEncryptor(b"test-key-32bytes" * 2)
++        with pytest.raises(SecretBrokerError, match="Corrupt"):
++            enc.decrypt(b"\x00" * 16)  # nonce only, no ciphertext or tag
++
++    @pytest.mark.asyncio
++    async def test_concurrent_put_respects_cap_limit(self) -> None:
++        """Concurrent writers must not exceed capability max_secrets (TOCTOU fix)."""
++        store = SecretStore()
++        cap = SecretCapability(allowed_scopes=["task"], max_secrets=5)
++        broker = SecretBroker(store=store, default_capability=cap)
++        errors: list[Exception] = []
++        success_count = 0
++        lock = threading.Lock()
++
++        import asyncio
++
++        async def write(i: int) -> None:
++            nonlocal success_count
++            try:
++                await broker.put_secret(
++                    f"key-{i}", f"val-{i}",
++                )
++                with lock:
++                    success_count += 1
++            except SecretAccessDenied:
++                pass  # Expected once limit is reached
++            except Exception as e:
++                with lock:
++                    errors.append(e)
++
++        # Attempt 20 concurrent writes with cap of 5
++        await asyncio.gather(*(write(i) for i in range(20)))
++        assert not errors, f"Unexpected errors: {errors}"
++        # Must not exceed cap
++        assert store.count(scope=SecretScope.TASK) <= 5

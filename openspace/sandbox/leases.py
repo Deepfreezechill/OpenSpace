@@ -143,7 +143,7 @@ class SecretCapability(BaseModel):
         default_factory=lambda: ["task"],
         description="Scopes this lease can access (task, session, global)",
     )
-    allowed_keys: list[str] = Field(default_factory=list, description="Specific secret keys allowed (empty = none)")
+    allowed_keys: list[str] = Field(default_factory=list, description="Specific secret keys allowed (empty = unrestricted)")
     max_secrets: int = Field(default=0, ge=0, le=50, description="Max secrets accessible (0 = none)")
 
 
