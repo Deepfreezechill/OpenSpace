@@ -343,6 +343,30 @@ class FilesystemBrokerPort(Protocol):
     def open_write(self, path: str, size_bytes: int = 0) -> int: ...
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Phase 2 — Network Proxy (EPIC 2.3)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@runtime_checkable
+class NetworkProxyPort(Protocol):
+    """Port for policy-enforced outbound network access (EPIC 2.3).
+
+    Provides domain allow/deny enforcement, port filtering,
+    concurrent connection tracking, and proxy lifecycle management.
+    """
+
+    def check_request(self, domain: str, port: int) -> None: ...
+
+    async def connect(self, domain: str, port: int) -> str: ...
+
+    async def disconnect(self, connection_id: str) -> None: ...
+
+    async def list_connections(self) -> list: ...
+
+    async def shutdown(self) -> int: ...
+
+
 __all__ = [
     "AgentExecutorPort",
     "AnalysisPort",

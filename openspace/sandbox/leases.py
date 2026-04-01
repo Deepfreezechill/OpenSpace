@@ -172,6 +172,10 @@ class LeaseSchema(BaseModel):
             # T0: strictest — sandbox-only isolation
             if self.network.outbound_enabled:
                 raise ValueError("T0 (untrusted) cannot have outbound network enabled")
+            if self.network.allowed_domains:
+                raise ValueError(
+                    "T0 (untrusted) cannot have allowed_domains when outbound is disabled"
+                )
             if self.process.allow_shell:
                 raise ValueError("T0 (untrusted) cannot allow shell execution")
             if self.process.max_processes > 1:
@@ -189,6 +193,10 @@ class LeaseSchema(BaseModel):
             # T1: read-only + limited tools — no network, no shell
             if self.network.outbound_enabled:
                 raise ValueError("T1 (basic) cannot have outbound network enabled")
+            if self.network.allowed_domains:
+                raise ValueError(
+                    "T1 (basic) cannot have allowed_domains when outbound is disabled"
+                )
             if self.process.allow_shell:
                 raise ValueError("T1 (basic) cannot allow shell execution")
             if self.secrets.max_secrets > 0:
