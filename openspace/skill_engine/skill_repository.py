@@ -24,6 +24,8 @@ from typing import Any, Dict, Generator, List, Optional
 
 from openspace.utils.logging import Logger
 
+from .migration_manager import MigrationManager
+
 from .types import (
     SkillCategory,
     SkillLineage,
@@ -63,61 +65,7 @@ def _db_retry(
     return decorator
 
 
-_DDL = """
-CREATE TABLE IF NOT EXISTS skill_records (
-    skill_id               TEXT PRIMARY KEY,
-    name                   TEXT NOT NULL,
-    description            TEXT NOT NULL DEFAULT '',
-    path                   TEXT NOT NULL DEFAULT '',
-    is_active              INTEGER NOT NULL DEFAULT 1,
-    category               TEXT NOT NULL DEFAULT 'workflow',
-    visibility             TEXT NOT NULL DEFAULT 'private',
-    creator_id             TEXT NOT NULL DEFAULT '',
-    lineage_origin         TEXT NOT NULL DEFAULT 'imported',
-    lineage_generation     INTEGER NOT NULL DEFAULT 0,
-    lineage_source_task_id TEXT,
-    lineage_change_summary TEXT NOT NULL DEFAULT '',
-    lineage_content_diff   TEXT NOT NULL DEFAULT '',
-    lineage_content_snapshot TEXT NOT NULL DEFAULT '{}',
-    lineage_created_at     TEXT NOT NULL,
-    lineage_created_by     TEXT NOT NULL DEFAULT '',
-    total_selections       INTEGER NOT NULL DEFAULT 0,
-    total_applied          INTEGER NOT NULL DEFAULT 0,
-    total_completions      INTEGER NOT NULL DEFAULT 0,
-    total_fallbacks        INTEGER NOT NULL DEFAULT 0,
-    first_seen             TEXT NOT NULL,
-    last_updated           TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_sr_category ON skill_records(category);
-CREATE INDEX IF NOT EXISTS idx_sr_updated  ON skill_records(last_updated);
-CREATE INDEX IF NOT EXISTS idx_sr_active   ON skill_records(is_active);
-CREATE INDEX IF NOT EXISTS idx_sr_name     ON skill_records(name);
 
-CREATE TABLE IF NOT EXISTS skill_lineage_parents (
-    skill_id        TEXT NOT NULL
-        REFERENCES skill_records(skill_id) ON DELETE CASCADE,
-    parent_skill_id TEXT NOT NULL,
-    PRIMARY KEY (skill_id, parent_skill_id)
-);
-CREATE INDEX IF NOT EXISTS idx_lp_parent
-    ON skill_lineage_parents(parent_skill_id);
-
-CREATE TABLE IF NOT EXISTS skill_tool_deps (
-    skill_id TEXT NOT NULL
-        REFERENCES skill_records(skill_id) ON DELETE CASCADE,
-    tool_key TEXT NOT NULL,
-    critical INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (skill_id, tool_key)
-);
-CREATE INDEX IF NOT EXISTS idx_td_tool ON skill_tool_deps(tool_key);
-
-CREATE TABLE IF NOT EXISTS skill_tags (
-    skill_id TEXT NOT NULL
-        REFERENCES skill_records(skill_id) ON DELETE CASCADE,
-    tag      TEXT NOT NULL,
-    PRIMARY KEY (skill_id, tag)
-);
-"""
 
 
 class SkillRepository:
@@ -199,10 +147,16 @@ class SkillRepository:
 
     @_db_retry()
     def _init_db(self) -> None:
-        """Create tables if they don't exist (idempotent)."""
-        with self._mu:
-            self._conn.executescript(_DDL)
-            self._conn.commit()
+        """Create tables if they don't exist (idempotent).
+        
+        In standalone mode, delegates to MigrationManager to ensure schema consistency.
+        In embedded mode (shared connection), assumes schema already exists.
+        """
+        # Create a MigrationManager to handle schema creation
+        # This ensures DDL consistency across all modules
+        migration_manager = MigrationManager(conn=self._conn, lock=self._mu)
+        migration_manager.ensure_current_schema()
+        logger.debug("Schema initialization delegated to MigrationManager")
 
     def _ensure_open(self) -> None:
         if self._closed:

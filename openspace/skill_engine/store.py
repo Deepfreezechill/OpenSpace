@@ -1067,8 +1067,11 @@ class SkillStore:
         return self._migrations.get_schema_version()
 
     def set_schema_version(self, version: int) -> None:
-        """Set schema version (facade to MigrationManager)."""
-        return self._migrations.set_schema_version(version)
+        """Set schema version (facade to MigrationManager).
+        
+        DEPRECATED: Use ensure_current_schema() instead.
+        """
+        return self._migrations._set_schema_version(version)
 
     def migrate_to_version(self, target_version: int) -> None:
         """Migrate schema to target version (facade to MigrationManager)."""

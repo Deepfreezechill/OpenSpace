@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from unittest.mock import patch
 
-from openspace.skill_engine.migration_manager import MigrationManager
+from openspace.skill_engine.migration_manager import MigrationManager, CURRENT_VERSION
 
 
 @pytest.fixture
@@ -199,7 +199,7 @@ class TestSchemaVersioning:
 
     def test_set_negative_version_fails(self, migration_manager):
         """Test that setting negative version raises error."""
-        with pytest.raises(ValueError, match="Schema version must be non-negative"):
+        with pytest.raises(ValueError, match="version must be non-negative"):
             migration_manager.set_schema_version(-1)
 
     def test_version_persists_across_connections(self, temp_db_path):
@@ -394,3 +394,150 @@ class TestSkillStoreFacadeIntegration:
         assert store.get_schema_version() == 2  # Should remain at 2
         
         store.close()
+
+
+class TestSecurityAndRobustness:
+    """Tests for security fixes and robustness improvements."""
+
+    def test_set_schema_version_rejects_non_int(self, migration_manager):
+        """Test that _set_schema_version rejects non-integer inputs."""
+        # Test various non-integer types that could be used for injection
+        invalid_inputs = [
+            "5; DROP TABLE skill_records; --",
+            5.0,
+            "5",
+            [],
+            {},
+            None,
+        ]
+        
+        for invalid_input in invalid_inputs:
+            with pytest.raises(TypeError, match="version must be int"):
+                migration_manager._set_schema_version(invalid_input)
+
+    def test_set_schema_version_bounds_checking(self, migration_manager):
+        """Test that _set_schema_version enforces bounds checking."""
+        # Test negative values
+        with pytest.raises(ValueError, match="version must be non-negative"):
+            migration_manager._set_schema_version(-1)
+            
+        # Test values exceeding reasonable limit
+        with pytest.raises(ValueError, match="version \\d+ exceeds reasonable limit"):
+            migration_manager._set_schema_version(100)
+
+    def test_migration_atomic_on_failure(self, migration_manager):
+        """Test that migration failures don't leave database in inconsistent state."""
+        # Start at version 0
+        assert migration_manager.get_schema_version() == 0
+        
+        # Patch the DDL statements to include a failing statement
+        with patch('openspace.skill_engine.migration_manager._DDL_STATEMENTS') as mock_statements:
+            mock_statements.__iter__ = lambda x: iter([
+                "CREATE TABLE test_table (id INTEGER PRIMARY KEY)",
+                "INVALID SQL THAT WILL FAIL",  # This will cause the migration to fail
+                "CREATE TABLE another_table (id INTEGER PRIMARY KEY)"
+            ])
+            
+            with pytest.raises(sqlite3.OperationalError):
+                migration_manager.migrate_to_version(1)
+        
+        # Verify version wasn't bumped due to rollback
+        assert migration_manager.get_schema_version() == 0
+        
+        # Verify no partial tables were created
+        with migration_manager._conn:
+            cursor = migration_manager._conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='test_table'"
+            )
+            tables = cursor.fetchall()
+            assert len(tables) == 0, "Partial table creation detected - transaction not atomic"
+
+    def test_set_schema_version_deprecated_warning(self, migration_manager):
+        """Test that public set_schema_version shows deprecation warning."""
+        with pytest.warns(DeprecationWarning, match="set_schema_version is deprecated"):
+            migration_manager.set_schema_version(1)
+
+
+class TestDDLSingleSourceOfTruth:
+    """Test that DDL consolidation is properly enforced."""
+
+    def test_ddl_single_source_of_truth(self):
+        """Verify no other module has CREATE TABLE strings (architecture invariant)."""
+        import openspace.skill_engine.skill_repository as repo_module
+        import openspace.skill_engine.analysis_store as analysis_module
+        import openspace.skill_engine.tag_search as tag_module
+        import inspect
+        
+        # Check module source code for CREATE TABLE strings
+        modules_to_check = [
+            (repo_module, "skill_repository.py"),
+            (analysis_module, "analysis_store.py"),
+            (tag_module, "tag_search.py"),
+        ]
+        
+        for module, module_name in modules_to_check:
+            source = inspect.getsource(module)
+            assert "CREATE TABLE" not in source, f"{module_name} still contains CREATE TABLE DDL"
+            assert "_DDL" not in source, f"{module_name} still contains _DDL constant"
+
+    def test_standalone_modules_use_migration_manager(self, temp_db_path):
+        """Verify SkillRepository/AnalysisStore/TagSearch standalone mode delegates DDL to MigrationManager."""
+        from openspace.skill_engine.skill_repository import SkillRepository
+        from openspace.skill_engine.analysis_store import AnalysisStore
+        from openspace.skill_engine.tag_search import TagSearch
+        
+        # Each module should create schema via MigrationManager in standalone mode
+        modules = [
+            SkillRepository,
+            AnalysisStore,
+            TagSearch,
+        ]
+        
+        for i, ModuleClass in enumerate(modules):
+            db_path = temp_db_path.parent / f"test_standalone_{i}.db"
+            
+            # Create instance (should delegate to MigrationManager)
+            instance = ModuleClass(db_path=db_path)
+            
+            # Verify schema exists
+            with instance._conn:
+                cursor = instance._conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+                tables = [row[0] for row in cursor.fetchall()]
+                
+            # All modules should have core schema tables
+            assert 'skill_records' in tables
+            assert 'execution_analyses' in tables
+            assert 'skill_judgments' in tables
+            
+            instance.close()
+
+    def test_schema_consistency_across_modules(self, temp_db_path):
+        """Verify that all modules create identical schemas."""
+        from openspace.skill_engine.skill_repository import SkillRepository
+        from openspace.skill_engine.analysis_store import AnalysisStore
+        from openspace.skill_engine.tag_search import TagSearch
+        
+        modules = [SkillRepository, AnalysisStore, TagSearch]
+        schemas = []
+        
+        for i, ModuleClass in enumerate(modules):
+            db_path = temp_db_path.parent / f"test_consistency_{i}.db"
+            instance = ModuleClass(db_path=db_path)
+            
+            # Get schema definition
+            with instance._conn:
+                cursor = instance._conn.execute("""
+                    SELECT sql FROM sqlite_master 
+                    WHERE type IN ('table', 'index') AND name NOT LIKE 'sqlite_%'
+                    ORDER BY name
+                """)
+                schema = [row[0] for row in cursor.fetchall() if row[0]]
+                schemas.append(schema)
+                
+            instance.close()
+        
+        # All schemas should be identical
+        for i in range(1, len(schemas)):
+            assert schemas[0] == schemas[i], f"Schema mismatch between modules {0} and {i}"

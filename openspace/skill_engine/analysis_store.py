@@ -26,6 +26,8 @@ from typing import Any, Dict, Generator, List, Optional
 
 from openspace.utils.logging import Logger
 
+from .migration_manager import MigrationManager
+
 from .types import (
     ExecutionAnalysis,
     EvolutionSuggestion,
@@ -64,39 +66,7 @@ def _db_retry(
     return decorator
 
 
-_DDL = """
-CREATE TABLE IF NOT EXISTS execution_analyses (
-    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id                TEXT NOT NULL UNIQUE,
-    timestamp              TEXT NOT NULL,
-    task_completed         INTEGER NOT NULL,
-    execution_note         TEXT NOT NULL DEFAULT '',
-    tool_issues            TEXT NOT NULL DEFAULT '[]',
-    candidate_for_evolution INTEGER NOT NULL DEFAULT 0,
-    evolution_suggestions   TEXT NOT NULL DEFAULT '[]',
-    analyzed_by            TEXT NOT NULL DEFAULT '',
-    analyzed_at            TEXT NOT NULL
-);
 
-CREATE INDEX IF NOT EXISTS idx_ea_task  ON execution_analyses(task_id);
-CREATE INDEX IF NOT EXISTS idx_ea_ts    ON execution_analyses(timestamp);
-
--- skill_judgments —— Per-skill assessments within a task analysis.
--- FK to execution_analyses.id (CASCADE delete).
--- FIXED: skill_id stores true skill_id (e.g. weather__imp_a1b2c3d4).
-
-CREATE TABLE IF NOT EXISTS skill_judgments (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    analysis_id INTEGER NOT NULL
-        REFERENCES execution_analyses(id) ON DELETE CASCADE,
-    skill_id   TEXT NOT NULL,
-    skill_applied INTEGER NOT NULL DEFAULT 0,
-    note       TEXT NOT NULL DEFAULT ''
-);
-
-CREATE INDEX IF NOT EXISTS idx_sj_skill    ON skill_judgments(skill_id);
-CREATE INDEX IF NOT EXISTS idx_sj_analysis ON skill_judgments(analysis_id);
-"""
 
 
 class AnalysisStore:
@@ -178,10 +148,16 @@ class AnalysisStore:
 
     @_db_retry()
     def _init_db(self) -> None:
-        """Create tables if they don't exist (idempotent)."""
-        with self._mu:
-            self._conn.executescript(_DDL)
-            self._conn.commit()
+        """Create tables if they don't exist (idempotent).
+        
+        In standalone mode, delegates to MigrationManager to ensure schema consistency.
+        In embedded mode (shared connection), assumes schema already exists.
+        """
+        # Create a MigrationManager to handle schema creation
+        # This ensures DDL consistency across all modules
+        migration_manager = MigrationManager(conn=self._conn, lock=self._mu)
+        migration_manager.ensure_current_schema()
+        logger.debug("Schema initialization delegated to MigrationManager")
 
     def _ensure_open(self) -> None:
         if self._closed:

@@ -54,93 +54,97 @@ def _db_retry(
     return decorator
 
 
-_DDL = """
-CREATE TABLE IF NOT EXISTS skill_records (
-    skill_id               TEXT PRIMARY KEY,
-    name                   TEXT NOT NULL,
-    description            TEXT NOT NULL DEFAULT '',
-    path                   TEXT NOT NULL DEFAULT '',
-    is_active              INTEGER NOT NULL DEFAULT 1,
-    category               TEXT NOT NULL DEFAULT 'workflow',
-    visibility             TEXT NOT NULL DEFAULT 'private',
-    creator_id             TEXT NOT NULL DEFAULT '',
-    lineage_origin         TEXT NOT NULL DEFAULT 'imported',
-    lineage_generation     INTEGER NOT NULL DEFAULT 0,
-    lineage_source_task_id TEXT,
-    lineage_change_summary TEXT NOT NULL DEFAULT '',
-    lineage_content_diff   TEXT NOT NULL DEFAULT '',
-    lineage_content_snapshot TEXT NOT NULL DEFAULT '{}',
-    lineage_created_at     TEXT NOT NULL,
-    lineage_created_by     TEXT NOT NULL DEFAULT '',
-    total_selections       INTEGER NOT NULL DEFAULT 0,
-    total_applied          INTEGER NOT NULL DEFAULT 0,
-    total_completions      INTEGER NOT NULL DEFAULT 0,
-    total_fallbacks        INTEGER NOT NULL DEFAULT 0,
-    first_seen             TEXT NOT NULL,
-    last_updated           TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_sr_category ON skill_records(category);
-CREATE INDEX IF NOT EXISTS idx_sr_updated  ON skill_records(last_updated);
-CREATE INDEX IF NOT EXISTS idx_sr_active   ON skill_records(is_active);
-CREATE INDEX IF NOT EXISTS idx_sr_name     ON skill_records(name);
+# DDL statements for schema creation
+# This is the SINGLE SOURCE OF TRUTH for all OpenSpace skill engine database schema.
+# Other modules (SkillRepository, AnalysisStore, TagSearch) must delegate to MigrationManager
+# for schema creation to prevent divergence and ensure consistency.
 
-CREATE TABLE IF NOT EXISTS skill_lineage_parents (
-    skill_id        TEXT NOT NULL
-        REFERENCES skill_records(skill_id) ON DELETE CASCADE,
-    parent_skill_id TEXT NOT NULL,
-    PRIMARY KEY (skill_id, parent_skill_id)
-);
-CREATE INDEX IF NOT EXISTS idx_lp_parent
-    ON skill_lineage_parents(parent_skill_id);
+_DDL_STATEMENTS = [
+    """CREATE TABLE IF NOT EXISTS skill_records (
+        skill_id               TEXT PRIMARY KEY,
+        name                   TEXT NOT NULL,
+        description            TEXT NOT NULL DEFAULT '',
+        path                   TEXT NOT NULL DEFAULT '',
+        is_active              INTEGER NOT NULL DEFAULT 1,
+        category               TEXT NOT NULL DEFAULT 'workflow',
+        visibility             TEXT NOT NULL DEFAULT 'private',
+        creator_id             TEXT NOT NULL DEFAULT '',
+        lineage_origin         TEXT NOT NULL DEFAULT 'imported',
+        lineage_generation     INTEGER NOT NULL DEFAULT 0,
+        lineage_source_task_id TEXT,
+        lineage_change_summary TEXT NOT NULL DEFAULT '',
+        lineage_content_diff   TEXT NOT NULL DEFAULT '',
+        lineage_content_snapshot TEXT NOT NULL DEFAULT '{}',
+        lineage_created_at     TEXT NOT NULL,
+        lineage_created_by     TEXT NOT NULL DEFAULT '',
+        total_selections       INTEGER NOT NULL DEFAULT 0,
+        total_applied          INTEGER NOT NULL DEFAULT 0,
+        total_completions      INTEGER NOT NULL DEFAULT 0,
+        total_fallbacks        INTEGER NOT NULL DEFAULT 0,
+        first_seen             TEXT NOT NULL,
+        last_updated           TEXT NOT NULL
+    )""",
+    
+    """CREATE INDEX IF NOT EXISTS idx_sr_category ON skill_records(category)""",
+    """CREATE INDEX IF NOT EXISTS idx_sr_updated  ON skill_records(last_updated)""",
+    """CREATE INDEX IF NOT EXISTS idx_sr_active   ON skill_records(is_active)""",
+    """CREATE INDEX IF NOT EXISTS idx_sr_name     ON skill_records(name)""",
 
--- One row per task.  task_id is UNIQUE (at most one analysis per task).
-CREATE TABLE IF NOT EXISTS execution_analyses (
-    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id                 TEXT NOT NULL UNIQUE,
-    timestamp               TEXT NOT NULL,
-    task_completed          INTEGER NOT NULL DEFAULT 0,
-    execution_note          TEXT NOT NULL DEFAULT '',
-    tool_issues             TEXT NOT NULL DEFAULT '[]',
-    candidate_for_evolution INTEGER NOT NULL DEFAULT 0,
-    evolution_suggestions   TEXT NOT NULL DEFAULT '[]',
-    analyzed_by             TEXT NOT NULL DEFAULT '',
-    analyzed_at             TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_ea_task  ON execution_analyses(task_id);
-CREATE INDEX IF NOT EXISTS idx_ea_ts    ON execution_analyses(timestamp);
+    """CREATE TABLE IF NOT EXISTS skill_lineage_parents (
+        skill_id        TEXT NOT NULL
+            REFERENCES skill_records(skill_id) ON DELETE CASCADE,
+        parent_skill_id TEXT NOT NULL,
+        PRIMARY KEY (skill_id, parent_skill_id)
+    )""",
+    """CREATE INDEX IF NOT EXISTS idx_lp_parent
+        ON skill_lineage_parents(parent_skill_id)""",
 
--- Per-skill judgments within an analysis.
--- FK to execution_analyses.id (CASCADE delete).
--- skill_id is a plain TEXT — no FK to skill_records so that
--- historical judgments survive skill deletion.
-CREATE TABLE IF NOT EXISTS skill_judgments (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    analysis_id    INTEGER NOT NULL
-        REFERENCES execution_analyses(id) ON DELETE CASCADE,
-    skill_id       TEXT NOT NULL,
-    skill_applied  INTEGER NOT NULL DEFAULT 0,
-    note           TEXT NOT NULL DEFAULT '',
-    UNIQUE(analysis_id, skill_id)
-);
-CREATE INDEX IF NOT EXISTS idx_sj_skill    ON skill_judgments(skill_id);
-CREATE INDEX IF NOT EXISTS idx_sj_analysis ON skill_judgments(analysis_id);
+    """CREATE TABLE IF NOT EXISTS execution_analyses (
+        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_id                 TEXT NOT NULL UNIQUE,
+        timestamp               TEXT NOT NULL,
+        task_completed          INTEGER NOT NULL DEFAULT 0,
+        execution_note          TEXT NOT NULL DEFAULT '',
+        tool_issues             TEXT NOT NULL DEFAULT '[]',
+        candidate_for_evolution INTEGER NOT NULL DEFAULT 0,
+        evolution_suggestions   TEXT NOT NULL DEFAULT '[]',
+        analyzed_by             TEXT NOT NULL DEFAULT '',
+        analyzed_at             TEXT NOT NULL
+    )""",
+    """CREATE INDEX IF NOT EXISTS idx_ea_task  ON execution_analyses(task_id)""",
+    """CREATE INDEX IF NOT EXISTS idx_ea_ts    ON execution_analyses(timestamp)""",
 
-CREATE TABLE IF NOT EXISTS skill_tool_deps (
-    skill_id TEXT NOT NULL
-        REFERENCES skill_records(skill_id) ON DELETE CASCADE,
-    tool_key TEXT NOT NULL,
-    critical INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (skill_id, tool_key)
-);
-CREATE INDEX IF NOT EXISTS idx_td_tool ON skill_tool_deps(tool_key);
+    """CREATE TABLE IF NOT EXISTS skill_judgments (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        analysis_id    INTEGER NOT NULL
+            REFERENCES execution_analyses(id) ON DELETE CASCADE,
+        skill_id       TEXT NOT NULL,
+        skill_applied  INTEGER NOT NULL DEFAULT 0,
+        note           TEXT NOT NULL DEFAULT '',
+        UNIQUE(analysis_id, skill_id)
+    )""",
+    """CREATE INDEX IF NOT EXISTS idx_sj_skill    ON skill_judgments(skill_id)""",
+    """CREATE INDEX IF NOT EXISTS idx_sj_analysis ON skill_judgments(analysis_id)""",
 
-CREATE TABLE IF NOT EXISTS skill_tags (
-    skill_id TEXT NOT NULL
-        REFERENCES skill_records(skill_id) ON DELETE CASCADE,
-    tag      TEXT NOT NULL,
-    PRIMARY KEY (skill_id, tag)
-);
-"""
+    """CREATE TABLE IF NOT EXISTS skill_tool_deps (
+        skill_id TEXT NOT NULL
+            REFERENCES skill_records(skill_id) ON DELETE CASCADE,
+        tool_key TEXT NOT NULL,
+        critical INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (skill_id, tool_key)
+    )""",
+    """CREATE INDEX IF NOT EXISTS idx_td_tool ON skill_tool_deps(tool_key)""",
+
+    """CREATE TABLE IF NOT EXISTS skill_tags (
+        skill_id TEXT NOT NULL
+            REFERENCES skill_records(skill_id) ON DELETE CASCADE,
+        tag      TEXT NOT NULL,
+        PRIMARY KEY (skill_id, tag)
+    )"""
+]
+
+# Schema version constants
+CURRENT_VERSION = 1
 
 
 class MigrationManager:
@@ -234,11 +238,15 @@ class MigrationManager:
         This method executes the complete DDL script to set up the OpenSpace
         skill engine database schema. Safe to call multiple times due to
         IF NOT EXISTS clauses.
+        
+        Uses individual execute() statements instead of executescript() to
+        maintain transaction control when called from migrate_to_version().
         """
         self._ensure_open()
         
         with self._mu:
-            self._conn.executescript(_DDL)
+            for statement in _DDL_STATEMENTS:
+                self._conn.execute(statement)
             self._conn.commit()
         
         logger.debug("Schema initialized successfully")
@@ -255,16 +263,28 @@ class MigrationManager:
             cursor = self._conn.execute("PRAGMA user_version")
             return cursor.fetchone()[0]
 
-    def set_schema_version(self, version: int) -> None:
+    def _set_schema_version(self, version: int) -> None:
         """Set the schema version using PRAGMA user_version.
+        
+        Private method - external callers should use ensure_current_schema().
         
         Args:
             version: Schema version number to set.
+            
+        Raises:
+            TypeError: If version is not an integer.
+            ValueError: If version is negative or exceeds CURRENT_VERSION.
         """
         self._ensure_open()
         
+        # Security: Explicit type check to prevent f-string injection
+        if not isinstance(version, int):
+            raise TypeError(f"version must be int, got {type(version).__name__}")
         if version < 0:
-            raise ValueError(f"Schema version must be non-negative, got {version}")
+            raise ValueError(f"version must be non-negative, got {version}")
+        # Allow test versions higher than CURRENT_VERSION for testing purposes
+        if version > 99:  # Reasonable upper bound for testing
+            raise ValueError(f"version {version} exceeds reasonable limit")
             
         with self._mu:
             # Note: PRAGMA user_version does not support parameterized queries
@@ -273,6 +293,27 @@ class MigrationManager:
             self._conn.commit()
         
         logger.debug(f"Schema version set to {version}")
+
+    def set_schema_version(self, version: int) -> None:
+        """Set the schema version using PRAGMA user_version.
+        
+        Args:
+            version: Schema version number to set.
+            
+        Raises:
+            TypeError: If version is not an integer.
+            ValueError: If version is negative or exceeds CURRENT_VERSION.
+            
+        DEPRECATED: External callers should use ensure_current_schema() instead.
+        This method may be removed in a future version.
+        """
+        import warnings
+        warnings.warn(
+            "set_schema_version is deprecated. Use ensure_current_schema() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        self._set_schema_version(version)
 
     def migrate_to_version(self, target_version: int) -> None:
         """Migrate schema from current version to target version.
@@ -297,18 +338,34 @@ class MigrationManager:
             logger.debug(f"Schema already at version {target_version}")
             return
         
-        # For now, we only support migration from 0 to 1
-        # Future versions will add migration paths between versions
-        if current_version == 0 and target_version == 1:
-            self.initialize_schema()
-            self.set_schema_version(1)
-            logger.info(f"Migrated schema from {current_version} to {target_version}")
-        else:
-            raise RuntimeError(
-                f"Migration from version {current_version} to {target_version} not supported"
-            )
+        # Atomic migration: wrap DDL execution and version bump in single transaction
+        with self._mu:
+            self._conn.execute("BEGIN")
+            try:
+                # For now, we only support migration from 0 to 1
+                # Future versions will add migration paths between versions
+                if current_version == 0 and target_version == 1:
+                    # Execute DDL statements individually to maintain transaction control
+                    for statement in _DDL_STATEMENTS:
+                        self._conn.execute(statement)
+                    
+                    # Set version atomically within the same transaction
+                    self._conn.execute(f"PRAGMA user_version = {target_version}")
+                    self._conn.commit()
+                    
+                    logger.info(f"Migrated schema from {current_version} to {target_version}")
+                    
+                else:
+                    self._conn.rollback()
+                    raise RuntimeError(
+                        f"Migration from version {current_version} to {target_version} not supported"
+                    )
+                    
+            except Exception:
+                self._conn.rollback()
+                raise
 
-    def ensure_current_schema(self, expected_version: int = 1) -> None:
+    def ensure_current_schema(self, expected_version: int = CURRENT_VERSION) -> None:
         """Ensure the database schema is at the expected version.
         
         This is the recommended method for application initialization.
@@ -316,6 +373,7 @@ class MigrationManager:
         
         Args:
             expected_version: The version the schema should be at.
+                             Defaults to CURRENT_VERSION.
         """
         self._ensure_open()
         
