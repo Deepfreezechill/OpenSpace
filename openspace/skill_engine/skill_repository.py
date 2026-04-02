@@ -276,7 +276,7 @@ class SkillRepository:
                 "SELECT * FROM skill_records WHERE skill_id=?",
                 (skill_id,),
             ).fetchone()
-            return self._to_record(conn, row) if row else None
+            return self.to_record(conn, row) if row else None
 
     # ── CRUD: Delete ──────────────────────────────────────────────────
 
@@ -316,7 +316,7 @@ class SkillRepository:
                 ).fetchall()
             result: Dict[str, SkillRecord] = {}
             for row in rows:
-                rec = self._to_record(conn, row)
+                rec = self.to_record(conn, row)
                 result[rec.skill_id] = rec
             return result
 
@@ -375,7 +375,7 @@ class SkillRepository:
                 params,
             ).fetchall()
 
-            return [self._to_record(conn, row) for row in rows]
+            return [self.to_record(conn, row) for row in rows]
 
     # ── CRUD: Count ───────────────────────────────────────────────────
 
@@ -525,7 +525,7 @@ class SkillRepository:
     # ── Internal: Deserialization ─────────────────────────────────────
 
     @staticmethod
-    def _to_record(conn: sqlite3.Connection, row: sqlite3.Row) -> SkillRecord:
+    def to_record(conn: sqlite3.Connection, row: sqlite3.Row) -> SkillRecord:
         """Deserialize a ``skill_records`` row + related rows → SkillRecord."""
         sid = row["skill_id"]
 
