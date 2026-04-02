@@ -25,6 +25,7 @@ from typing import Any, Dict, Generator, List, Optional
 from openspace.config.constants import PROJECT_ROOT
 from openspace.utils.logging import Logger
 
+from .lineage_tracker import LineageTracker
 from .patch import collect_skill_snapshot, compute_unified_diff
 from .skill_repository import SkillRepository
 from .types import (
@@ -197,6 +198,9 @@ class SkillStore:
         # Shares our lock to avoid dual-mutex on the same connection.
         self._repo = SkillRepository(conn=self._conn, lock=self._mu)
 
+        # Lineage tracker (Epic 3.3) — delegates lineage traversal/evolution.
+        self._lineage = LineageTracker(conn=self._conn, lock=self._mu)
+
         logger.debug(f"SkillStore ready at {self._db_path}")
 
     def _make_connection(self, *, read_only: bool) -> sqlite3.Connection:
@@ -276,6 +280,10 @@ class SkillStore:
         self._closed = True
         try:
             self._repo.close()
+        except Exception:
+            pass
+        try:
+            self._lineage.close()
         except Exception:
             pass
         try:
@@ -585,35 +593,11 @@ class SkillStore:
         new_record: SkillRecord,
         parent_skill_ids: List[str],
     ) -> None:
-        """Atomic: insert new version + deactivate parents (for FIXED)."""
-        self._ensure_open()
-        with self._mu:
-            self._conn.execute("BEGIN")
-            try:
-                # For FIXED: deactivate same-name parents
-                if new_record.lineage.origin == SkillOrigin.FIXED:
-                    for pid in parent_skill_ids:
-                        self._conn.execute(
-                            "UPDATE skill_records SET is_active=0, last_updated=? WHERE skill_id=?",
-                            (datetime.now().isoformat(), pid),
-                        )
+        """Atomic: insert new version + deactivate parents (for FIXED).
 
-                # Ensure new record has parent refs set
-                new_record.lineage.parent_skill_ids = list(parent_skill_ids)
-                new_record.is_active = True
-
-                self._upsert(new_record)
-                self._conn.commit()
-
-                origin = new_record.lineage.origin.value
-                logger.info(
-                    f"evolve_skill ({origin}): "
-                    f"{new_record.name}@gen{new_record.lineage.generation} "
-                    f"[{new_record.skill_id}] ← parents={parent_skill_ids}"
-                )
-            except Exception:
-                self._conn.rollback()
-                raise
+        Delegates to :class:`LineageTracker` (Epic 3.3).
+        """
+        self._lineage.record_derivation(new_record, parent_skill_ids)
 
     @_db_retry()
     def _deactivate_record_sync(self, skill_id: str) -> bool:
@@ -711,13 +695,11 @@ class SkillStore:
 
     @_db_retry()
     def get_versions(self, name: str) -> List[SkillRecord]:
-        """Load all versions of a named skill (active + inactive), sorted by generation."""
-        with self._reader() as conn:
-            rows = conn.execute(
-                "SELECT * FROM skill_records WHERE name=? ORDER BY lineage_generation ASC",
-                (name,),
-            ).fetchall()
-            return [self._to_record(conn, r) for r in rows]
+        """Load all versions of a named skill (active + inactive), sorted by generation.
+
+        Delegates to :class:`LineageTracker` (Epic 3.3).
+        """
+        return self._lineage.get_evolution_chain(name)
 
     @_db_retry()
     def load_by_category(self, category: SkillCategory, *, active_only: bool = True) -> List[SkillRecord]:
@@ -820,13 +802,11 @@ class SkillStore:
 
     @_db_retry()
     def find_children(self, parent_skill_id: str) -> List[str]:
-        """Find skill_ids derived from the given parent."""
-        with self._reader() as conn:
-            rows = conn.execute(
-                "SELECT skill_id FROM skill_lineage_parents WHERE parent_skill_id=?",
-                (parent_skill_id,),
-            ).fetchall()
-            return [r["skill_id"] for r in rows]
+        """Find skill_ids derived from the given parent.
+
+        Delegates to :class:`LineageTracker` (Epic 3.3).
+        """
+        return self._lineage.get_children(parent_skill_id)
 
     @_db_retry()
     def count(self, *, active_only: bool = False) -> int:
@@ -1014,73 +994,19 @@ class SkillStore:
     # Lineage / Ancestry
     @_db_retry()
     def get_ancestry(self, skill_id: str, max_depth: int = 10) -> List[SkillRecord]:
-        """Walk up the lineage tree; returns ancestors oldest-first."""
-        with self._reader() as conn:
-            visited: set[str] = set()
-            ancestors: List[SkillRecord] = []
-            frontier = [skill_id]
+        """Walk up the lineage tree; returns ancestors oldest-first.
 
-            for _ in range(max_depth):
-                next_frontier: List[str] = []
-                for sid in frontier:
-                    for pr in conn.execute(
-                        "SELECT parent_skill_id FROM skill_lineage_parents WHERE skill_id=?",
-                        (sid,),
-                    ).fetchall():
-                        pid = pr["parent_skill_id"]
-                        if pid in visited:
-                            continue
-                        visited.add(pid)
-                        row = conn.execute(
-                            "SELECT * FROM skill_records WHERE skill_id=?",
-                            (pid,),
-                        ).fetchone()
-                        if row:
-                            ancestors.append(self._to_record(conn, row))
-                            next_frontier.append(pid)
-                frontier = next_frontier
-                if not frontier:
-                    break
-
-            ancestors.sort(key=lambda r: r.lineage.generation)
-            return ancestors
+        Delegates to :class:`LineageTracker` (Epic 3.3).
+        """
+        return self._lineage.get_ancestors(skill_id, max_depth=max_depth)
 
     @_db_retry()
     def get_lineage_tree(self, skill_id: str, max_depth: int = 5) -> Dict[str, Any]:
-        """Build a JSON-friendly tree rooted at *skill_id* (downward)."""
-        with self._reader() as conn:
-            return self._subtree(conn, skill_id, max_depth, set())
+        """Build a JSON-friendly tree rooted at *skill_id* (downward).
 
-    def _subtree(
-        self,
-        conn: sqlite3.Connection,
-        sid: str,
-        depth: int,
-        visited: set,
-    ) -> Dict[str, Any]:
-        visited.add(sid)
-        row = conn.execute(
-            "SELECT skill_id, name, lineage_generation, lineage_origin, is_active FROM skill_records WHERE skill_id=?",
-            (sid,),
-        ).fetchone()
-        node: Dict[str, Any] = {
-            "skill_id": sid,
-            "name": row["name"] if row else "?",
-            "generation": row["lineage_generation"] if row else -1,
-            "origin": row["lineage_origin"] if row else "unknown",
-            "is_active": bool(row["is_active"]) if row else False,
-            "children": [],
-        }
-        if depth <= 0:
-            return node
-        for cr in conn.execute(
-            "SELECT skill_id FROM skill_lineage_parents WHERE parent_skill_id=?",
-            (sid,),
-        ).fetchall():
-            cid = cr["skill_id"]
-            if cid not in visited:
-                node["children"].append(self._subtree(conn, cid, depth - 1, visited))
-        return node
+        Delegates to :class:`LineageTracker` (Epic 3.3).
+        """
+        return self._lineage.get_lineage_tree(skill_id, max_depth=max_depth)
 
     # Maintenance
     def clear(self) -> None:
