@@ -22,7 +22,6 @@ from typing import Any, Dict, Generator, List, Optional
 
 from openspace.utils.logging import Logger
 
-from .skill_repository import SkillRepository
 from .migration_manager import MigrationManager
 from .types import SkillCategory, SkillVisibility
 
@@ -532,3 +531,7 @@ class TagSearch:
                 "count": row["cnt"] if row else 0,
                 "max_last_updated": row["max_ts"] if row else None,
             }
+
+    def clear(self) -> None:
+        """No independent data to clear - all tag data is in skill_tags (CASCADE)."""
+        pass

@@ -334,8 +334,8 @@ class TestLineageWorkflow:
         # Check full ancestry
         ancestry = store.get_ancestry(gen2_id)
         assert len(ancestry) == 2  # gen1 + gen0 (ancestors only)
-        assert ancestry[0].skill_id == sample_record.skill_id  # gen0 (oldest)
-        assert ancestry[1].skill_id == gen1_id                # gen1 (newer)
+        assert ancestry[0].skill_id == gen1_id                # gen1 (nearest)
+        assert ancestry[1].skill_id == sample_record.skill_id  # gen0 (furthest)
 
 
 class TestAnalysisWorkflow:
