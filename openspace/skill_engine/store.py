@@ -29,6 +29,7 @@ from .analysis_store import AnalysisStore
 from .lineage_tracker import LineageTracker
 from .patch import collect_skill_snapshot, compute_unified_diff
 from .skill_repository import SkillRepository
+from .tag_search import TagSearch
 from .types import (
     EvolutionSuggestion,
     ExecutionAnalysis,
@@ -205,6 +206,9 @@ class SkillStore:
         # Analysis store (Epic 3.4) — delegates execution analyses and judgments.
         self._analyses = AnalysisStore(conn=self._conn, lock=self._mu)
 
+        # Tag search (Epic 3.5) — delegates tag indexing and skill search operations.
+        self._tag_search = TagSearch(conn=self._conn, lock=self._mu)
+
         logger.debug(f"SkillStore ready at {self._db_path}")
 
     def _make_connection(self, *, read_only: bool) -> sqlite3.Connection:
@@ -288,6 +292,14 @@ class SkillStore:
             pass
         try:
             self._lineage.close()
+        except Exception:
+            pass
+        try:
+            self._analyses.close()
+        except Exception:
+            pass
+        try:
+            self._tag_search.close()
         except Exception:
             pass
         try:
@@ -765,16 +777,10 @@ class SkillStore:
         """
         Only returns active records — deactivated (superseded) versions
         are excluded so that Trigger 2 never re-processes old versions.
+        
+        Delegates to :class:`TagSearch` (Epic 3.5).
         """
-        with self._reader() as conn:
-            rows = conn.execute(
-                "SELECT sd.skill_id "
-                "FROM skill_tool_deps sd "
-                "JOIN skill_records sr ON sd.skill_id = sr.skill_id "
-                "WHERE sd.tool_key=? AND sr.is_active=1",
-                (tool_key,),
-            ).fetchall()
-            return [r["skill_id"] for r in rows]
+        return self._tag_search.find_skills_by_tool(tool_key)
 
     @_db_retry()
     def find_children(self, parent_skill_id: str) -> List[str]:
@@ -795,72 +801,29 @@ class SkillStore:
         """Lightweight summary of skills (no analyses/deps loaded).
 
         Default filters to active skills only.
+        
+        Delegates to :class:`TagSearch` (Epic 3.5).
         """
-        with self._reader() as conn:
-            where = "WHERE is_active=1 " if active_only else ""
-            rows = conn.execute(
-                f"""
-                SELECT skill_id, name, description, category, is_active,
-                       visibility, creator_id,
-                       lineage_origin, lineage_generation,
-                       total_selections, total_applied,
-                       total_completions, total_fallbacks,
-                       first_seen, last_updated
-                FROM skill_records
-                {where}
-                ORDER BY last_updated DESC
-                """
-            ).fetchall()
-            return [dict(r) for r in rows]
+        return self._tag_search.get_summary(active_only=active_only)
 
     @_db_retry()
     def get_stats(self, *, active_only: bool = True) -> Dict[str, Any]:
-        """Aggregate statistics across skills."""
-        with self._reader() as conn:
-            where = " WHERE is_active=1" if active_only else ""
-            total = conn.execute(f"SELECT COUNT(*) FROM skill_records{where}").fetchone()[0]
-
-            by_category = {
-                r["category"]: r["cnt"]
-                for r in conn.execute(
-                    f"SELECT category, COUNT(*) AS cnt FROM skill_records{where} GROUP BY category"
-                ).fetchall()
-            }
-            by_origin = {
-                r["lineage_origin"]: r["cnt"]
-                for r in conn.execute(
-                    f"SELECT lineage_origin, COUNT(*) AS cnt FROM skill_records{where} GROUP BY lineage_origin"
-                ).fetchall()
-            }
-            # Delegate analysis stats to AnalysisStore (Epic 3.4)
-            analysis_stats = self._analyses.get_analysis_stats()
-            n_analyses = analysis_stats["total_analyses"]
-            n_candidates = analysis_stats["evolution_candidates"]
-            agg = conn.execute(
-                f"""
-                SELECT SUM(total_selections)  AS sel,
-                       SUM(total_applied)      AS app,
-                       SUM(total_completions)  AS comp,
-                       SUM(total_fallbacks)    AS fb
-                FROM skill_records{where}
-                """
-            ).fetchone()
-
-            # Also report total (including inactive) for context
-            total_all = conn.execute("SELECT COUNT(*) FROM skill_records").fetchone()[0]
-
-            return {
-                "total_skills": total,
-                "total_skills_all": total_all,
-                "by_category": by_category,
-                "by_origin": by_origin,
-                "total_analyses": n_analyses,
-                "evolution_candidates": n_candidates,
-                "total_selections": agg["sel"] or 0,
-                "total_applied": agg["app"] or 0,
-                "total_completions": agg["comp"] or 0,
-                "total_fallbacks": agg["fb"] or 0,
-            }
+        """Aggregate statistics across skills.
+        
+        Delegates to :class:`TagSearch` (Epic 3.5) for skill stats and
+        :class:`AnalysisStore` (Epic 3.4) for analysis stats.
+        """
+        # Get skill-related stats from TagSearch
+        stats = self._tag_search.get_stats(active_only=active_only)
+        
+        # Merge in analysis stats from AnalysisStore
+        analysis_stats = self._analyses.get_analysis_stats()
+        stats.update({
+            "total_analyses": analysis_stats["total_analyses"],
+            "evolution_candidates": analysis_stats["evolution_candidates"],
+        })
+        
+        return stats
 
     @_db_retry()
     def get_task_skill_summary(self, task_id: str) -> Dict[str, Any]:
@@ -892,45 +855,20 @@ class SkillStore:
             ``applied_rate``    — applied / selections
             ``completion_rate`` — completions / applied
             ``total_selections``— raw count
+            
+        Delegates to :class:`TagSearch` (Epic 3.5).
         """
-        rate_exprs = {
-            "effective_rate": ("CAST(total_completions AS REAL) / total_selections"),
-            "applied_rate": ("CAST(total_applied AS REAL) / total_selections"),
-            "completion_rate": (
-                "CASE WHEN total_applied > 0 THEN CAST(total_completions AS REAL) / total_applied ELSE 0.0 END"
-            ),
-            "total_selections": "total_selections",
-        }
-        expr = rate_exprs.get(metric, rate_exprs["effective_rate"])
-        active_clause = " AND is_active=1" if active_only else ""
-
-        with self._reader() as conn:
-            rows = conn.execute(
-                f"SELECT *, ({expr}) AS _rank "
-                f"FROM skill_records "
-                f"WHERE total_selections >= ?{active_clause} "
-                f"ORDER BY _rank DESC LIMIT ?",
-                (min_selections, n),
-            ).fetchall()
-            results = []
-            for r in rows:
-                d = dict(r)
-                d.pop("_rank", None)
-                results.append(d)
-            return results
+        return self._tag_search.get_top_skills(
+            n=n, metric=metric, min_selections=min_selections, active_only=active_only
+        )
 
     @_db_retry()
     def get_count_and_timestamp(self, *, active_only: bool = True) -> Dict[str, Any]:
-        """Skill count + newest ``last_updated`` for cheap change detection."""
-        with self._reader() as conn:
-            where = " WHERE is_active=1" if active_only else ""
-            row = conn.execute(
-                f"SELECT COUNT(*) AS cnt, MAX(last_updated) AS max_ts FROM skill_records{where}"
-            ).fetchone()
-            return {
-                "count": row["cnt"] if row else 0,
-                "max_last_updated": row["max_ts"] if row else None,
-            }
+        """Skill count + newest ``last_updated`` for cheap change detection.
+        
+        Delegates to :class:`TagSearch` (Epic 3.5).
+        """
+        return self._tag_search.get_count_and_timestamp(active_only=active_only)
 
     # Lineage / Ancestry
     @_db_retry()
@@ -1073,16 +1011,8 @@ class SkillStore:
                 (record.skill_id, tk, 1 if tk in critical_set else 0),
             )
 
-        # Sync tags
-        self._conn.execute(
-            "DELETE FROM skill_tags WHERE skill_id=?",
-            (record.skill_id,),
-        )
-        for tag in record.tags:
-            self._conn.execute(
-                "INSERT INTO skill_tags(skill_id, tag) VALUES(?,?)",
-                (record.skill_id, tag),
-            )
+        # Sync tags - delegate to TagSearch (Epic 3.5)
+        self._tag_search.sync_tags(record.skill_id, record.tags)
 
         # Sync analyses (insert only NEW ones, dedup by task_id) - delegate to AnalysisStore
         self._analyses.bulk_upsert_analyses(record.recent_analyses)
@@ -1130,7 +1060,8 @@ class SkillStore:
             (sid,),
         ).fetchall()
 
-        tag_rows = conn.execute("SELECT tag FROM skill_tags WHERE skill_id=?", (sid,)).fetchall()
+        # Load tags - delegate to TagSearch (Epic 3.5)
+        tags = self._tag_search.get_tags(sid)
 
         # Load recent analyses involving this skill - delegate to AnalysisStore (Epic 3.4)
         recent_analyses = self._analyses.load_recent_analyses_for_skill(
@@ -1144,7 +1075,7 @@ class SkillStore:
             path=row["path"],
             is_active=bool(row["is_active"]),
             category=SkillCategory(row["category"]),
-            tags=[r["tag"] for r in tag_rows],
+            tags=tags,
             visibility=(SkillVisibility(row["visibility"]) if row["visibility"] else SkillVisibility.PRIVATE),
             creator_id=row["creator_id"] or "",
             lineage=lineage,
@@ -1158,3 +1089,52 @@ class SkillStore:
             first_seen=datetime.fromisoformat(row["first_seen"]),
             last_updated=datetime.fromisoformat(row["last_updated"]),
         )
+
+    # ── Tag Search Facade Methods (Epic 3.5) ──────────────────────────────
+    # Fix Finding 3: Complete SkillStore facade for all extracted TagSearch methods
+
+    def find_skills_by_tags(
+        self,
+        tags: List[str],
+        *,
+        match_all: bool = False,
+        active_only: bool = True,
+    ) -> List[str]:
+        """Find skills by tags (facade to TagSearch)."""
+        return self._tag_search.find_skills_by_tags(
+            tags, match_all=match_all, active_only=active_only
+        )
+
+    def search_skills(
+        self,
+        query: Optional[str] = None,
+        *,
+        category: Optional[SkillCategory] = None,
+        visibility: Optional[SkillVisibility] = None,
+        tags: Optional[List[str]] = None,
+        match_all_tags: bool = False,
+        active_only: bool = True,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Search skills by multiple criteria (facade to TagSearch)."""
+        return self._tag_search.search_skills(
+            query,
+            category=category,
+            visibility=visibility,
+            tags=tags,
+            match_all_tags=match_all_tags,
+            active_only=active_only,
+            limit=limit,
+        )
+
+    def get_tags(self, skill_id: str) -> List[str]:
+        """Get all tags for a skill (facade to TagSearch)."""
+        return self._tag_search.get_tags(skill_id)
+
+    def get_all_tags(self) -> List[Dict[str, Any]]:
+        """Get all tags with usage counts (facade to TagSearch)."""
+        return self._tag_search.get_all_tags()
+
+    def sync_tags(self, skill_id: str, tags: List[str]) -> None:
+        """Synchronize tags for a skill (facade to TagSearch)."""
+        return self._tag_search.sync_tags(skill_id, tags)
