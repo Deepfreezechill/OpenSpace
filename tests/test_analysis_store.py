@@ -1,6 +1,8 @@
 """Tests for AnalysisStore (Epic 3.4) — execution analysis persistence."""
 
 import pytest
+import sqlite3
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import List
@@ -340,9 +342,10 @@ class TestAnalysisStoreSharedConnection:
         conn.row_factory = sqlite3.Row
         lock = threading.Lock()
         
-        # Initialize the DDL manually since we're not using standalone mode
-        from openspace.skill_engine.analysis_store import _DDL
-        conn.executescript(_DDL)
+        # Initialize the schema manually since we're not using standalone mode
+        from openspace.skill_engine.migration_manager import MigrationManager
+        migration_manager = MigrationManager(conn=conn, lock=lock)
+        migration_manager.ensure_current_schema()
         
         # Create AnalysisStore with shared connection
         store = AnalysisStore(conn=conn, lock=lock)
@@ -410,30 +413,52 @@ def test_analysis_store_integration_with_skill_store(temp_db_path):
 
 
 def test_duplicate_judgments_no_duplicate_analysis_rows(temp_db_path):
-    """Test that multiple judgments for same analysis don't create duplicate analysis rows."""
+    """Test that multiple judgments for different skills in same analysis don't create duplicate analysis rows."""
     store = AnalysisStore(db_path=temp_db_path)
     
-    # Create analysis with multiple judgments for same skill
+    # Create analysis with judgments for different skills (no duplicates)
     analysis = ExecutionAnalysis(
-        task_id="duplicate_judgment_test",
+        task_id="no_duplicate_judgment_test",
         timestamp=datetime.now(),
         skill_judgments=[
-            SkillJudgment(skill_id="shared_skill", skill_applied=True, note="First judgment"),
-            SkillJudgment(skill_id="shared_skill", skill_applied=False, note="Second judgment"),
-            SkillJudgment(skill_id="other_skill", skill_applied=True, note="Other judgment"),
+            SkillJudgment(skill_id="first_skill", skill_applied=True, note="First judgment"),
+            SkillJudgment(skill_id="second_skill", skill_applied=False, note="Second judgment"),
+            SkillJudgment(skill_id="third_skill", skill_applied=True, note="Third judgment"),
         ]
     )
     
     store.record_execution_analysis_sync(analysis)
     
-    # Load analyses for the shared skill - should only get one analysis back
-    analyses = store.load_analyses(skill_id="shared_skill", limit=10)
-    assert len(analyses) == 1, "Should not get duplicate analysis rows due to multiple judgments"
-    assert analyses[0].task_id == "duplicate_judgment_test"
+    # Load analyses for the first skill - should only get one analysis back
+    analyses = store.load_analyses(skill_id="first_skill", limit=10)
+    assert len(analyses) == 1, "Should get exactly one analysis row"
+    assert analyses[0].task_id == "no_duplicate_judgment_test"
     
     # Load recent analyses - should also not have duplicates  
-    recent_analyses = store.load_recent_analyses_for_skill("shared_skill", limit=10)
-    assert len(recent_analyses) == 1, "Should not get duplicate analysis rows in recent analyses"
+    recent_analyses = store.load_recent_analyses_for_skill("first_skill", limit=10)
+    assert len(recent_analyses) == 1, "Should get exactly one analysis row in recent analyses"
+    
+    store.close()
+
+
+def test_duplicate_judgments_prevented_by_unique_constraint(temp_db_path):
+    """Test that the UNIQUE constraint prevents duplicate judgments for same skill in same analysis."""
+    store = AnalysisStore(db_path=temp_db_path)
+    
+    # Create analysis with duplicate judgments for the same skill (should fail)
+    analysis = ExecutionAnalysis(
+        task_id="duplicate_judgment_test",
+        timestamp=datetime.now(),
+        skill_judgments=[
+            SkillJudgment(skill_id="shared_skill", skill_applied=True, note="First judgment"),
+            SkillJudgment(skill_id="shared_skill", skill_applied=False, note="Second judgment"),  # Duplicate!
+            SkillJudgment(skill_id="other_skill", skill_applied=True, note="Other judgment"),
+        ]
+    )
+    
+    # This should fail due to UNIQUE constraint on (analysis_id, skill_id)
+    with pytest.raises(sqlite3.IntegrityError, match="UNIQUE constraint failed"):
+        store.record_execution_analysis_sync(analysis)
     
     store.close()
 
@@ -448,9 +473,10 @@ def test_bulk_upsert_atomicity_with_validation_error(temp_db_path):
     conn.row_factory = sqlite3.Row
     lock = threading.Lock()
     
-    # Initialize DDL
-    from openspace.skill_engine.analysis_store import _DDL
-    conn.executescript(_DDL)
+    # Initialize schema
+    from openspace.skill_engine.migration_manager import MigrationManager
+    migration_manager = MigrationManager(conn=conn, lock=lock)
+    migration_manager.ensure_current_schema()
     
     store = AnalysisStore(conn=conn, lock=lock)
     

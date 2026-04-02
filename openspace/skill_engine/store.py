@@ -27,6 +27,7 @@ from openspace.utils.logging import Logger
 
 from .analysis_store import AnalysisStore
 from .lineage_tracker import LineageTracker
+from .migration_manager import MigrationManager
 from .patch import collect_skill_snapshot, compute_unified_diff
 from .skill_repository import SkillRepository
 from .tag_search import TagSearch
@@ -76,93 +77,7 @@ def _db_retry(
     return decorator
 
 
-_DDL = """
-CREATE TABLE IF NOT EXISTS skill_records (
-    skill_id               TEXT PRIMARY KEY,
-    name                   TEXT NOT NULL,
-    description            TEXT NOT NULL DEFAULT '',
-    path                   TEXT NOT NULL DEFAULT '',
-    is_active              INTEGER NOT NULL DEFAULT 1,
-    category               TEXT NOT NULL DEFAULT 'workflow',
-    visibility             TEXT NOT NULL DEFAULT 'private',
-    creator_id             TEXT NOT NULL DEFAULT '',
-    lineage_origin         TEXT NOT NULL DEFAULT 'imported',
-    lineage_generation     INTEGER NOT NULL DEFAULT 0,
-    lineage_source_task_id TEXT,
-    lineage_change_summary TEXT NOT NULL DEFAULT '',
-    lineage_content_diff   TEXT NOT NULL DEFAULT '',
-    lineage_content_snapshot TEXT NOT NULL DEFAULT '{}',
-    lineage_created_at     TEXT NOT NULL,
-    lineage_created_by     TEXT NOT NULL DEFAULT '',
-    total_selections       INTEGER NOT NULL DEFAULT 0,
-    total_applied          INTEGER NOT NULL DEFAULT 0,
-    total_completions      INTEGER NOT NULL DEFAULT 0,
-    total_fallbacks        INTEGER NOT NULL DEFAULT 0,
-    first_seen             TEXT NOT NULL,
-    last_updated           TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_sr_category ON skill_records(category);
-CREATE INDEX IF NOT EXISTS idx_sr_updated  ON skill_records(last_updated);
-CREATE INDEX IF NOT EXISTS idx_sr_active   ON skill_records(is_active);
-CREATE INDEX IF NOT EXISTS idx_sr_name     ON skill_records(name);
 
-CREATE TABLE IF NOT EXISTS skill_lineage_parents (
-    skill_id        TEXT NOT NULL
-        REFERENCES skill_records(skill_id) ON DELETE CASCADE,
-    parent_skill_id TEXT NOT NULL,
-    PRIMARY KEY (skill_id, parent_skill_id)
-);
-CREATE INDEX IF NOT EXISTS idx_lp_parent
-    ON skill_lineage_parents(parent_skill_id);
-
--- One row per task.  task_id is UNIQUE (at most one analysis per task).
-CREATE TABLE IF NOT EXISTS execution_analyses (
-    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id                 TEXT NOT NULL UNIQUE,
-    timestamp               TEXT NOT NULL,
-    task_completed          INTEGER NOT NULL DEFAULT 0,
-    execution_note          TEXT NOT NULL DEFAULT '',
-    tool_issues             TEXT NOT NULL DEFAULT '[]',
-    candidate_for_evolution INTEGER NOT NULL DEFAULT 0,
-    evolution_suggestions   TEXT NOT NULL DEFAULT '[]',
-    analyzed_by             TEXT NOT NULL DEFAULT '',
-    analyzed_at             TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_ea_task  ON execution_analyses(task_id);
-CREATE INDEX IF NOT EXISTS idx_ea_ts    ON execution_analyses(timestamp);
-
--- Per-skill judgments within an analysis.
--- FK to execution_analyses.id (CASCADE delete).
--- skill_id is a plain TEXT — no FK to skill_records so that
--- historical judgments survive skill deletion.
-CREATE TABLE IF NOT EXISTS skill_judgments (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    analysis_id    INTEGER NOT NULL
-        REFERENCES execution_analyses(id) ON DELETE CASCADE,
-    skill_id       TEXT NOT NULL,
-    skill_applied  INTEGER NOT NULL DEFAULT 0,
-    note           TEXT NOT NULL DEFAULT '',
-    UNIQUE(analysis_id, skill_id)
-);
-CREATE INDEX IF NOT EXISTS idx_sj_skill    ON skill_judgments(skill_id);
-CREATE INDEX IF NOT EXISTS idx_sj_analysis ON skill_judgments(analysis_id);
-
-CREATE TABLE IF NOT EXISTS skill_tool_deps (
-    skill_id TEXT NOT NULL
-        REFERENCES skill_records(skill_id) ON DELETE CASCADE,
-    tool_key TEXT NOT NULL,
-    critical INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (skill_id, tool_key)
-);
-CREATE INDEX IF NOT EXISTS idx_td_tool ON skill_tool_deps(tool_key);
-
-CREATE TABLE IF NOT EXISTS skill_tags (
-    skill_id TEXT NOT NULL
-        REFERENCES skill_records(skill_id) ON DELETE CASCADE,
-    tag      TEXT NOT NULL,
-    PRIMARY KEY (skill_id, tag)
-);
-"""
 
 
 class SkillStore:
@@ -194,7 +109,10 @@ class SkillStore:
 
         # Persistent write connection
         self._conn = self._make_connection(read_only=False)
-        self._init_db()
+        
+        # Migration manager (Epic 3.6) — delegates schema creation and versioning.
+        self._migrations = MigrationManager(conn=self._conn, lock=self._mu)
+        self._migrations.ensure_current_schema()
 
         # CRUD repository (Epic 3.2) — delegates simple CRUD operations.
         # Shares our lock to avoid dual-mutex on the same connection.
@@ -267,12 +185,7 @@ class SkillStore:
                 if f.exists():
                     f.unlink()
 
-    @_db_retry()
-    def _init_db(self) -> None:
-        """Create tables if they don't exist (idempotent via IF NOT EXISTS)."""
-        with self._mu:
-            self._conn.executescript(_DDL)
-            self._conn.commit()
+
 
     # Lifecycle
     def close(self) -> None:
@@ -300,6 +213,10 @@ class SkillStore:
             pass
         try:
             self._tag_search.close()
+        except Exception:
+            pass
+        try:
+            self._migrations.close()
         except Exception:
             pass
         try:
@@ -1138,3 +1055,28 @@ class SkillStore:
     def sync_tags(self, skill_id: str, tags: List[str]) -> None:
         """Synchronize tags for a skill (facade to TagSearch)."""
         return self._tag_search.sync_tags(skill_id, tags)
+
+    # ── Migration Management (Epic 3.6) ─────────────────────────────────
+
+    def initialize_schema(self) -> None:
+        """Initialize database schema (facade to MigrationManager)."""
+        return self._migrations.initialize_schema()
+
+    def get_schema_version(self) -> int:
+        """Get current schema version (facade to MigrationManager)."""
+        return self._migrations.get_schema_version()
+
+    def set_schema_version(self, version: int) -> None:
+        """Set schema version (facade to MigrationManager).
+        
+        DEPRECATED: Use ensure_current_schema() instead.
+        """
+        return self._migrations._set_schema_version(version)
+
+    def migrate_to_version(self, target_version: int) -> None:
+        """Migrate schema to target version (facade to MigrationManager)."""
+        return self._migrations.migrate_to_version(target_version)
+
+    def ensure_current_schema(self, expected_version: int = 1) -> None:
+        """Ensure schema is at expected version (facade to MigrationManager)."""
+        return self._migrations.ensure_current_schema(expected_version)
