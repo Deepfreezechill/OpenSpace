@@ -30,7 +30,6 @@ from openspace.sandbox.net_proxy import (
     check_port_allowed,
 )
 
-
 # ---------------------------------------------------------------------------
 # #95 — Domain Matching Tests
 # ---------------------------------------------------------------------------
@@ -482,18 +481,13 @@ class TestSecurityRegressions:
 
         # Shutdown and attempt concurrent connects
         shutdown_task = asyncio.create_task(proxy.shutdown())
-        connect_tasks = [
-            asyncio.create_task(proxy.connect(f"late-{i}.com", 443))
-            for i in range(10)
-        ]
+        connect_tasks = [asyncio.create_task(proxy.connect(f"late-{i}.com", 443)) for i in range(10)]
         await shutdown_task
 
         results = await asyncio.gather(*connect_tasks, return_exceptions=True)
         # All post-shutdown connects must fail
         for r in results:
-            assert isinstance(r, (NetworkPolicyError, ConnectionLimitError)), (
-                f"Post-shutdown connect succeeded: {r}"
-            )
+            assert isinstance(r, (NetworkPolicyError, ConnectionLimitError)), f"Post-shutdown connect succeeded: {r}"
         assert proxy.active_connections == 0
 
     # --- T0/T1 LeaseSchema validation ---
@@ -501,6 +495,7 @@ class TestSecurityRegressions:
     def test_t0_schema_rejects_nonempty_allowed_domains(self) -> None:
         """LeaseSchema must reject T0 with non-empty allowed_domains."""
         from pydantic import ValidationError
+
         from openspace.sandbox.leases import LeaseSchema, TrustTier
 
         with pytest.raises(ValidationError, match="allowed_domains"):
@@ -517,6 +512,7 @@ class TestSecurityRegressions:
     def test_t1_schema_rejects_nonempty_allowed_domains(self) -> None:
         """LeaseSchema must reject T1 with non-empty allowed_domains."""
         from pydantic import ValidationError
+
         from openspace.sandbox.leases import LeaseSchema, TrustTier
 
         with pytest.raises(ValidationError, match="allowed_domains"):

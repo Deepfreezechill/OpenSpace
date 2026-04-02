@@ -8,25 +8,22 @@ and edge cases (nested functions, classes, lambdas, comprehensions).
 from __future__ import annotations
 
 import textwrap
-from pathlib import Path
 
 import pytest
 
+from openspace.security import check_code_safety
 from openspace.security.ast_scanner import (
-    BlocklistPattern,
-    DangerousAPIVisitor,
     Finding,
     Severity,
     load_blocklist,
     scan_code,
     scan_file,
 )
-from openspace.security import check_code_safety
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _names(findings: list[Finding]) -> set[str]:
     """Return set of pattern_name values from findings."""
@@ -42,32 +39,42 @@ def _severities(findings: list[Finding]) -> set[Severity]:
 # Issue #18 — Core pattern detection
 # ---------------------------------------------------------------------------
 
+
 class TestDangerousPatterns:
     """Each dangerous API from the spec MUST be detected."""
 
-    @pytest.mark.parametrize("code,expected_pattern", [
-        ("eval('1+1')", "eval"),
-        ("exec('pass')", "exec"),
-        ("result = eval(input())", "eval"),
-    ])
+    @pytest.mark.parametrize(
+        "code,expected_pattern",
+        [
+            ("eval('1+1')", "eval"),
+            ("exec('pass')", "exec"),
+            ("result = eval(input())", "eval"),
+        ],
+    )
     def test_eval_exec(self, code, expected_pattern):
         findings = scan_code(code)
         assert expected_pattern in _names(findings)
 
-    @pytest.mark.parametrize("code,expected_pattern", [
-        ("import os; os.system('ls')", "os_system"),
-        ("import os; os.popen('ls')", "os_popen"),
-    ])
+    @pytest.mark.parametrize(
+        "code,expected_pattern",
+        [
+            ("import os; os.system('ls')", "os_system"),
+            ("import os; os.popen('ls')", "os_popen"),
+        ],
+    )
     def test_os_command_execution(self, code, expected_pattern):
         findings = scan_code(code)
         assert expected_pattern in _names(findings)
 
-    @pytest.mark.parametrize("code", [
-        "import subprocess; subprocess.run(['ls'])",
-        "import subprocess; subprocess.Popen(['ls'])",
-        "import subprocess; subprocess.call(['ls'])",
-        "import subprocess; subprocess.check_output(['ls'])",
-    ])
+    @pytest.mark.parametrize(
+        "code",
+        [
+            "import subprocess; subprocess.run(['ls'])",
+            "import subprocess; subprocess.Popen(['ls'])",
+            "import subprocess; subprocess.call(['ls'])",
+            "import subprocess; subprocess.check_output(['ls'])",
+        ],
+    )
     def test_subprocess(self, code):
         findings = scan_code(code)
         assert "subprocess" in _names(findings) or "subprocess_import" in _names(findings)
@@ -76,18 +83,24 @@ class TestDangerousPatterns:
         findings = scan_code("mod = __import__('os')")
         assert "dynamic_import" in _names(findings)
 
-    @pytest.mark.parametrize("code", [
-        "import socket; socket.socket()",
-        "import socket; s = socket.create_connection(('host', 80))",
-    ])
+    @pytest.mark.parametrize(
+        "code",
+        [
+            "import socket; socket.socket()",
+            "import socket; s = socket.create_connection(('host', 80))",
+        ],
+    )
     def test_socket(self, code):
         findings = scan_code(code)
         assert "socket" in _names(findings) or "socket_import" in _names(findings)
 
-    @pytest.mark.parametrize("code", [
-        "import ctypes; ctypes.cdll.LoadLibrary('libc.so')",
-        "import ctypes; ctypes.CDLL('libc.so.6')",
-    ])
+    @pytest.mark.parametrize(
+        "code",
+        [
+            "import ctypes; ctypes.cdll.LoadLibrary('libc.so')",
+            "import ctypes; ctypes.CDLL('libc.so.6')",
+        ],
+    )
     def test_ctypes(self, code):
         findings = scan_code(code)
         assert "ctypes" in _names(findings) or "ctypes_import" in _names(findings)
@@ -134,19 +147,23 @@ class TestDangerousPatterns:
 # Safe code — no findings
 # ---------------------------------------------------------------------------
 
+
 class TestSafeCode:
     """Safe, everyday Python should produce zero findings."""
 
-    @pytest.mark.parametrize("code", [
-        "x = 1 + 2",
-        "def greet(name): return f'Hello, {name}'",
-        "data = [i**2 for i in range(10)]",
-        "import json; json.loads('{}')",
-        "from pathlib import Path; p = Path('.')",
-        "class Foo:\n    def bar(self): return 42",
-        "open('myfile.txt', 'r')",  # non-sensitive path
-        "compile('1+1', '<string>', 'eval')",  # eval mode, not exec
-    ])
+    @pytest.mark.parametrize(
+        "code",
+        [
+            "x = 1 + 2",
+            "def greet(name): return f'Hello, {name}'",
+            "data = [i**2 for i in range(10)]",
+            "import json; json.loads('{}')",
+            "from pathlib import Path; p = Path('.')",
+            "class Foo:\n    def bar(self): return 42",
+            "open('myfile.txt', 'r')",  # non-sensitive path
+            "compile('1+1', '<string>', 'eval')",  # eval mode, not exec
+        ],
+    )
     def test_safe_code_clean(self, code):
         findings = scan_code(code)
         # Filter out MEDIUM / informational — only CRITICAL/HIGH matter
@@ -157,6 +174,7 @@ class TestSafeCode:
 # ---------------------------------------------------------------------------
 # Severity levels
 # ---------------------------------------------------------------------------
+
 
 class TestSeverityLevels:
     """Verify severity assignments match the blocklist."""
@@ -197,6 +215,7 @@ class TestSeverityLevels:
 # Issue #19 — Blocklist loading
 # ---------------------------------------------------------------------------
 
+
 class TestBlocklist:
     """Blocklist YAML loading and extensibility."""
 
@@ -220,7 +239,8 @@ class TestBlocklist:
 
     def test_custom_blocklist(self, tmp_path):
         custom = tmp_path / "custom.yml"
-        custom.write_text(textwrap.dedent("""\
+        custom.write_text(
+            textwrap.dedent("""\
             patterns:
               - name: custom_danger
                 description: "Custom dangerous function"
@@ -228,7 +248,9 @@ class TestBlocklist:
                 ast_type: Call
                 targets:
                   - my_dangerous_func
-        """), encoding="utf-8")
+        """),
+            encoding="utf-8",
+        )
 
         patterns = load_blocklist(extra_paths=[custom])
         names = {p.name for p in patterns}
@@ -246,6 +268,7 @@ class TestBlocklist:
 # ---------------------------------------------------------------------------
 # Issue #20 — check_code_safety integration
 # ---------------------------------------------------------------------------
+
 
 class TestCheckCodeSafety:
     """Integration function for the execution pipeline."""
@@ -286,6 +309,7 @@ class TestCheckCodeSafety:
 # ---------------------------------------------------------------------------
 # Issue #21 — Edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     """Dangerous code hiding in nested contexts."""
@@ -365,6 +389,7 @@ class TestEdgeCases:
 # ---------------------------------------------------------------------------
 # scan_file
 # ---------------------------------------------------------------------------
+
 
 class TestScanFile:
     def test_scan_existing_file(self, tmp_path):

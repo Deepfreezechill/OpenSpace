@@ -97,15 +97,13 @@ class RetrieveSkillTool(LocalTool):
                 return "No relevant skills found for this query."
 
             hit_ids = {r["skill_id"] for r in results}
-            selected = [
-                s for s in self._skill_registry.list_skills()
-                if s.skill_id in hit_ids
-            ]
+            selected = [s for s in self._skill_registry.list_skills() if s.skill_id in hit_ids]
 
         if not selected:
             return "No relevant skills found for this query."
 
         logger.info(f"retrieve_skill matched: {[s.skill_id for s in selected]}")
         return self._skill_registry.build_context_injection(
-            selected, backends=self._backends,
+            selected,
+            backends=self._backends,
         )

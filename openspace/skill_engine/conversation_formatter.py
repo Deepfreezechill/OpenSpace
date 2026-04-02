@@ -42,9 +42,7 @@ def format_conversations(
          budget-allocate priority 2, and summarize priority 3.
     """
     # Count total iterations for priority assignment
-    total_iters = sum(
-        1 for c in conversations if c.get("type") == "iteration"
-    )
+    total_iters = sum(1 for c in conversations if c.get("type") == "iteration")
 
     # Phase 1: Collect all segments in chronological order with priority
     segments: List[Dict[str, Any]] = []
@@ -58,6 +56,7 @@ def format_conversations(
 
     # Phase 2: Assemble with budget management
     return _assemble_with_budget(segments, budget)
+
 
 def _collect_setup_segments(
     conv: Dict[str, Any],
@@ -76,13 +75,16 @@ def _collect_setup_segments(
             content = str(content)
 
         if role == "user":
-            segments.append({
-                "priority": 0,  # CRITICAL — always keep
-                "text": f"[USER INSTRUCTION]\n{content}",
-                "iteration": 0,
-                "role": "user",
-                "truncatable_to": None,
-            })
+            segments.append(
+                {
+                    "priority": 0,  # CRITICAL — always keep
+                    "text": f"[USER INSTRUCTION]\n{content}",
+                    "iteration": 0,
+                    "role": "user",
+                    "truncatable_to": None,
+                }
+            )
+
 
 def _collect_iteration_segments(
     conv: Dict[str, Any],
@@ -110,13 +112,15 @@ def _collect_iteration_segments(
             # Assistant reasoning
             if content:
                 priority = 1 if is_last else 3
-                segments.append({
-                    "priority": priority,
-                    "text": f"[Iter {iteration}] ASSISTANT: {content}",
-                    "iteration": iteration,
-                    "role": "assistant",
-                    "truncatable_to": None,
-                })
+                segments.append(
+                    {
+                        "priority": priority,
+                        "text": f"[Iter {iteration}] ASSISTANT: {content}",
+                        "iteration": iteration,
+                        "role": "assistant",
+                        "truncatable_to": None,
+                    }
+                )
 
             # Tool calls
             for tc in msg.get("tool_calls", []):
@@ -125,13 +129,15 @@ def _collect_iteration_segments(
                 fn_args = fn.get("arguments", "")
                 if isinstance(fn_args, str) and len(fn_args) > TOOL_ARGS_MAX_CHARS:
                     fn_args = fn_args[:TOOL_ARGS_MAX_CHARS] + "..."
-                segments.append({
-                    "priority": 2,  # HIGH — paired with tool results/errors
-                    "text": f"[Iter {iteration}] TOOL_CALL: {fn_name}({fn_args})",
-                    "iteration": iteration,
-                    "role": "tool_call",
-                    "truncatable_to": None,
-                })
+                segments.append(
+                    {
+                        "priority": 2,  # HIGH — paired with tool results/errors
+                        "text": f"[Iter {iteration}] TOOL_CALL: {fn_name}({fn_args})",
+                        "iteration": iteration,
+                        "role": "tool_call",
+                        "truncatable_to": None,
+                    }
+                )
 
         elif role == "tool":
             # Tool result
@@ -141,48 +147,57 @@ def _collect_iteration_segments(
                 truncated = content[:TOOL_ERROR_MAX_CHARS]
                 if len(content) > TOOL_ERROR_MAX_CHARS:
                     truncated += f"... [truncated, total {len(content)} chars]"
-                segments.append({
-                    "priority": 2,  # HIGH — errors are critical, same tier as tool calls
-                    "text": f"[Iter {iteration}] TOOL_ERROR: {truncated}",
-                    "iteration": iteration,
-                    "role": "tool_error",
-                    "truncatable_to": None,
-                })
+                segments.append(
+                    {
+                        "priority": 2,  # HIGH — errors are critical, same tier as tool calls
+                        "text": f"[Iter {iteration}] TOOL_ERROR: {truncated}",
+                        "iteration": iteration,
+                        "role": "tool_error",
+                        "truncatable_to": None,
+                    }
+                )
             else:
                 # Check if result contains a self-generated summary
                 # (e.g. shell_agent produces "Execution Summary (N steps):")
                 summary = _extract_embedded_summary(content)
                 if summary:
                     # Show the embedded summary (high value, compact)
-                    segments.append({
-                        "priority": 3,  # HIGH — self-generated summaries are informative
-                        "text": f"[Iter {iteration}] TOOL_RESULT (with summary):\n{summary}",
-                        "iteration": iteration,
-                        "role": "tool_result",
-                        "truncatable_to": 500,
-                    })
+                    segments.append(
+                        {
+                            "priority": 3,  # HIGH — self-generated summaries are informative
+                            "text": f"[Iter {iteration}] TOOL_RESULT (with summary):\n{summary}",
+                            "iteration": iteration,
+                            "role": "tool_result",
+                            "truncatable_to": 500,
+                        }
+                    )
                 else:
                     truncated = content[:TOOL_SUCCESS_MAX_CHARS]
                     if len(content) > TOOL_SUCCESS_MAX_CHARS:
                         truncated += f"... [truncated, total {len(content)} chars]"
-                    segments.append({
-                        "priority": 4,  # MEDIUM — try to preserve success results
-                        "text": f"[Iter {iteration}] TOOL_RESULT: {truncated}",
-                        "iteration": iteration,
-                        "role": "tool_result",
-                        "truncatable_to": 300,
-                    })
+                    segments.append(
+                        {
+                            "priority": 4,  # MEDIUM — try to preserve success results
+                            "text": f"[Iter {iteration}] TOOL_RESULT: {truncated}",
+                            "iteration": iteration,
+                            "role": "tool_result",
+                            "truncatable_to": 300,
+                        }
+                    )
 
         elif role == "system":
             # System guidance between iterations (e.g. "Iteration N complete...")
             if content:
-                segments.append({
-                    "priority": 5,  # LOW — guidance messages
-                    "text": f"[Iter {iteration}] SYSTEM: {content}",
-                    "iteration": iteration,
-                    "role": "system",
-                    "truncatable_to": 150,
-                })
+                segments.append(
+                    {
+                        "priority": 5,  # LOW — guidance messages
+                        "text": f"[Iter {iteration}] SYSTEM: {content}",
+                        "iteration": iteration,
+                        "role": "system",
+                        "truncatable_to": 150,
+                    }
+                )
+
 
 def _assemble_with_budget(
     segments: List[Dict[str, Any]],
@@ -237,9 +252,7 @@ def _assemble_with_budget(
             skipped_count += 1
 
     if skipped_count > 0:
-        output_parts.append(
-            f"\n[... {skipped_count} lower-priority segment(s) omitted due to length ...]"
-        )
+        output_parts.append(f"\n[... {skipped_count} lower-priority segment(s) omitted due to length ...]")
 
     return "\n\n".join(output_parts)
 
@@ -293,6 +306,7 @@ def _assemble_essential_only(
 
     return "\n\n".join(output_parts)
 
+
 def _is_error_result(content: str) -> bool:
     """Detect if a tool result represents an error."""
     if not content:
@@ -332,4 +346,3 @@ def _extract_embedded_summary(content: str) -> Optional[str]:
         return summary[:TOOL_SUMMARY_MAX_CHARS]
 
     return None
-

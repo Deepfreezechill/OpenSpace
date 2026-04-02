@@ -1,12 +1,14 @@
-from enum import Enum
 from datetime import datetime
-from typing import Any, Dict, Generic, List, TypeVar, Optional
+from enum import Enum
+from typing import Any, Dict, Generic, List, Optional, TypeVar
+
 import jsonschema
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 # Pydantic v2 compatibility
 try:
     from pydantic import RootModel
+
     PYDANTIC_V2 = True
 except ImportError:
     PYDANTIC_V2 = False
@@ -30,8 +32,8 @@ class SessionStatus(str, Enum):
     CONNECTED = "connected"
     DISCONNECTED = "disconnected"
     CONNECTING = "connecting"
-    
-    
+
+
 ProgressToken = str | int
 RequestId = str | int
 
@@ -74,16 +76,19 @@ class ErrorData(BaseEntity):
 
 class ToolResult(Result):
     """Tool execution result"""
+
     status: ToolStatus
     content: Any = ""
     error: ErrorData | str | None = None
     execution_time: float | None = None
 
     @property
-    def is_success(self) -> bool: return self.status == ToolStatus.SUCCESS
-    
+    def is_success(self) -> bool:
+        return self.status == ToolStatus.SUCCESS
+
     @property
-    def is_error(self) -> bool: return self.status == ToolStatus.ERROR
+    def is_error(self) -> bool:
+        return self.status == ToolStatus.ERROR
 
 
 class SecurityPolicy(BaseEntity):
@@ -93,12 +98,12 @@ class SecurityPolicy(BaseEntity):
     allowed_domains: List[str] = Field(default_factory=list)
     blocked_commands: List[str] = Field(default_factory=list)
     sandbox_enabled: bool = False
-    
+
     @classmethod
     def from_dict(cls, data: Dict) -> "SecurityPolicy":
         """
         Create SecurityPolicy from configuration dict.
-        
+
         Supports two formats for blocked_commands:
         1. List format (applies to all OS): ["cmd1", "cmd2"]
         2. Dict format (OS-specific):
@@ -108,23 +113,22 @@ class SecurityPolicy(BaseEntity):
                "darwin": ["cmd4"],
                "windows": ["cmd5"]
            }
-        
+
         When using dict format, merges 'common' commands with current OS-specific commands.
         """
         import sys
-        import platform
-        
+
         processed_data = {}
         for k, v in data.items():
             if k not in cls.model_fields:
                 continue
-            
+
             # Special handling for blocked_commands
             if k == "blocked_commands":
                 if isinstance(v, dict):
                     # Dict format: merge common + OS-specific
                     blocked_list = list(v.get("common", []))
-                    
+
                     # Determine current OS
                     system = sys.platform
                     if system.startswith("linux"):
@@ -135,11 +139,11 @@ class SecurityPolicy(BaseEntity):
                         os_key = "windows"
                     else:
                         os_key = None
-                    
+
                     # Merge OS-specific commands
                     if os_key and os_key in v:
                         blocked_list.extend(v[os_key])
-                    
+
                     processed_data[k] = blocked_list
                 elif isinstance(v, list):
                     # List format: use as-is
@@ -149,7 +153,7 @@ class SecurityPolicy(BaseEntity):
                     processed_data[k] = []
             else:
                 processed_data[k] = v
-        
+
         return cls(**processed_data)
 
     def check(self, *, command: str | None = None, domain: str | None = None) -> bool:
@@ -184,19 +188,19 @@ class SecurityPolicy(BaseEntity):
         Returns empty list if no dangerous tokens found.
         """
         import shlex
-        
+
         if not command:
             return []
-        
+
         try:
             tokens = [t.lower() for t in shlex.split(command, posix=True)]
         except ValueError:
             # If shlex.split fails, fall back to simple split
             tokens = [t.lower() for t in command.split()]
-        
+
         blocked_set = {b.lower() for b in self.blocked_commands}
         dangerous = [tok for tok in tokens if tok in blocked_set]
-        
+
         return dangerous
 
 
@@ -213,19 +217,19 @@ class ToolSchema(BaseEntity):
 
     def validate_parameters(self, params: Dict[str, Any], *, raise_exc: bool = False) -> bool:
         """use jsonschema to validate parameters
-        
+
         Returns True if parameters are valid or if tool has no parameters.
         """
         # If tool has no parameters defined and no parameters are provided, validation passes
         if not self.parameters and not params:
             return True
-        
+
         # If tool has no parameters defined but parameters are provided, validation fails
         if not self.parameters and params:
             if raise_exc:
                 raise ValueError(f"Tool '{self.name}' does not accept any parameters, but got: {list(params.keys())}")
             return False
-        
+
         try:
             jsonschema.validate(params, self.parameters)
             return True
@@ -261,7 +265,7 @@ class SandboxOptions(BaseEntity):
     api_key: str
     """Direct API key for sandbox provider (e.g., E2B API key).
     If not provided, will use E2B_API_KEY environment variable."""
-    
+
     sandbox_template_id: Optional[str] = None
     """Template ID for the sandbox environment.
     Default: 'base'"""
@@ -273,11 +277,8 @@ class SandboxOptions(BaseEntity):
 
 # ClientMessage: Only available in Pydantic v2
 if PYDANTIC_V2:
-    class ClientMessage(
-        RootModel[
-            Request[Any, str] | Notification[Any, str]
-        ]
-    ):
+
+    class ClientMessage(RootModel[Request[Any, str] | Notification[Any, str]]):
         """
         Unified deserialization entry: `ClientMessage.model_validate_json(raw_bytes)`
         """

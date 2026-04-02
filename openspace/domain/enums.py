@@ -10,6 +10,13 @@ from __future__ import annotations
 
 from enum import Enum
 
+from openspace.grounding.core.exceptions import ErrorCode as GroundingErrorCode
+from openspace.grounding.core.types import (
+    BackendType,
+    SessionStatus,
+    ToolStatus,
+)
+
 # ── Re-exports from existing locations ────────────────────────────────
 from openspace.skill_engine.types import (
     EvolutionType,
@@ -17,15 +24,9 @@ from openspace.skill_engine.types import (
     SkillOrigin,
     SkillVisibility,
 )
-from openspace.grounding.core.types import (
-    BackendType,
-    SessionStatus,
-    ToolStatus,
-)
-from openspace.grounding.core.exceptions import ErrorCode as GroundingErrorCode
-
 
 # ── New enums (were magic strings) ────────────────────────────────────
+
 
 class TaskStatus(str, Enum):
     """Execution task lifecycle status."""

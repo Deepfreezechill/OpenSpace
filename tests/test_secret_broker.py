@@ -13,24 +13,22 @@ from __future__ import annotations
 
 import threading
 import time
+
 import pytest
 
+from openspace.sandbox.leases import SecretCapability
 from openspace.secret.broker import (
-    SecretBroker,
-    SecretStore,
-    SecretScope,
-    SecretEntry,
     SecretAccessDenied,
-    SecretNotFoundError,
-    SecretStoreFull,
-    SecretKeyInvalid,
+    SecretBroker,
     SecretBrokerError,
+    SecretKeyInvalid,
+    SecretScope,
+    SecretStore,
+    SecretStoreFull,
     SecretValueTooLarge,
     _SecretEncryptor,
     _validate_key,
 )
-from openspace.sandbox.leases import SecretCapability
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Key Validation
@@ -226,15 +224,11 @@ class TestSecretStore:
         def write_batch(prefix: str) -> None:
             try:
                 for i in range(50):
-                    store.put(f"{prefix}-{i}", f"val-{i}",
-                              scope=SecretScope.TASK, owner="svc")
+                    store.put(f"{prefix}-{i}", f"val-{i}", scope=SecretScope.TASK, owner="svc")
             except Exception as e:
                 errors.append(e)
 
-        threads = [
-            threading.Thread(target=write_batch, args=(f"t{n}",))
-            for n in range(4)
-        ]
+        threads = [threading.Thread(target=write_batch, args=(f"t{n}",)) for n in range(4)]
         for t in threads:
             t.start()
         for t in threads:
@@ -246,8 +240,7 @@ class TestSecretStore:
     def test_encryption_at_rest(self) -> None:
         """Stored values are encrypted — raw access doesn't reveal plaintext."""
         store = SecretStore()
-        store.put("secret-key", "super-secret-password",
-                  scope=SecretScope.TASK, owner="svc")
+        store.put("secret-key", "super-secret-password", scope=SecretScope.TASK, owner="svc")
         with store._lock:
             entry = store._store[SecretScope.TASK]["secret-key"]
         assert b"super-secret-password" not in entry.encrypted_value
@@ -337,10 +330,8 @@ class TestSecretBrokerCapability:
         broker = SecretBroker()
         cap = self._t4_capability()
         for scope in ["task", "session", "global"]:
-            await broker.put_secret(f"k-{scope}", "v", scope=scope,
-                                    capability=cap)
-            assert await broker.get_secret(f"k-{scope}", scope=scope,
-                                           capability=cap) == "v"
+            await broker.put_secret(f"k-{scope}", "v", scope=scope, capability=cap)
+            assert await broker.get_secret(f"k-{scope}", scope=scope, capability=cap) == "v"
 
     @pytest.mark.asyncio
     async def test_allowed_keys_enforced(self) -> None:
@@ -542,15 +533,14 @@ class TestSecretBrokerSecurity:
     async def test_scope_escalation_prevented(self) -> None:
         """T2 (task-only) cannot read session secrets."""
         store = SecretStore()
-        store.put("session-secret", "classified",
-                  scope=SecretScope.SESSION, owner="admin")
+        store.put("session-secret", "classified", scope=SecretScope.SESSION, owner="admin")
         t2_cap = SecretCapability(
-            allowed_scopes=["task"], max_secrets=3,
+            allowed_scopes=["task"],
+            max_secrets=3,
         )
         broker = SecretBroker(store=store)
         with pytest.raises(SecretAccessDenied, match="not in allowed scopes"):
-            await broker.get_secret("session-secret", scope="session",
-                                    capability=t2_cap)
+            await broker.get_secret("session-secret", scope="session", capability=t2_cap)
 
     @pytest.mark.asyncio
     async def test_key_restriction_enforced(self) -> None:
@@ -640,7 +630,8 @@ class TestSecretBrokerSecurity:
             nonlocal success_count
             try:
                 await broker.put_secret(
-                    f"key-{i}", f"val-{i}",
+                    f"key-{i}",
+                    f"val-{i}",
                 )
                 with lock:
                     success_count += 1

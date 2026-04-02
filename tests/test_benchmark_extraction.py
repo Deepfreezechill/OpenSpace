@@ -5,6 +5,7 @@ to ``gdpval_bench`` (the benchmark harness).  The benchmark package is
 CLI-only and must never be imported during MCP server startup or
 tool execution.
 """
+
 from __future__ import annotations
 
 import ast
@@ -46,9 +47,7 @@ def _has_gdpval_import(source: str) -> List[str]:
         elif isinstance(node, ast.ImportFrom):
             if node.module and node.module.startswith("gdpval_bench"):
                 names = ", ".join(a.name for a in node.names)
-                findings.append(
-                    f"from {node.module} import {names} (line {node.lineno})"
-                )
+                findings.append(f"from {node.module} import {names} (line {node.lineno})")
     return findings
 
 
@@ -68,25 +67,25 @@ class TestNoBenchmarkImports:
                 for f in findings:
                     violations.append(f"{rel}: {f}")
 
-        assert violations == [], (
-            "Production code must not import gdpval_bench:\n"
-            + "\n".join(f"  - {v}" for v in violations)
+        assert violations == [], "Production code must not import gdpval_bench:\n" + "\n".join(
+            f"  - {v}" for v in violations
         )
 
     def test_allowed_files_list_is_minimal(self):
         """Ensure _ALLOWED_FILES only contains files that actually exist."""
         for name in _ALLOWED_FILES:
-            assert (_OPENSPACE_ROOT / name).exists(), (
-                f"{name} is in _ALLOWED_FILES but doesn't exist"
-            )
+            assert (_OPENSPACE_ROOT / name).exists(), f"{name} is in _ALLOWED_FILES but doesn't exist"
 
-    @pytest.mark.parametrize("module_path", [
-        "openspace.llm.client",
-        "openspace.skill_engine.registry",
-        "openspace.skill_engine.evolver",
-        "openspace.skill_engine.analyzer",
-        "openspace.grounding.core.quality.manager",
-    ])
+    @pytest.mark.parametrize(
+        "module_path",
+        [
+            "openspace.llm.client",
+            "openspace.skill_engine.registry",
+            "openspace.skill_engine.evolver",
+            "openspace.skill_engine.analyzer",
+            "openspace.grounding.core.quality.manager",
+        ],
+    )
     def test_previously_coupled_modules_clean(self, module_path):
         """Verify the 5 modules that previously imported gdpval_bench are clean."""
         py_file = _OPENSPACE_ROOT.parent / module_path.replace(".", "/")
@@ -95,10 +94,7 @@ class TestNoBenchmarkImports:
 
         source = py_file.read_text(encoding="utf-8")
         findings = _has_gdpval_import(source)
-        assert findings == [], (
-            f"{module_path} still imports gdpval_bench:\n"
-            + "\n".join(f"  - {f}" for f in findings)
-        )
+        assert findings == [], f"{module_path} still imports gdpval_bench:\n" + "\n".join(f"  - {f}" for f in findings)
 
 
 class TestBenchmarkIsolation:
@@ -128,9 +124,7 @@ class TestBenchmarkIsolation:
 
             # Verify no gdpval_bench modules crept in
             leaked = [k for k in sys.modules if k.startswith("gdpval_bench")]
-            assert leaked == [], (
-                f"gdpval_bench leaked into sys.modules: {leaked}"
-            )
+            assert leaked == [], f"gdpval_bench leaked into sys.modules: {leaked}"
         finally:
             # Restore
             sys.modules.update(saved)
@@ -143,7 +137,4 @@ class TestBenchmarkIsolation:
             source = py_file.read_text(encoding="utf-8", errors="replace")
             if "token_tracker" in source:
                 rel = py_file.relative_to(_OPENSPACE_ROOT.parent)
-                pytest.fail(
-                    f"{rel} still references 'token_tracker' — "
-                    "benchmark coupling not fully removed"
-                )
+                pytest.fail(f"{rel} still references 'token_tracker' — benchmark coupling not fully removed")

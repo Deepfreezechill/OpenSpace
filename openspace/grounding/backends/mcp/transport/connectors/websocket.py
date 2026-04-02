@@ -14,7 +14,7 @@ from mcp.types import Tool
 from websockets import ClientConnection
 
 from openspace.utils.logging import Logger
-from openspace.grounding.core.transport.task_managers.base import BaseConnectionManager
+
 from ..task_managers import WebSocketConnectionManager
 from .base import MCPBaseConnector
 
@@ -51,7 +51,7 @@ class WebSocketConnector(MCPBaseConnector):
         self._receiver_task: asyncio.Task | None = None
         self.pending_requests: dict[str, asyncio.Future] = {}
         self._tools: list[Tool] | None = None
-        
+
         # Create connection manager with actual parameters
         connection_manager = WebSocketConnectionManager(self.url, self.headers)
         super().__init__(connection_manager)
@@ -60,19 +60,19 @@ class WebSocketConnector(MCPBaseConnector):
     async def _get_streams_from_connection(self):
         """WebSocket doesn't use streams, return None to skip ClientSession creation."""
         return None
-    
+
     async def _after_connect(self) -> None:
         """Set up WebSocket-specific resources after connection.
-        
+
         WebSocket doesn't use ClientSession, so we skip the parent's implementation
         and set up WebSocket-specific resources instead.
         """
         # Store the WebSocket connection
         self.ws = self._connection
-        
+
         # Start the message receiver task
         self._receiver_task = asyncio.create_task(self._receive_messages(), name="websocket_receiver_task")
-        
+
         logger.debug(f"Successfully connected to MCP implementation via WebSocket: {self.url}")
 
     async def _receive_messages(self) -> None:
@@ -141,7 +141,7 @@ class WebSocketConnector(MCPBaseConnector):
 
         if errors:
             logger.warning(f"Encountered {len(errors)} errors during WebSocket resource cleanup")
-    
+
     async def _cleanup_on_connect_failure(self) -> None:
         """Clean up WebSocket resources on connection failure."""
         # Cancel receiver task if it was started
@@ -155,13 +155,13 @@ class WebSocketConnector(MCPBaseConnector):
                 pass
             finally:
                 self._receiver_task = None
-        
+
         # Reject pending requests
         for future in self.pending_requests.values():
             if not future.done():
                 future.set_exception(ConnectionError("Connection failed"))
         self.pending_requests.clear()
-        
+
         # Call parent cleanup
         await super()._cleanup_on_connect_failure()
         self.ws = None

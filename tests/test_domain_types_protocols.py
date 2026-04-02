@@ -13,10 +13,8 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import FrozenInstanceError, replace
 from datetime import datetime
-from typing import Any, Dict, List, Optional
 
 import pytest
-
 
 # ═══════════════════════════════════════════════════════════════════════
 #  Protocol Import & Structural Tests (EPIC 1.1)
@@ -92,9 +90,9 @@ class TestProtocolImports:
             TelemetryPort,
             ToolBackendPort,
         ]:
-            assert hasattr(proto, "__protocol_attrs__") or hasattr(
-                proto, "_is_runtime_protocol"
-            ), f"{proto.__name__} is not runtime_checkable"
+            assert hasattr(proto, "__protocol_attrs__") or hasattr(proto, "_is_runtime_protocol"), (
+                f"{proto.__name__} is not runtime_checkable"
+            )
 
 
 class TestProtocolCompliance:
@@ -120,9 +118,7 @@ class TestProtocolCompliance:
             "count",
         ]
         for method in required_methods:
-            assert hasattr(SkillStore, method), (
-                f"SkillStore missing method: {method}"
-            )
+            assert hasattr(SkillStore, method), f"SkillStore missing method: {method}"
 
     def test_sandbox_has_required_methods(self):
         """BaseSandbox has the methods that SandboxPort requires."""
@@ -130,9 +126,7 @@ class TestProtocolCompliance:
 
         required_methods = ["start", "stop", "execute_safe"]
         for method in required_methods:
-            assert hasattr(BaseSandbox, method), (
-                f"BaseSandbox missing method: {method}"
-            )
+            assert hasattr(BaseSandbox, method), f"BaseSandbox missing method: {method}"
 
     def test_telemetry_has_required_methods(self):
         """Telemetry has capture/flush/shutdown (adapter bridges signature)."""
@@ -143,9 +137,7 @@ class TestProtocolCompliance:
 
         required_methods = ["capture", "flush", "shutdown"]
         for method in required_methods:
-            assert hasattr(Telemetry, method), (
-                f"Telemetry missing method: {method}"
-            )
+            assert hasattr(Telemetry, method), f"Telemetry missing method: {method}"
 
     def test_llm_client_has_complete(self):
         """LLMClient has the complete method."""
@@ -166,9 +158,7 @@ class TestProtocolCompliance:
             "get_policy",
         ]
         for method in required_methods:
-            assert hasattr(SecurityPolicyManager, method), (
-                f"SecurityPolicyManager missing: {method}"
-            )
+            assert hasattr(SecurityPolicyManager, method), f"SecurityPolicyManager missing: {method}"
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -322,9 +312,7 @@ class TestSkillTypes:
     def test_skill_manifest_effective_rate(self):
         from openspace.domain.types import SkillManifest
 
-        zero = SkillManifest(
-            skill_id="s1", name="t", description="d", total_selections=0
-        )
+        zero = SkillManifest(skill_id="s1", name="t", description="d", total_selections=0)
         assert zero.effective_rate == 0.0
 
         active = SkillManifest(
@@ -359,9 +347,7 @@ class TestEvolutionTypes:
     def test_evolution_request_frozen(self):
         from openspace.domain.types import EvolutionRequest
 
-        req = EvolutionRequest(
-            evolution_type="fix", trigger="analysis", target_skill_ids=("s1",)
-        )
+        req = EvolutionRequest(evolution_type="fix", trigger="analysis", target_skill_ids=("s1",))
         with pytest.raises(FrozenInstanceError):
             req.direction = "mutated"  # type: ignore[misc]
 
@@ -401,9 +387,7 @@ class TestAnalysisTypes:
         snap = ExecutionAnalysisSnapshot(
             task_id="t1",
             timestamp=datetime.now(),
-            skill_judgments=(
-                SkillJudgmentSnapshot(skill_id="s1", skill_applied=True),
-            ),
+            skill_judgments=(SkillJudgmentSnapshot(skill_id="s1", skill_applied=True),),
         )
         assert snap.skill_judgments[0].skill_applied is True
         with pytest.raises(FrozenInstanceError):
@@ -416,9 +400,7 @@ class TestSearchTypes:
     def test_search_result_frozen(self):
         from openspace.domain.types import SkillSearchResult
 
-        r = SkillSearchResult(
-            skill_id="s1", name="Test", description="desc", score=0.9
-        )
+        r = SkillSearchResult(skill_id="s1", name="Test", description="desc", score=0.9)
         with pytest.raises(FrozenInstanceError):
             r.score = 0.1  # type: ignore[misc]
 
@@ -427,11 +409,7 @@ class TestSearchTypes:
 
         resp = SkillSearchResponse(
             query="test",
-            results=(
-                SkillSearchResult(
-                    skill_id="s1", name="Test", description="d", score=0.9
-                ),
-            ),
+            results=(SkillSearchResult(skill_id="s1", name="Test", description="d", score=0.9),),
             total_count=1,
         )
         assert len(resp.results) == 1

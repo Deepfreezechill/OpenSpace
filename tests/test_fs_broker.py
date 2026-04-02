@@ -13,17 +13,13 @@ from __future__ import annotations
 
 import os
 import platform
-import stat
-import string
 import tempfile
 import threading
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from openspace.sandbox.fs_broker import (
-    VIRTUAL_SCHEME,
     DeniedPathError,
     FileSizeLimitError,
     FilesystemBroker,
@@ -243,7 +239,6 @@ class TestWriteEnforcement:
             denied_patterns=(),
             temp_dir_only=True,
         )
-        import tempfile
         check_write(os.path.join(tempfile.gettempdir(), "output.txt"), config)
 
 
@@ -488,10 +483,7 @@ class TestSymlinkRaceConditions:
                             actual = Path(os.readlink(proc_link)).resolve()
                             jail_str = str(jail.resolve())
                             actual_str = str(actual)
-                            if not (
-                                actual_str == jail_str
-                                or actual_str.startswith(jail_str + "/")
-                            ):
+                            if not (actual_str == jail_str or actual_str.startswith(jail_str + "/")):
                                 escapes_detected.append(actual_str)
                     finally:
                         os.close(fd)
@@ -523,6 +515,7 @@ class TestSymlinkRaceConditions:
                         (subdir / "file.txt").write_text("inner content")
                     else:
                         import shutil
+
                         shutil.rmtree(subdir, ignore_errors=True)
                         subdir.symlink_to("/tmp")
                 except OSError:
@@ -550,6 +543,7 @@ class TestSymlinkRaceConditions:
                 subdir.unlink()
             elif subdir.exists():
                 import shutil
+
                 shutil.rmtree(subdir, ignore_errors=True)
 
         assert not escapes, f"Jail escapes during race: {escapes}"

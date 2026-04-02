@@ -7,13 +7,15 @@ It exposes a unified `connect / disconnect / is_connected` lifecycle and
 defines an abstract `request()` method which concrete back-ends must
 implement.
 """
-import asyncio
+
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar, Type
+from typing import Any, Generic, Type, TypeVar
+
 from pydantic import BaseModel
+
 from ..task_managers import BaseConnectionManager
 
-T = TypeVar("T")        # The object returned by manager.start(): session / connection
+T = TypeVar("T")  # The object returned by manager.start(): session / connection
 
 
 class BaseConnector(ABC, Generic[T]):
@@ -24,7 +26,7 @@ class BaseConnector(ABC, Generic[T]):
     """
 
     def __init__(self, connection_manager: BaseConnectionManager[T]):
-        self._connection_manager = connection_manager        # e.g. AioHttpConnectionManager instance
+        self._connection_manager = connection_manager  # e.g. AioHttpConnectionManager instance
         # The raw connection object returned by the manager, for reusing the established long-term connection
         self._connection: T | None = None
         self._connected = False
@@ -33,17 +35,17 @@ class BaseConnector(ABC, Generic[T]):
         """Create the underlying session/connection via the manager."""
         if self._connected:
             return
-        
+
         try:
             # Hook: before connection
             await self._before_connect()
-            
+
             # Start the connection manager
             self._connection = await self._connection_manager.start()
-            
+
             # Hook: after connection established
             await self._after_connect()
-            
+
             # Mark as connected
             self._connected = True
         except Exception:
@@ -53,23 +55,23 @@ class BaseConnector(ABC, Generic[T]):
 
     async def disconnect(self) -> None:
         """Close the session/connection and reset state.
-        
+
         Ensures proper cleanup of all resources including aiohttp sessions.
         """
         if not self._connected:
             return
-        
+
         # Hook: before disconnection
         await self._before_disconnect()
-        
+
         # Stop the connection manager
         if self._connection_manager:
             await self._connection_manager.stop()
             self._connection = None
-        
+
         # Hook: after disconnection
         await self._after_disconnect()
-        
+
         self._connected = False
 
     async def _before_connect(self) -> None:
@@ -115,7 +117,7 @@ class BaseConnector(ABC, Generic[T]):
     @staticmethod
     def _parse_as(data: Any, model_cls: "Type[BaseModel] | None" = None) -> Any:
         """
-        Try to parse *data* into *model_cls* (a subclass of BaseModel).  
+        Try to parse *data* into *model_cls* (a subclass of BaseModel).
         If `model_cls` is None or not a subclass of BaseModel, return the original data.
         """
         if model_cls is None:
@@ -123,7 +125,7 @@ class BaseConnector(ABC, Generic[T]):
         if isinstance(model_cls, type) and issubclass(model_cls, BaseModel):
             return model_cls.model_validate(data)
         return data
-    
+
     @abstractmethod
     async def invoke(self, name: str, params: dict[str, Any]) -> Any:
         """

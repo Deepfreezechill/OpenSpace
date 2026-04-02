@@ -39,10 +39,7 @@ def validate_token_strength(token: str) -> tuple[bool, str]:
     Returns (is_valid, reason).
     """
     if len(token) < MIN_TOKEN_LENGTH:
-        return False, (
-            f"Token too short ({len(token)} chars). "
-            f"Minimum is {MIN_TOKEN_LENGTH} characters."
-        )
+        return False, (f"Token too short ({len(token)} chars). Minimum is {MIN_TOKEN_LENGTH} characters.")
     return True, "OK"
 
 

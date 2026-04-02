@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from openspace.cloud.auth import get_api_base, get_auth_headers_or_exit
-from openspace.cloud.client import OpenSpaceClient, CloudError
+from openspace.cloud.client import CloudError, OpenSpaceClient
 
 
 def main() -> None:
@@ -53,12 +53,12 @@ def main() -> None:
     parent_ids = [p.strip() for p in args.parent_ids.split(",") if p.strip()]
     tags = [t.strip() for t in args.tags.split(",") if t.strip()]
 
-    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"\n{'=' * 60}", file=sys.stderr)
     print(f"Upload Skill: {skill_dir.name}", file=sys.stderr)
     print(f"  Visibility:  {args.visibility}", file=sys.stderr)
     print(f"  Origin:      {args.origin}", file=sys.stderr)
     print(f"  API Base:    {api_base}", file=sys.stderr)
-    print(f"{'='*60}\n", file=sys.stderr)
+    print(f"{'=' * 60}\n", file=sys.stderr)
 
     try:
         client = OpenSpaceClient(headers, api_base)
@@ -75,7 +75,7 @@ def main() -> None:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"\nUpload complete!", file=sys.stderr)
+    print("\nUpload complete!", file=sys.stderr)
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
 

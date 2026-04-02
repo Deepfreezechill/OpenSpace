@@ -24,7 +24,6 @@ from typing import (
     List,
     Optional,
     Protocol,
-    Sequence,
     runtime_checkable,
 )
 
@@ -41,7 +40,6 @@ from openspace.domain.types import (
     ToolCallResult,
     ToolDescriptor,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # 1. SkillStorePort — persistence for skill records & analyses
@@ -105,17 +103,11 @@ class LLMClientPort(Protocol):
 class CloudSkillPort(Protocol):
     """Port for cloud skill operations (Issue #44)."""
 
-    async def search_skills(
-        self, query: str, *, limit: int = 20
-    ) -> List[SkillSearchResult]: ...
+    async def search_skills(self, query: str, *, limit: int = 20) -> List[SkillSearchResult]: ...
 
-    async def import_skill(
-        self, skill_id: str, target_dir: str
-    ) -> Dict[str, Any]: ...
+    async def import_skill(self, skill_id: str, target_dir: str) -> Dict[str, Any]: ...
 
-    async def publish_skill(
-        self, skill_dir: str, *, visibility: str = "private"
-    ) -> Dict[str, Any]: ...
+    async def publish_skill(self, skill_dir: str, *, visibility: str = "private") -> Dict[str, Any]: ...
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -148,9 +140,7 @@ class SkillEvolutionPort(Protocol):
 
     async def evolve(self, request: EvolutionRequest) -> Optional[EvolutionResult]: ...
 
-    async def process_analysis(
-        self, analysis: ExecutionAnalysisSnapshot
-    ) -> List[EvolutionResult]: ...
+    async def process_analysis(self, analysis: ExecutionAnalysisSnapshot) -> List[EvolutionResult]: ...
 
     async def wait_background(self) -> None: ...
 
@@ -199,9 +189,7 @@ class ToolBackendPort(Protocol):
     An adapter (Phase 1.3) will normalize the interface at the boundary.
     """
 
-    async def list_tools(
-        self, *, session_name: Optional[str] = None
-    ) -> List[ToolDescriptor]: ...
+    async def list_tools(self, *, session_name: Optional[str] = None) -> List[ToolDescriptor]: ...
 
     async def call_tool(
         self,
@@ -225,13 +213,9 @@ class PolicyEnginePort(Protocol):
     to infrastructure enums.  Adapters convert to ``BackendType`` enum.
     """
 
-    async def check_command_allowed(
-        self, backend_type: str, command: str
-    ) -> bool: ...
+    async def check_command_allowed(self, backend_type: str, command: str) -> bool: ...
 
-    async def check_domain_allowed(
-        self, backend_type: str, domain: str
-    ) -> bool: ...
+    async def check_domain_allowed(self, backend_type: str, domain: str) -> bool: ...
 
     def get_policy(self, backend_type: str) -> SandboxPolicy: ...
 

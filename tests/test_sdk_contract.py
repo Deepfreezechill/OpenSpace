@@ -19,8 +19,6 @@ import json
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
-import pytest
-
 # ---------------------------------------------------------------------------
 # SDK envelope helpers (will become openspace.sdk.envelope in Phase 6)
 # ---------------------------------------------------------------------------
@@ -169,9 +167,7 @@ VALID_ERROR_CODES = frozenset(
     }
 )
 
-VALID_TASK_STATUSES = frozenset(
-    {"queued", "running", "completed", "failed", "cancelled"}
-)
+VALID_TASK_STATUSES = frozenset({"queued", "running", "completed", "failed", "cancelled"})
 
 VALID_SEARCH_SCOPES = frozenset({"all", "local", "cloud"})
 
@@ -414,8 +410,17 @@ class TestSDKTypeConsistency:
         assert actual == expected
 
     def test_task_result_has_all_spec_fields(self) -> None:
-        expected = {"task_id", "status", "success", "output", "tools_used",
-                    "skill_used", "evolved_skills", "duration_ms", "error"}
+        expected = {
+            "task_id",
+            "status",
+            "success",
+            "output",
+            "tools_used",
+            "skill_used",
+            "evolved_skills",
+            "duration_ms",
+            "error",
+        }
         actual = {f.name for f in TaskResultData.__dataclass_fields__.values()}
         assert actual == expected
 
@@ -481,9 +486,7 @@ class TestToolUsageContract:
             ToolUsageRecord(tool_name="bash", arguments={"cmd": "ls"}),
             ToolUsageRecord(tool_name="python", arguments={"code": "1+1"}, success=False),
         ]
-        result = TaskResultData(
-            task_id="t-5", status="completed", success=True, tools_used=tools
-        )
+        result = TaskResultData(task_id="t-5", status="completed", success=True, tools_used=tools)
         assert result.tools_used is not None
         assert len(result.tools_used) == 2
         assert result.tools_used[1].success is False
@@ -545,9 +548,7 @@ class TestSecurityContract:
 
         for key in parsed["data"]:
             normalized = key.lower()
-            assert normalized not in self._SENSITIVE_KEYS, (
-                f"Config response contains sensitive key: {key}"
-            )
+            assert normalized not in self._SENSITIVE_KEYS, f"Config response contains sensitive key: {key}"
 
     def test_error_responses_never_leak_tokens(self) -> None:
         """Error messages must not contain token values."""

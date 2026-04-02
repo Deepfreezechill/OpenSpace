@@ -13,9 +13,8 @@ Covers:
 from __future__ import annotations
 
 import json
-import os
 import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -26,7 +25,6 @@ from openspace.auth.bearer import (
     get_bearer_token,
     validate_token_strength,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -202,9 +200,7 @@ class TestBearerTokenMiddleware:
         # This is a design test: verify the code path uses constant-time comparison.
         # We can't truly test timing, but we confirm wrong tokens of same length are rejected.
         same_length_wrong = "z" * len(VALID_TOKEN)
-        scope = _http_scope(
-            headers={"authorization": f"Bearer {same_length_wrong}"}
-        )
+        scope = _http_scope(headers={"authorization": f"Bearer {same_length_wrong}"})
         collector = ResponseCollector()
         await middleware(scope, AsyncMock(), collector)
         assert collector.status == 401
@@ -221,9 +217,7 @@ class TestRunMcpServerFailClosed:
 
     def test_sse_without_token_exits(self, monkeypatch):
         monkeypatch.delenv(BEARER_TOKEN_ENV, raising=False)
-        monkeypatch.setattr(
-            sys, "argv", ["openspace-mcp", "--transport", "sse"]
-        )
+        monkeypatch.setattr(sys, "argv", ["openspace-mcp", "--transport", "sse"])
         with pytest.raises(SystemExit) as exc_info:
             from openspace.mcp_server import run_mcp_server
 
@@ -232,9 +226,7 @@ class TestRunMcpServerFailClosed:
 
     def test_sse_with_weak_token_exits(self, monkeypatch):
         monkeypatch.setenv(BEARER_TOKEN_ENV, "tooshort")
-        monkeypatch.setattr(
-            sys, "argv", ["openspace-mcp", "--transport", "sse"]
-        )
+        monkeypatch.setattr(sys, "argv", ["openspace-mcp", "--transport", "sse"])
         with pytest.raises(SystemExit) as exc_info:
             from openspace.mcp_server import run_mcp_server
 

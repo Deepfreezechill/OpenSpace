@@ -25,7 +25,6 @@ Issues:
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import hmac
 import os
@@ -37,7 +36,6 @@ from enum import Enum
 from typing import Optional
 
 from openspace.sandbox.leases import SecretCapability
-
 
 # ---------------------------------------------------------------------------
 # Secret Scope Model
@@ -117,7 +115,9 @@ class _SecretEncryptor:
         ciphertext = bytes(a ^ b for a, b in zip(plaintext_bytes, key_stream))
         # Encrypt-then-MAC: HMAC over nonce + ciphertext
         tag = hmac.new(
-            self._master_key, nonce + ciphertext, hashlib.sha256,
+            self._master_key,
+            nonce + ciphertext,
+            hashlib.sha256,
         ).digest()
         return nonce + ciphertext + tag
 
@@ -132,11 +132,13 @@ class _SecretEncryptor:
         if len(data) < 16 + self._TAG_LEN:
             raise SecretBrokerError("Corrupt encrypted data")
         nonce = data[:16]
-        ciphertext = data[16:-self._TAG_LEN]
-        stored_tag = data[-self._TAG_LEN:]
+        ciphertext = data[16 : -self._TAG_LEN]
+        stored_tag = data[-self._TAG_LEN :]
         # Verify integrity before decryption
         expected_tag = hmac.new(
-            self._master_key, nonce + ciphertext, hashlib.sha256,
+            self._master_key,
+            nonce + ciphertext,
+            hashlib.sha256,
         ).digest()
         if not hmac.compare_digest(stored_tag, expected_tag):
             raise SecretBrokerError("Encrypted data integrity check failed")
@@ -181,12 +183,7 @@ class SecretEntry:
 # ---------------------------------------------------------------------------
 
 _MAX_KEY_LENGTH = 256
-_KEY_PATTERN_CHARS = frozenset(
-    "abcdefghijklmnopqrstuvwxyz"
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "0123456789"
-    "-_./:"
-)
+_KEY_PATTERN_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./:")
 
 
 def _validate_key(key: str) -> None:
@@ -194,14 +191,10 @@ def _validate_key(key: str) -> None:
     if not key:
         raise SecretKeyInvalid("Secret key cannot be empty")
     if len(key) > _MAX_KEY_LENGTH:
-        raise SecretKeyInvalid(
-            f"Secret key exceeds maximum length ({_MAX_KEY_LENGTH})"
-        )
+        raise SecretKeyInvalid(f"Secret key exceeds maximum length ({_MAX_KEY_LENGTH})")
     invalid = set(key) - _KEY_PATTERN_CHARS
     if invalid:
-        raise SecretKeyInvalid(
-            f"Secret key contains invalid characters: {sorted(invalid)}"
-        )
+        raise SecretKeyInvalid(f"Secret key contains invalid characters: {sorted(invalid)}")
 
 
 class SecretStore:
@@ -217,13 +210,9 @@ class SecretStore:
 
     def __init__(self, encryption_key: bytes | None = None) -> None:
         self._lock = threading.Lock()
-        self._encryptor = _SecretEncryptor(
-            encryption_key or secrets.token_bytes(32)
-        )
+        self._encryptor = _SecretEncryptor(encryption_key or secrets.token_bytes(32))
         # scope -> key -> SecretEntry
-        self._store: dict[SecretScope, dict[str, SecretEntry]] = {
-            scope: {} for scope in SecretScope
-        }
+        self._store: dict[SecretScope, dict[str, SecretEntry]] = {scope: {} for scope in SecretScope}
 
     def put(
         self,
@@ -252,8 +241,7 @@ class SecretStore:
         value_bytes_len = len(value.encode("utf-8"))
         if value_bytes_len > self.MAX_VALUE_LENGTH:
             raise SecretValueTooLarge(
-                f"Secret value ({value_bytes_len} bytes) exceeds "
-                f"maximum length ({self.MAX_VALUE_LENGTH} bytes)"
+                f"Secret value ({value_bytes_len} bytes) exceeds maximum length ({self.MAX_VALUE_LENGTH} bytes)"
             )
 
         encrypted = self._encryptor.encrypt(value)
@@ -271,17 +259,11 @@ class SecretStore:
             if key not in scope_store:
                 # Purge expired entries before capacity check
                 now = time.time()
-                expired_keys = [
-                    k for k, e in scope_store.items()
-                    if e.expires_at is not None and e.expires_at <= now
-                ]
+                expired_keys = [k for k, e in scope_store.items() if e.expires_at is not None and e.expires_at <= now]
                 for k in expired_keys:
                     del scope_store[k]
                 if len(scope_store) >= self.MAX_SECRETS_PER_SCOPE:
-                    raise SecretStoreFull(
-                        f"Scope '{scope.value}' is full "
-                        f"({self.MAX_SECRETS_PER_SCOPE} secrets)"
-                    )
+                    raise SecretStoreFull(f"Scope '{scope.value}' is full ({self.MAX_SECRETS_PER_SCOPE} secrets)")
             scope_store[key] = entry
 
     def put_checked(
@@ -308,8 +290,7 @@ class SecretStore:
         value_bytes_len = len(value.encode("utf-8"))
         if value_bytes_len > self.MAX_VALUE_LENGTH:
             raise SecretValueTooLarge(
-                f"Secret value ({value_bytes_len} bytes) exceeds "
-                f"maximum length ({self.MAX_VALUE_LENGTH} bytes)"
+                f"Secret value ({value_bytes_len} bytes) exceeds maximum length ({self.MAX_VALUE_LENGTH} bytes)"
             )
 
         encrypted = self._encryptor.encrypt(value)
@@ -326,37 +307,23 @@ class SecretStore:
             scope_store = self._store[scope]
             now = time.time()
             # Purge expired entries first to avoid ghost fullness
-            expired_keys = [
-                k for k, e in scope_store.items()
-                if e.expires_at is not None and e.expires_at <= now
-            ]
+            expired_keys = [k for k, e in scope_store.items() if e.expires_at is not None and e.expires_at <= now]
             for k in expired_keys:
                 del scope_store[k]
             # After purge, expired keys are gone — is_new is accurate
             is_new = key not in scope_store
             if is_new:
                 # Capability limit: count only secrets owned by this caller
-                owner_count = sum(
-                    1 for e in scope_store.values()
-                    if e.owner == owner
-                )
+                owner_count = sum(1 for e in scope_store.values() if e.owner == owner)
                 if owner_count >= cap_limit:
-                    raise SecretAccessDenied(
-                        f"Would exceed max_secrets limit ({cap_limit}) "
-                        f"for scope '{scope.value}'"
-                    )
+                    raise SecretAccessDenied(f"Would exceed max_secrets limit ({cap_limit}) for scope '{scope.value}'")
                 if len(scope_store) >= self.MAX_SECRETS_PER_SCOPE:
-                    raise SecretStoreFull(
-                        f"Scope '{scope.value}' is full "
-                        f"({self.MAX_SECRETS_PER_SCOPE} secrets)"
-                    )
+                    raise SecretStoreFull(f"Scope '{scope.value}' is full ({self.MAX_SECRETS_PER_SCOPE} secrets)")
             else:
                 # Overwrite: only the owner can update their own secret
                 existing = scope_store[key]
                 if existing.owner != owner:
-                    raise SecretAccessDenied(
-                        f"Cannot overwrite secret owned by '{existing.owner}'"
-                    )
+                    raise SecretAccessDenied(f"Cannot overwrite secret owned by '{existing.owner}'")
             scope_store[key] = entry
 
     def get(self, key: str, *, scope: SecretScope) -> str | None:
@@ -391,7 +358,11 @@ class SecretStore:
             return entry
 
     def get_owned(
-        self, key: str, *, scope: SecretScope, owner: str,
+        self,
+        key: str,
+        *,
+        scope: SecretScope,
+        owner: str,
     ) -> str | None:
         """Retrieve and decrypt a secret only if owned by the given owner.
 
@@ -414,7 +385,11 @@ class SecretStore:
             return self._store[scope].pop(key, None) is not None
 
     def delete_owned(
-        self, key: str, *, scope: SecretScope, owner: str,
+        self,
+        key: str,
+        *,
+        scope: SecretScope,
+        owner: str,
     ) -> bool:
         """Delete a secret only if owned by the given owner."""
         with self._lock:
@@ -499,9 +474,7 @@ class SecretBroker:
     """
 
     store: SecretStore = field(default_factory=SecretStore)
-    default_capability: SecretCapability = field(
-        default_factory=SecretCapability
-    )
+    default_capability: SecretCapability = field(default_factory=SecretCapability)
     owner: str = "system"
 
     def _resolve_scope(self, scope: str) -> SecretScope:
@@ -510,8 +483,7 @@ class SecretBroker:
             return SecretScope(scope)
         except ValueError:
             raise SecretAccessDenied(
-                f"Invalid scope '{scope}'. "
-                f"Must be one of: {', '.join(s.value for s in SecretScope)}"
+                f"Invalid scope '{scope}'. Must be one of: {', '.join(s.value for s in SecretScope)}"
             )
 
     def _check_capability(
@@ -536,18 +508,13 @@ class SecretBroker:
         # 2. Scope check
         resolved_scope = self._resolve_scope(scope)
         if scope not in capability.allowed_scopes:
-            raise SecretAccessDenied(
-                f"Scope '{scope}' not in allowed scopes: "
-                f"{capability.allowed_scopes}"
-            )
+            raise SecretAccessDenied(f"Scope '{scope}' not in allowed scopes: {capability.allowed_scopes}")
 
         # 3. Key check — empty allowed_keys = unrestricted (all tiers use
         #    empty by default; non-empty means explicit whitelist)
         if key is not None and capability.allowed_keys:
             if key not in capability.allowed_keys:
-                raise SecretAccessDenied(
-                    f"Key '{key}' not in allowed keys"
-                )
+                raise SecretAccessDenied(f"Key '{key}' not in allowed keys")
 
         return resolved_scope
 
@@ -605,14 +572,21 @@ class SecretBroker:
         _validate_key(key)
         cap = capability or self.default_capability
         resolved = self._check_capability(
-            cap, scope=scope, key=key, writing=True,
+            cap,
+            scope=scope,
+            key=key,
+            writing=True,
         )
 
         # Atomic put with capability count check inside the lock
         # owner is bound at construction — not caller-supplied
         self.store.put_checked(
-            key, value, scope=resolved, owner=self.owner,
-            expires_at=expires_at, cap_limit=cap.max_secrets,
+            key,
+            value,
+            scope=resolved,
+            owner=self.owner,
+            expires_at=expires_at,
+            cap_limit=cap.max_secrets,
         )
 
     async def revoke(

@@ -31,6 +31,7 @@ Replacer = Generator[str, None, None]
 SINGLE_CANDIDATE_SIMILARITY_THRESHOLD = 0.0
 MULTIPLE_CANDIDATES_SIMILARITY_THRESHOLD = 0.3
 
+
 def levenshtein(a: str, b: str) -> int:
     """Compute the Levenshtein edit distance between two strings."""
     if not a or not b:
@@ -52,9 +53,11 @@ def levenshtein(a: str, b: str) -> int:
             )
     return matrix[len(a)][len(b)]
 
+
 def simple_replacer(_content: str, find: str) -> Replacer:
     """Yield *find* unconditionally; the caller verifies via ``str.find``."""
     yield find
+
 
 def line_trimmed_replacer(content: str, find: str) -> Replacer:
     """Match by trimming each line, then yield the original substring."""
@@ -83,6 +86,7 @@ def line_trimmed_replacer(content: str, find: str) -> Replacer:
                 if k < n_search - 1:
                     end_idx += 1
             yield content[start_idx:end_idx]
+
 
 def block_anchor_replacer(content: str, find: str) -> Replacer:
     """Anchor on first/last lines (trimmed) and use Levenshtein on middles."""
@@ -174,6 +178,7 @@ def block_anchor_replacer(content: str, find: str) -> Replacer:
     if max_similarity >= MULTIPLE_CANDIDATES_SIMILARITY_THRESHOLD and best_match:
         yield _extract_block(best_match[0], best_match[1])
 
+
 def whitespace_normalized_replacer(content: str, find: str) -> Replacer:
     r"""Normalize whitespace (``\s+`` -> single space) before comparing."""
 
@@ -204,9 +209,10 @@ def whitespace_normalized_replacer(content: str, find: str) -> Replacer:
     find_lines = find.split("\n")
     if len(find_lines) > 1:
         for i in range(len(lines) - len(find_lines) + 1):
-            block = lines[i: i + len(find_lines)]
+            block = lines[i : i + len(find_lines)]
             if _normalize("\n".join(block)) == normalized_find:
                 yield "\n".join(block)
+
 
 def indentation_flexible_replacer(content: str, find: str) -> Replacer:
     """Remove the common leading indentation and compare blocks."""
@@ -217,18 +223,17 @@ def indentation_flexible_replacer(content: str, find: str) -> Replacer:
         if not non_empty:
             return text
         min_indent = min(len(line) - len(line.lstrip()) for line in non_empty)
-        return "\n".join(
-            line[min_indent:] if line.strip() else line for line in lines
-        )
+        return "\n".join(line[min_indent:] if line.strip() else line for line in lines)
 
     normalized_find = _remove_indent(find)
     content_lines = content.split("\n")
     find_lines = find.split("\n")
 
     for i in range(len(content_lines) - len(find_lines) + 1):
-        block = "\n".join(content_lines[i: i + len(find_lines)])
+        block = "\n".join(content_lines[i : i + len(find_lines)])
         if _remove_indent(block) == normalized_find:
             yield block
+
 
 def trimmed_boundary_replacer(content: str, find: str) -> Replacer:
     """Trim the entire find block, then search."""
@@ -242,9 +247,10 @@ def trimmed_boundary_replacer(content: str, find: str) -> Replacer:
     lines = content.split("\n")
     find_lines = find.split("\n")
     for i in range(len(lines) - len(find_lines) + 1):
-        block = "\n".join(lines[i: i + len(find_lines)])
+        block = "\n".join(lines[i : i + len(find_lines)])
         if block.strip() == trimmed_find:
             yield block
+
 
 REPLACER_CHAIN: list = [
     ("simple", simple_replacer),
@@ -254,6 +260,7 @@ REPLACER_CHAIN: list = [
     ("indentation_flexible", indentation_flexible_replacer),
     ("trimmed_boundary", trimmed_boundary_replacer),
 ]
+
 
 def fuzzy_find_match(content: str, find: str) -> Tuple[str, int]:
     """Locate *find* in *content* using the replacer chain.
@@ -270,11 +277,13 @@ def fuzzy_find_match(content: str, find: str) -> Tuple[str, int]:
             if name != "simple":
                 logger.debug(
                     "fuzzy_find_match: matched via '%s' at position %d",
-                    name, pos,
+                    name,
+                    pos,
                 )
             return candidate, pos
 
     return "", -1
+
 
 def fuzzy_replace(
     content: str,
@@ -309,14 +318,10 @@ def fuzzy_replace(
             if idx != last_idx:
                 continue  # ambiguous
 
-            return content[:idx] + new_string + content[idx + len(candidate):]
+            return content[:idx] + new_string + content[idx + len(candidate) :]
 
     if not_found:
         raise ValueError(
-            "Could not find old_string in the file. "
-            "Must match exactly (including whitespace and indentation)."
+            "Could not find old_string in the file. Must match exactly (including whitespace and indentation)."
         )
-    raise ValueError(
-        "Found multiple matches for old_string. "
-        "Provide more context to make the match unique."
-    )
+    raise ValueError("Found multiple matches for old_string. Provide more context to make the match unique.")

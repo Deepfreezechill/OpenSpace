@@ -12,8 +12,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from openspace.grounding.core.types import BackendType, ToolResult, ToolStatus
 from openspace.grounding.core.tool import BaseTool
+from openspace.grounding.core.types import BackendType, ToolResult, ToolStatus
 from openspace.utils.logging import Logger
 
 logger = Logger.get_logger(__name__)
@@ -32,6 +32,7 @@ def _ensure_livebench():
     try:
         import livebench.tools.direct_tools as dt
         import livebench.tools.productivity as prod
+
         _direct_tools = dt
         _productivity = prod
         _LIVEBENCH_AVAILABLE = True
@@ -125,8 +126,7 @@ class SearchWebTool(_ProductivityToolBase):
 class ReadWebpageTool(_ProductivityToolBase):
     _name = "read_webpage"
     _description = (
-        "Extract and read web page content from URLs using Tavily Extract. "
-        "Returns cleaned text in markdown format."
+        "Extract and read web page content from URLs using Tavily Extract. Returns cleaned text in markdown format."
     )
 
     async def _arun(self, urls: str, query: Optional[str] = None) -> ToolResult:
@@ -162,6 +162,7 @@ class CreateFileProductivityTool(_ProductivityToolBase):
             return ToolResult(status=ToolStatus.ERROR, content="filename and content are required")
 
         import os
+
         safe_name = os.path.basename(filename).replace("/", "_").replace("\\", "_")
         # Strip extension from filename if it matches file_type to avoid .docx.docx
         name_root, name_ext = os.path.splitext(safe_name)
@@ -246,9 +247,12 @@ class CreateFileProductivityTool(_ProductivityToolBase):
 
         try:
             from openspace.grounding.backends.shell.session import _parse_shell_result
+
             working_dir = getattr(self._session, "default_working_dir", None)
             result = await self._session.connector.run_python_script(
-                code, timeout=30, working_dir=working_dir,
+                code,
+                timeout=30,
+                working_dir=working_dir,
             )
             stdout, stderr, rc = _parse_shell_result(result)
             if rc != 0:
@@ -294,9 +298,7 @@ class ReadFileProductivityTool(_ProductivityToolBase):
 
 class ExecuteCodeSandboxTool(_ProductivityToolBase):
     _name = "execute_code_sandbox"
-    _description = (
-        "Execute Python code in a persistent sandbox. Supports artifact download via ARTIFACT_PATH:/path/to/file in output."
-    )
+    _description = "Execute Python code in a persistent sandbox. Supports artifact download via ARTIFACT_PATH:/path/to/file in output."
 
     async def _arun(self, code: str, language: str = "python") -> ToolResult:
         return await self._run_sync_tool(
@@ -322,6 +324,7 @@ class CreateVideoTool(_ProductivityToolBase):
     ) -> ToolResult:
         """Create video via Shell connector so it lands in the task workspace."""
         import os
+
         safe_name = os.path.basename(output_filename).replace("/", "_").replace("\\", "_")
         if not safe_name.endswith(".mp4"):
             safe_name = safe_name.rsplit(".", 1)[0] if "." in safe_name else safe_name
@@ -376,9 +379,12 @@ class CreateVideoTool(_ProductivityToolBase):
 
         try:
             from openspace.grounding.backends.shell.session import _parse_shell_result
+
             working_dir = getattr(self._session, "default_working_dir", None)
             result = await self._session.connector.run_python_script(
-                code, timeout=120, working_dir=working_dir,
+                code,
+                timeout=120,
+                working_dir=working_dir,
             )
             stdout, stderr, rc = _parse_shell_result(result)
             if rc != 0:

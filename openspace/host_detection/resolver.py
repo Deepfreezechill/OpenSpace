@@ -64,7 +64,8 @@ def build_llm_kwargs(model: str) -> tuple[str, Dict[str, Any]]:
             resolved_model = f"{forced_provider}/{resolved_model}"
             logger.info(
                 "Prepended gateway prefix: model=%r (forced_provider=%s)",
-                resolved_model, forced_provider,
+                resolved_model,
+                forced_provider,
             )
         kwargs.update(host_config)
         source = "nanobot config"
@@ -104,8 +105,7 @@ def build_llm_kwargs(model: str) -> tuple[str, Dict[str, Any]]:
 
     if kwargs:
         safe = {
-            k: (v[:8] + "..." if k == "api_key" and isinstance(v, str) and len(v) > 8 else v)
-            for k, v in kwargs.items()
+            k: (v[:8] + "..." if k == "api_key" and isinstance(v, str) and len(v) > 8 else v) for k, v in kwargs.items()
         }
         logger.info("LLM kwargs resolved (source=%s): %s", source, safe)
 
@@ -173,11 +173,11 @@ def build_grounding_config_path() -> Optional[str]:
                 json.dump(overrides, f, ensure_ascii=False)
             logger.info(
                 "Grounding config overrides written to %s (%d keys)",
-                tmp_path, len(overrides),
+                tmp_path,
+                len(overrides),
             )
             return tmp_path
         except Exception as e:
             logger.warning("Failed to write config overrides: %s", e)
 
     return os.environ.get("OPENSPACE_CONFIG_PATH")
-

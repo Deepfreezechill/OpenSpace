@@ -1,4 +1,4 @@
-from openspace.agents.base import BaseAgent, AgentStatus, AgentRegistry
+from openspace.agents.base import AgentRegistry, AgentStatus, BaseAgent
 from openspace.agents.grounding_agent import GroundingAgent
 
 __all__ = [

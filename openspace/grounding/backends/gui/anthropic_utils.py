@@ -1,6 +1,7 @@
-from typing import List, cast
-from enum import Enum
 from datetime import datetime
+from enum import Enum
+from typing import List, cast
+
 from openspace.utils.logging import Logger
 
 logger = Logger.get_logger(__name__)
@@ -17,6 +18,7 @@ try:
         BetaToolResultBlockParam,
         BetaToolUseBlockParam,
     )
+
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     ANTHROPIC_AVAILABLE = False
@@ -30,6 +32,7 @@ PROMPT_CACHING_BETA_FLAG = "prompt-caching-2024-07-31"
 
 class APIProvider(Enum):
     """API Provider enumeration"""
+
     ANTHROPIC = "anthropic"
     # BEDROCK = "bedrock"
     # VERTEX = "vertex"
@@ -46,16 +49,16 @@ PROVIDER_TO_DEFAULT_MODEL_NAME: dict = {
 def get_system_prompt(platform: str = "Ubuntu") -> str:
     """
     Get system prompt based on platform.
-    
+
     Args:
         platform: Platform type (Ubuntu, Windows, macOS, or Darwin)
-    
+
     Returns:
         System prompt string
     """
     # Normalize platform name
     platform_lower = platform.lower()
-    
+
     if platform_lower in ["windows", "win32"]:
         return f"""<SYSTEM_CAPABILITY>
 * You are utilising a Windows virtual machine using x86_64 architecture with internet access.
@@ -65,7 +68,7 @@ def get_system_prompt(platform: str = "Ubuntu") -> str:
 * When viewing a page it can be helpful to zoom out so that you can see everything on the page. Either that, or make sure you scroll down to see everything before deciding something isn't available.
 * DO NOT ask users for clarification during task execution. DO NOT stop to request more information from users. Always take action using available tools.
 * When using your computer function calls, they take a while to run and send back to you. Where possible/feasible, try to chain multiple of these calls all into one function calls request.
-* The current date is {datetime.today().strftime('%A, %B %d, %Y')}.
+* The current date is {datetime.today().strftime("%A, %B %d, %Y")}.
 * Home directory of this Windows system is 'C:\\Users\\user'.
 * When you want to open some applications on Windows, please use Double Click on it instead of clicking once.
 * After each action, the system will provide you with a new screenshot showing the result.
@@ -80,7 +83,7 @@ def get_system_prompt(platform: str = "Ubuntu") -> str:
 * When viewing a page it can be helpful to zoom out so that you can see everything on the page. Either that, or make sure you scroll down to see everything before deciding something isn't available.
 * DO NOT ask users for clarification during task execution. DO NOT stop to request more information from users. Always take action using available tools.
 * When using your computer function calls, they take a while to run and send back to you. Where possible/feasible, try to chain multiple of these calls all into one function calls request.
-* The current date is {datetime.today().strftime('%A, %B %d, %Y')}.
+* The current date is {datetime.today().strftime("%A, %B %d, %Y")}.
 * Home directory of this macOS system is typically '/Users/[username]' or can be accessed via '~'.
 * On macOS, use Command (⌘) key combinations instead of Ctrl (e.g., Command+C for copy).
 * After each action, the system will provide you with a new screenshot showing the result.
@@ -96,7 +99,7 @@ def get_system_prompt(platform: str = "Ubuntu") -> str:
 * When viewing a page it can be helpful to zoom out so that you can see everything on the page. Either that, or make sure you scroll down to see everything before deciding something isn't available.
 * DO NOT ask users for clarification during task execution. DO NOT stop to request more information from users. Always take action using available tools.
 * When using your computer function calls, they take a while to run and send back to you. Where possible/feasible, try to chain multiple of these calls all into one function calls request.
-* The current date is {datetime.today().strftime('%A, %B %d, %Y')}.
+* The current date is {datetime.today().strftime("%A, %B %d, %Y")}.
 * Home directory of this Ubuntu system is '/home/user'.
 * After each action, the system will provide you with a new screenshot showing the result.
 * Continue taking actions until the task is complete.
@@ -107,18 +110,16 @@ def inject_prompt_caching(messages: List[BetaMessageParam]) -> None:
     """
     Set cache breakpoints for the 3 most recent turns.
     One cache breakpoint is left for tools/system prompt, to be shared across sessions.
-    
+
     Args:
         messages: Message history (modified in place)
     """
     if not ANTHROPIC_AVAILABLE:
         return
-    
+
     breakpoints_remaining = 3
     for message in reversed(messages):
-        if message["role"] == "user" and isinstance(
-            content := message["content"], list
-        ):
+        if message["role"] == "user" and isinstance(content := message["content"], list):
             if breakpoints_remaining:
                 breakpoints_remaining -= 1
                 # Use type ignore to bypass TypedDict check until SDK types are updated
@@ -141,7 +142,7 @@ def maybe_filter_to_n_most_recent_images(
     the conversation progresses, remove all but the final `images_to_keep` tool_result
     images in place, with a chunk of min_removal_threshold to reduce the amount we
     break the implicit prompt cache.
-    
+
     Args:
         messages: Message history (modified in place)
         images_to_keep: Number of recent images to keep
@@ -149,30 +150,28 @@ def maybe_filter_to_n_most_recent_images(
     """
     if not ANTHROPIC_AVAILABLE or images_to_keep is None:
         return
-    
+
     tool_result_blocks = cast(
         list[BetaToolResultBlockParam],
         [
             item
             for message in messages
-            for item in (
-                message["content"] if isinstance(message["content"], list) else []
-            )
+            for item in (message["content"] if isinstance(message["content"], list) else [])
             if isinstance(item, dict) and item.get("type") == "tool_result"
         ],
     )
-    
+
     total_images = sum(
         1
         for tool_result in tool_result_blocks
         for content in tool_result.get("content", [])
         if isinstance(content, dict) and content.get("type") == "image"
     )
-    
+
     images_to_remove = total_images - images_to_keep
     # for better cache behavior, we want to remove in chunks
     images_to_remove -= images_to_remove % min_removal_threshold
-    
+
     for tool_result in tool_result_blocks:
         if isinstance(tool_result.get("content"), list):
             new_content = []
@@ -189,23 +188,23 @@ def response_to_params(response: BetaMessage) -> List[BetaContentBlockParam]:
     """
     Convert Anthropic response to parameter list.
     Handles both text blocks, tool use blocks, and thinking blocks.
-    
+
     Args:
         response: Anthropic API response
-    
+
     Returns:
         List of content blocks
     """
     if not ANTHROPIC_AVAILABLE:
         return []
-    
+
     res: List[BetaContentBlockParam] = []
     if response.content:
         for block in response.content:
             # Check block type using type attribute
             # Note: type may be a string or enum, so convert to string for comparison
             block_type = str(getattr(block, "type", ""))
-            
+
             if block_type == "text":
                 # Regular text block
                 if isinstance(block, BetaTextBlock) and block.text:
@@ -238,4 +237,3 @@ def response_to_params(response: BetaMessage) -> List[BetaContentBlockParam]:
         return res
     else:
         return []
-

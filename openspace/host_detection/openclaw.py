@@ -129,9 +129,9 @@ def get_openclaw_openai_api_key() -> Optional[str]:
 def is_openclaw_host() -> bool:
     """Detect if the current environment is running under OpenClaw."""
     import os
+
     # Check OpenClaw-specific env vars
     if os.environ.get("OPENCLAW_STATE_DIR") or os.environ.get("OPENCLAW_CONFIG_PATH"):
         return True
     # Check if config exists
     return _resolve_openclaw_config_path() is not None
-

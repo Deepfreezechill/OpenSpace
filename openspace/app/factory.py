@@ -36,7 +36,6 @@ from openspace.domain.ports import (
     ToolBackendPort,
 )
 
-
 # ══════════════════════════════════════════════════════════════════════
 # Production factory
 # ══════════════════════════════════════════════════════════════════════
@@ -112,9 +111,7 @@ async def build_container(
 class _StubLLM:
     """Minimal LLM stub for testing — satisfies LLMClientPort."""
 
-    async def complete(
-        self, messages: Any, *, tools: Any = None, execute_tools: bool = True, **kw: Any
-    ) -> dict:
+    async def complete(self, messages: Any, *, tools: Any = None, execute_tools: bool = True, **kw: Any) -> dict:
         return {"role": "assistant", "content": "stub response"}
 
     def estimate_tokens(self, text: str) -> int:

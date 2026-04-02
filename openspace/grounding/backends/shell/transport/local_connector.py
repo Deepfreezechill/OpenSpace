@@ -13,11 +13,11 @@ import os
 import platform
 import tempfile
 import uuid
-from typing import Any, Optional, Dict
+from typing import Any, Dict, Optional
 
+from openspace.grounding.core.security import SecurityPolicyManager
 from openspace.grounding.core.transport.connectors.base import BaseConnector
 from openspace.grounding.core.transport.task_managers.noop import NoOpConnectionManager
-from openspace.grounding.core.security import SecurityPolicyManager
 from openspace.utils.logging import Logger
 
 logger = Logger.get_logger(__name__)
@@ -28,6 +28,7 @@ platform_name = platform.system()
 # ---------------------------------------------------------------------------
 # Conda helpers (mirrored from local_server/main.py)
 # ---------------------------------------------------------------------------
+
 
 def _get_conda_activation_prefix(conda_env: str | None) -> str:
     """Generate platform-specific conda activation prefix."""
@@ -79,17 +80,16 @@ def _wrap_script_with_conda(script: str, conda_env: str | None) -> str:
                 break
         if conda_sh:
             return (
-                f'#!/bin/bash\n'
+                f"#!/bin/bash\n"
                 f'if [ -f "{conda_sh}" ]; then\n'
                 f'    . "{conda_sh}"\n'
-                f'    conda activate {conda_env} 2>/dev/null || true\n'
-                f'fi\n\n'
-                f'{script}\n'
+                f"    conda activate {conda_env} 2>/dev/null || true\n"
+                f"fi\n\n"
+                f"{script}\n"
             )
         else:
             logger.warning(
-                "Conda environment '%s' requested but conda not found. "
-                "Executing with system Python.", conda_env
+                "Conda environment '%s' requested but conda not found. Executing with system Python.", conda_env
             )
             return script
 
@@ -98,7 +98,7 @@ class LocalShellConnector(BaseConnector[Any]):
     """
     Shell connector that runs scripts **locally** using asyncio subprocesses,
     bypassing the Flask local_server entirely.
-    
+
     Public API is compatible with ``ShellConnector`` so that ``ShellSession``
     works without modification.
     """
@@ -157,9 +157,7 @@ class LocalShellConnector(BaseConnector[Any]):
                 cwd=cwd,
                 env=exec_env,
             )
-            stdout_b, stderr_b = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout
-            )
+            stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             stdout = stdout_b.decode("utf-8", errors="replace") if stdout_b else ""
             stderr = stderr_b.decode("utf-8", errors="replace") if stderr_b else ""
             returncode = proc.returncode or 0
@@ -211,9 +209,7 @@ class LocalShellConnector(BaseConnector[Any]):
                 cwd=cwd,
                 env=exec_env,
             )
-            stdout_b, _ = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout
-            )
+            stdout_b, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             stdout = stdout_b.decode("utf-8", errors="replace") if stdout_b else ""
             returncode = proc.returncode or 0
 
@@ -261,9 +257,8 @@ class LocalShellConnector(BaseConnector[Any]):
         # Security check
         if self._security_manager:
             from openspace.grounding.core.types import BackendType
-            allowed = await self._security_manager.check_command_allowed(
-                BackendType.SHELL, code
-            )
+
+            allowed = await self._security_manager.check_command_allowed(BackendType.SHELL, code)
             if not allowed:
                 logger.error("SecurityPolicy blocked python code execution")
                 raise PermissionError("SecurityPolicy: python code execution blocked")
@@ -292,9 +287,7 @@ class LocalShellConnector(BaseConnector[Any]):
                 if activation:
                     python_cmd = "python" if platform_name == "Windows" else "python3"
                     full_cmd = f'{activation}{python_cmd} "{temp_filename}"'
-                    result = await self._run_shell_command(
-                        full_cmd, timeout=timeout, working_dir=working_dir, env=env
-                    )
+                    result = await self._run_shell_command(full_cmd, timeout=timeout, working_dir=working_dir, env=env)
                 else:
                     python_cmd = "python" if platform_name == "Windows" else "python3"
                     result = await self._run_subprocess(
@@ -334,9 +327,8 @@ class LocalShellConnector(BaseConnector[Any]):
         # Security check
         if self._security_manager:
             from openspace.grounding.core.types import BackendType
-            allowed = await self._security_manager.check_command_allowed(
-                BackendType.SHELL, script
-            )
+
+            allowed = await self._security_manager.check_command_allowed(BackendType.SHELL, script)
             if not allowed:
                 logger.error("SecurityPolicy blocked bash script execution")
                 raise PermissionError("SecurityPolicy: bash script execution blocked")
@@ -405,7 +397,4 @@ class LocalShellConnector(BaseConnector[Any]):
 
     async def request(self, *args: Any, **kwargs: Any) -> Any:
         """Not used in local mode."""
-        raise NotImplementedError(
-            "LocalShellConnector does not support raw HTTP requests"
-        )
-
+        raise NotImplementedError("LocalShellConnector does not support raw HTTP requests")

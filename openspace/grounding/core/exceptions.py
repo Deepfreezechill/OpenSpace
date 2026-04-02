@@ -1,6 +1,7 @@
 """
 Unified exception & error-code definitions for the grounding framework
 """
+
 from enum import Enum, auto
 from typing import Any, Dict
 
@@ -60,8 +61,8 @@ class GroundingError(Exception):
             "context": self.context,
         }
 
-    def __str__(self) -> str:  
+    def __str__(self) -> str:
         return f"[{self.code}] {self.message}"
 
-    def __repr__(self) -> str: 
+    def __repr__(self) -> str:
         return f"GroundingError(code={self.code}, msg={self.message!r})"

@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from openspace.cloud.auth import get_api_base, get_auth_headers_or_exit
-from openspace.cloud.client import OpenSpaceClient, CloudError
+from openspace.cloud.client import CloudError, OpenSpaceClient
 
 
 def main() -> None:
@@ -43,8 +43,7 @@ def main() -> None:
 
     if result.get("status") == "already_exists" and not args.force:
         print(
-            f"ERROR: Skill directory already exists: {result.get('local_path')}\n"
-            f"  Use --force to overwrite.",
+            f"ERROR: Skill directory already exists: {result.get('local_path')}\n  Use --force to overwrite.",
             file=sys.stderr,
         )
         sys.exit(1)

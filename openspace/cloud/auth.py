@@ -82,6 +82,7 @@ def get_api_base(cli_override: Optional[str] = None) -> str:
 def get_auth_headers_or_exit() -> Dict[str, str]:
     """Resolve auth headers for CLI scripts.  Exits on failure."""
     import sys
+
     from openspace.host_detection import read_host_mcp_env
 
     env_key = os.environ.get("OPENSPACE_API_KEY", "").strip()

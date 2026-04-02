@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import ast
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Sequence
 
 from openspace.utils.logging import Logger
 
@@ -25,6 +25,7 @@ logger = Logger.get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Data types
 # ---------------------------------------------------------------------------
+
 
 class Severity(str, Enum):
     CRITICAL = "CRITICAL"
@@ -35,6 +36,7 @@ class Severity(str, Enum):
 @dataclass(frozen=True)
 class Finding:
     """A single dangerous-API detection result."""
+
     line: int
     col: int
     severity: Severity
@@ -45,10 +47,11 @@ class Finding:
 @dataclass
 class BlocklistPattern:
     """One entry from the blocklist configuration."""
+
     name: str
     description: str
     severity: Severity
-    ast_type: str          # "Call", "Attribute", "Import"
+    ast_type: str  # "Call", "Attribute", "Import"
     targets: List[str]
 
 
@@ -90,9 +93,7 @@ def _parse_blocklist_yaml(text: str) -> List[Dict[str, Any]]:
         indent = len(raw_line) - len(raw_line.lstrip())
 
         # Sub-list item under targets (deeper indent)
-        if in_targets and stripped.startswith("- ") and (
-            pattern_indent is not None and indent > pattern_indent
-        ):
+        if in_targets and stripped.startswith("- ") and (pattern_indent is not None and indent > pattern_indent):
             if len(targets_list) < MAX_TARGETS:
                 targets_list.append(stripped[2:].strip().strip("'\""))
             continue
@@ -158,19 +159,14 @@ def load_blocklist(
         is_default = idx == 0
         if not path.exists():
             if is_default:
-                raise RuntimeError(
-                    f"Default blocklist not found: {path}. "
-                    "Cannot scan without rules — refusing to run."
-                )
+                raise RuntimeError(f"Default blocklist not found: {path}. Cannot scan without rules — refusing to run.")
             logger.warning("Blocklist file not found: %s", path)
             continue
         try:
             text = path.read_text(encoding="utf-8")
         except OSError as exc:
             if is_default:
-                raise RuntimeError(
-                    f"Cannot read default blocklist {path}: {exc}"
-                ) from exc
+                raise RuntimeError(f"Cannot read default blocklist {path}: {exc}") from exc
             logger.warning("Cannot read blocklist %s: %s", path, exc)
             continue
 
@@ -180,21 +176,20 @@ def load_blocklist(
                 continue
             seen_names.add(name)
             try:
-                results.append(BlocklistPattern(
-                    name=name,
-                    description=entry.get("description", ""),
-                    severity=Severity(entry.get("severity", "HIGH").upper()),
-                    ast_type=entry.get("ast_type", "Call"),
-                    targets=entry.get("targets", []),
-                ))
+                results.append(
+                    BlocklistPattern(
+                        name=name,
+                        description=entry.get("description", ""),
+                        severity=Severity(entry.get("severity", "HIGH").upper()),
+                        ast_type=entry.get("ast_type", "Call"),
+                        targets=entry.get("targets", []),
+                    )
+                )
             except (ValueError, KeyError) as exc:
                 logger.warning("Skipping malformed blocklist entry %r: %s", name, exc)
 
     if not results:
-        raise RuntimeError(
-            "Blocklist loaded but produced zero patterns. "
-            "Cannot scan without rules — refusing to run."
-        )
+        raise RuntimeError("Blocklist loaded but produced zero patterns. Cannot scan without rules — refusing to run.")
 
     return results
 
@@ -234,13 +229,15 @@ class DangerousAPIVisitor(ast.NodeVisitor):
         desc = pat.description
         if extra:
             desc = f"{desc} ({extra})"
-        self.findings.append(Finding(
-            line=getattr(node, "lineno", 0),
-            col=getattr(node, "col_offset", 0),
-            severity=pat.severity,
-            pattern_name=pat.name,
-            description=desc,
-        ))
+        self.findings.append(
+            Finding(
+                line=getattr(node, "lineno", 0),
+                col=getattr(node, "col_offset", 0),
+                severity=pat.severity,
+                pattern_name=pat.name,
+                description=desc,
+            )
+        )
 
     @staticmethod
     def _resolve_call_name(node: ast.Call) -> str | None:
@@ -371,6 +368,7 @@ class DangerousAPIVisitor(ast.NodeVisitor):
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def scan_code(
     source_code: str,
     extra_blocklists: Sequence[str | Path] | None = None,
@@ -379,13 +377,15 @@ def scan_code(
     try:
         tree = ast.parse(source_code)
     except SyntaxError as exc:
-        return [Finding(
-            line=exc.lineno or 0,
-            col=exc.offset or 0,
-            severity=Severity.HIGH,
-            pattern_name="syntax_error",
-            description=f"Could not parse source: {exc.msg}",
-        )]
+        return [
+            Finding(
+                line=exc.lineno or 0,
+                col=exc.offset or 0,
+                severity=Severity.HIGH,
+                pattern_name="syntax_error",
+                description=f"Could not parse source: {exc.msg}",
+            )
+        ]
 
     patterns = load_blocklist(extra_paths=extra_blocklists)
     visitor = DangerousAPIVisitor(patterns=patterns)
@@ -402,11 +402,13 @@ def scan_file(
     try:
         source = path.read_text(encoding="utf-8")
     except OSError as exc:
-        return [Finding(
-            line=0,
-            col=0,
-            severity=Severity.HIGH,
-            pattern_name="file_read_error",
-            description=f"Cannot read file: {exc}",
-        )]
+        return [
+            Finding(
+                line=0,
+                col=0,
+                severity=Severity.HIGH,
+                pattern_name="file_read_error",
+                description=f"Cannot read file: {exc}",
+            )
+        ]
     return scan_code(source, extra_blocklists=extra_blocklists)

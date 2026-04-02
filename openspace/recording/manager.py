@@ -1,21 +1,22 @@
+import ast
 import datetime
 import json
-import ast
 import types
-from typing import Any, Dict, List, Optional
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from openspace.utils.logging import Logger
-from .recorder import TrajectoryRecorder
+
 from .action_recorder import ActionRecorder
+from .recorder import TrajectoryRecorder
 
 logger = Logger.get_logger(__name__)
 
 
 class RecordingManager:
     # Global instance management (singleton pattern)
-    _global_instance: Optional['RecordingManager'] = None
-    
+    _global_instance: Optional["RecordingManager"] = None
+
     def __init__(
         self,
         enabled: bool = True,
@@ -31,7 +32,7 @@ class RecordingManager:
     ):
         """
         Initialize automatic recording manager
-        
+
         Args:
             enabled: whether to enable recording
             task_id: task ID (for naming recording directory)
@@ -55,21 +56,21 @@ class RecordingManager:
         self.auto_save_interval = auto_save_interval
         self.server_url = server_url
         self.agent_name = agent_name
-        
+
         # internal state
         self._recorder: Optional[TrajectoryRecorder] = None
         self._action_recorder: Optional[ActionRecorder] = None
         self._is_started = False
         self._step_counter = 0
-        
+
         # registered LLM clients
         self._registered_llm_clients = []
         self._original_methods = {}
-        
+
         # video/screenshot clients (internal management)
         self._recording_client = None
         self._screenshot_client = None
-        
+
         # Register as global instance
         RecordingManager._global_instance = self
 
@@ -77,12 +78,12 @@ class RecordingManager:
     def is_recording(cls) -> bool:
         """
         Check if there is an active recording session
-        
+
         Returns:
             bool: True if recording is active
         """
         return cls._global_instance is not None and cls._global_instance._is_started
-    
+
     @classmethod
     async def record_retrieved_tools(
         cls,
@@ -92,7 +93,7 @@ class RecordingManager:
     ):
         """
         Record the tools retrieved for a task
-        
+
         Args:
             task_instruction: The task instruction used for retrieval
             tools: List of retrieved tools
@@ -101,7 +102,7 @@ class RecordingManager:
         instance = cls._global_instance
         if not instance or not instance._is_started or not instance._recorder:
             return
-        
+
         # Extract tool info
         tool_info = []
         for tool in tools:
@@ -112,19 +113,23 @@ class RecordingManager:
             # over backend_type (may be NOT_SET for cached RemoteTools)
             runtime_info = getattr(tool, "_runtime_info", None)
             if runtime_info and hasattr(runtime_info, "backend"):
-                info["backend"] = runtime_info.backend.value if hasattr(runtime_info.backend, "value") else str(runtime_info.backend)
+                info["backend"] = (
+                    runtime_info.backend.value if hasattr(runtime_info.backend, "value") else str(runtime_info.backend)
+                )
                 info["server_name"] = runtime_info.server_name
             elif hasattr(tool, "backend_type"):
-                info["backend"] = tool.backend_type.value if hasattr(tool.backend_type, "value") else str(tool.backend_type)
+                info["backend"] = (
+                    tool.backend_type.value if hasattr(tool.backend_type, "value") else str(tool.backend_type)
+                )
             tool_info.append(info)
-        
+
         # Build metadata
         metadata = {
             "instruction": task_instruction[:500],  # Truncate long instructions
             "count": len(tools),
             "tools": tool_info,
         }
-        
+
         # Add search debug info if available
         if search_debug_info:
             metadata["search_debug"] = {
@@ -135,12 +140,12 @@ class RecordingManager:
                 "llm_filter": search_debug_info.get("llm_filter", {}),
                 "tool_scores": search_debug_info.get("tool_scores", []),
             }
-        
+
         # Save to metadata
         await instance._recorder.add_metadata("retrieved_tools", metadata)
-        
+
         logger.info(f"Recorded {len(tools)} retrieved tools (with search debug info: {search_debug_info is not None})")
-    
+
     @classmethod
     async def record_skill_selection(
         cls,
@@ -148,12 +153,12 @@ class RecordingManager:
     ):
         """
         Record skill selection decision to metadata.json.
-        
+
         This captures the pre-execution skill matching conversation:
         - Which skills were available
         - The LLM prompt and response (or keyword fallback)
         - Which skills were selected
-        
+
         Args:
             selection_record: Structured record from SkillRegistry.select_skills_with_llm()
                 Keys: method, task, available_skills, prompt, llm_response, selected, error
@@ -161,17 +166,17 @@ class RecordingManager:
         instance = cls._global_instance
         if not instance or not instance._is_started or not instance._recorder:
             return
-        
+
         # Save to metadata alongside retrieved_tools
         await instance._recorder.add_metadata("skill_selection", selection_record)
-        
+
         selected = selection_record.get("selected", [])
         method = selection_record.get("method", "unknown")
         logger.info(
             f"Recorded skill selection: {len(selected)} selected via {method} "
             f"(from {len(selection_record.get('available_skills', []))} available)"
         )
-    
+
     @staticmethod
     def _truncate_messages(
         messages: List[Dict[str, Any]],
@@ -198,10 +203,12 @@ class RecordingManager:
                         elif item.get("type") == "text":
                             text = item.get("text", "")
                             if len(text) > max_content_length:
-                                new_content.append({
-                                    "type": "text",
-                                    "text": text[:max_content_length] + f"... [truncated, total {len(text)} chars]"
-                                })
+                                new_content.append(
+                                    {
+                                        "type": "text",
+                                        "text": text[:max_content_length] + f"... [truncated, total {len(text)} chars]",
+                                    }
+                                )
                             else:
                                 new_content.append(item)
                         else:
@@ -249,7 +256,7 @@ class RecordingManager:
         instance = cls._global_instance
         if not instance or not instance._is_started or not instance._recorder:
             return
-        if not getattr(instance, 'enable_conversation_log', True):
+        if not getattr(instance, "enable_conversation_log", True):
             return
 
         record: Dict[str, Any] = {
@@ -265,8 +272,11 @@ class RecordingManager:
         # Description includes the [Backend] tag that the LLM actually sees.
         if tools:
             _BACKEND_LABELS = {
-                "mcp": "MCP", "shell": "Shell", "gui": "GUI",
-                "web": "Web", "system": "System",
+                "mcp": "MCP",
+                "shell": "Shell",
+                "gui": "GUI",
+                "web": "Web",
+                "system": "System",
             }
             tool_defs = []
             for t in tools:
@@ -276,7 +286,9 @@ class RecordingManager:
                     backend_str = (
                         backend_val.value
                         if hasattr(backend_val, "value")
-                        else str(backend_val) if backend_val else None
+                        else str(backend_val)
+                        if backend_val
+                        else None
                     )
                     entry: Dict[str, Any] = {
                         "name": schema.name,
@@ -337,7 +349,7 @@ class RecordingManager:
         instance = cls._global_instance
         if not instance or not instance._is_started or not instance._recorder:
             return
-        if not getattr(instance, 'enable_conversation_log', True):
+        if not getattr(instance, "enable_conversation_log", True):
             return
 
         record = {
@@ -359,7 +371,7 @@ class RecordingManager:
                 f.write("\n")
         except Exception as e:
             logger.debug(f"Failed to write conversation log: {e}")
-    
+
     @classmethod
     async def record_tool_execution(
         cls,
@@ -373,7 +385,7 @@ class RecordingManager:
     ):
         """
         Record tool execution (internal method, called by BaseTool automatically)
-        
+
         Args:
             tool_name: Name of the tool
             backend: Backend type (gui, shell, mcp, etc.)
@@ -385,9 +397,9 @@ class RecordingManager:
         """
         if not cls._global_instance or not cls._global_instance._is_started:
             return
-        
+
         instance = cls._global_instance
-        
+
         # Infer backend if not_set or not in allowed backends
         if backend == "not_set" or backend not in instance.backends:
             inferred = cls._infer_backend_from_tool_name(tool_name)
@@ -399,17 +411,17 @@ class RecordingManager:
                     f"skipping recording for tool '{tool_name}'"
                 )
                 return
-        
+
         # Create mock tool_call and result objects for compatibility with existing _record_* methods
         class MockFunctionCall:
             def __init__(self, name, arguments):
                 self.name = name
                 self.arguments = arguments
-        
+
         class MockToolCall:
             def __init__(self, name, arguments):
                 self.function = MockFunctionCall(name, arguments)
-        
+
         class MockResult:
             def __init__(self, content, is_success=True, metadata=None):
                 self.content = content
@@ -417,10 +429,10 @@ class RecordingManager:
                 self.is_error = not is_success
                 self.error = content if not is_success else None
                 self.metadata = metadata or {}
-        
+
         tool_call = MockToolCall(tool_name, parameters)
         mock_result = MockResult(result, is_success=is_success, metadata=metadata)
-        
+
         try:
             if backend == "mcp":
                 server = server_name or "unknown"
@@ -436,11 +448,11 @@ class RecordingManager:
             else:
                 logger.warning(f"No recording handler for backend '{backend}', tool '{tool_name}'")
                 return
-            
+
             instance._step_counter += 1
         except Exception as e:
             logger.warning(f"Failed to record tool execution for {tool_name}: {e}")
-    
+
     @staticmethod
     def _parse_arguments(arg_data):
         """Safely parse tool_call.function.arguments which may be JSON string.
@@ -465,7 +477,7 @@ class RecordingManager:
         except Exception:
             logger.debug("Failed to parse arguments, returning raw string")
             return {"raw": arg_data}
-    
+
     async def start(self, task_id: Optional[str] = None):
         """Start automatic recording
         Args:
@@ -478,12 +490,12 @@ class RecordingManager:
             self.task_id = task_id
         if not self.enabled or self._is_started:
             return
-        
+
         try:
             # check server availability (only when video or screenshot is enabled)
             if self.enable_video or self.enable_screenshot:
                 await self._check_server_availability()
-            
+
             self._recorder = TrajectoryRecorder(
                 task_name=self.task_id,
                 log_dir=self.log_dir,
@@ -491,29 +503,28 @@ class RecordingManager:
                 enable_video=self.enable_video,
                 server_url=self.server_url,
             )
-            
+
             # create action recorder for agent decision tracking
-            self._action_recorder = ActionRecorder(
-                trajectory_dir=Path(self._recorder.get_trajectory_dir())
-            )
-            
-            
+            self._action_recorder = ActionRecorder(trajectory_dir=Path(self._recorder.get_trajectory_dir()))
+
             # create video client (internal management)
             if self.enable_video:
                 from openspace.platforms import RecordingClient
+
                 self._recording_client = RecordingClient(base_url=self.server_url)
                 success = await self._recording_client.start_recording()
                 if success:
                     logger.info("Video recording started")
                 else:
                     logger.warning("Video recording failed to start")
-            
+
             # create screenshot client (internal management)
             if self.enable_screenshot:
                 from openspace.platforms import ScreenshotClient
+
                 self._screenshot_client = ScreenshotClient(base_url=self.server_url)
                 logger.debug("Screenshot client ready")
-            
+
             # save initial metadata
             await self._recorder.add_metadata("task_id", self.task_id)
             await self._recorder.add_metadata("backends", list(self.backends))
@@ -528,14 +539,14 @@ class RecordingManager:
                         logger.debug("Initial screenshot saved")
                 except Exception as e:
                     logger.debug(f"Failed to capture initial screenshot: {e}")
-            
+
             self._is_started = True
             logger.info(f"Recording started: {self._recorder.get_trajectory_dir()}")
-            
+
         except Exception as e:
             logger.error(f"Recording failed to start: {e}")
             raise
-    
+
     async def _check_server_availability(self):
         """Check if local server is available"""
         try:
@@ -549,10 +560,10 @@ class RecordingManager:
                 logger.info(f"Server connected ({info.get('platform', 'unknown')})")
             else:
                 logger.warning("Server not responding, video/screenshot functionality unavailable")
-        
+
         except Exception:
             logger.warning("Cannot connect to server, video/screenshot functionality unavailable")
-    
+
     async def save_execution_outcome(
         self,
         status: str,
@@ -569,17 +580,20 @@ class RecordingManager:
              "execution_time": float}
         """
         if self._recorder:
-            await self._recorder.add_metadata("execution_outcome", {
-                "status": status,
-                "iterations": iterations,
-                "execution_time": round(execution_time, 2),
-            })
+            await self._recorder.add_metadata(
+                "execution_outcome",
+                {
+                    "status": status,
+                    "iterations": iterations,
+                    "execution_time": round(execution_time, 2),
+                },
+            )
 
     async def stop(self):
         """Stop automatic recording"""
         if not self.enabled or not self._is_started:
             return
-        
+
         try:
             # stop video recording and save
             if self._recording_client:
@@ -587,7 +601,7 @@ class RecordingManager:
                     video_path = None
                     if self._recorder:
                         video_path = str(Path(self._recorder.get_trajectory_dir()) / "screen_recording.mp4")
-                    
+
                     video_bytes = await self._recording_client.end_recording(dest=video_path)
                     if video_bytes and video_path:
                         video_size_mb = len(video_bytes) / (1024 * 1024)
@@ -601,7 +615,7 @@ class RecordingManager:
                     await self._recording_client.close()
             except Exception as e:
                 logger.debug(f"Failed to close RecordingClient session: {e}")
-            
+
             # close screenshot client
             if self._screenshot_client:
                 try:
@@ -610,21 +624,21 @@ class RecordingManager:
                     logger.debug(f"Screenshot client failed to close: {e}")
                 finally:
                     self._screenshot_client = None
-            
+
             # finalize trajectory recording
             if self._recorder:
                 # save final metadata
                 await self._recorder.add_metadata("end_time", datetime.datetime.now().isoformat())
                 await self._recorder.add_metadata("total_steps", self._step_counter)
-                
+
                 # generate summary
                 await self.generate_summary()
-                
+
                 # finalize recording
                 await self._recorder.finalize()
-                
+
                 logger.info(f"Recording completed: {self._recorder.get_trajectory_dir()}")
-            
+
             # Restore original methods for registered LLM clients
             for client in self._registered_llm_clients:
                 client_id = id(client)
@@ -636,14 +650,14 @@ class RecordingManager:
                         logger.debug(f"Failed to restore original method for LLM client: {e}")
             self._registered_llm_clients.clear()
             self._original_methods.clear()
-            
+
             self._is_started = False
             self._recorder = None
             self._action_recorder = None
-            
+
         except Exception as e:
             logger.error(f"Recording failed to stop: {e}")
-    
+
     def register_to_llm(self, llm_client):
         """Register LLM client: wrap complete() to record tool results (Path B, aligned with AnyTool)."""
         if not self.enabled:
@@ -652,16 +666,16 @@ class RecordingManager:
             return
         original_complete = llm_client.complete
         self._original_methods[id(llm_client)] = original_complete
-        
+
         async def wrapped_complete(self_client, *args, **kwargs):
             response = await original_complete(*args, **kwargs)
             if response.get("tool_results"):
                 await self._auto_record_tool_results(response["tool_results"])
             return response
-        
+
         llm_client.complete = types.MethodType(wrapped_complete, llm_client)
         self._registered_llm_clients.append(llm_client)
-    
+
     @staticmethod
     def _infer_backend_from_tool_name(tool_name: str) -> Optional[str]:
         """Infer backend from tool name when tool_results lack backend."""
@@ -680,7 +694,7 @@ class RecordingManager:
         if name in ("deep_research_agent", "deep_research"):
             return "web"
         return None
-    
+
     async def _auto_record_tool_results(self, tool_results: List[Dict]):
         """Record tool execution results from LLM complete() (Path B, aligned with AnyTool)."""
         if not self._recorder or not self._is_started:
@@ -690,37 +704,39 @@ class RecordingManager:
             result = tool_result.get("result")
             backend = tool_result.get("backend")
             server_name = tool_result.get("server_name")
-            
+
             if not tool_call or not result:
                 continue
             if not backend:
-                _name = getattr(getattr(tool_call, "function", None), "name", None) or str(tool_result.get("tool_call", ""))
+                _name = getattr(getattr(tool_call, "function", None), "name", None) or str(
+                    tool_result.get("tool_call", "")
+                )
                 backend = self._infer_backend_from_tool_name(_name)
                 if not backend:
                     logger.warning(f"Tool result missing 'backend', cannot infer for '{_name}', skipping")
                     continue
-            
-            result_metadata = result.metadata if hasattr(result, 'metadata') else None
+
+            result_metadata = result.metadata if hasattr(result, "metadata") else None
             await RecordingManager.record_tool_execution(
                 tool_name=tool_call.function.name,
                 backend=backend,
                 parameters=self._parse_arguments(tool_call.function.arguments),
-                result=result.content if hasattr(result, 'content') else str(result),
+                result=result.content if hasattr(result, "content") else str(result),
                 server_name=server_name,
-                is_success=result.is_success if hasattr(result, 'is_success') else True,
+                is_success=result.is_success if hasattr(result, "is_success") else True,
                 metadata=result_metadata,
             )
-    
+
     async def _record_mcp(self, tool_call, result, server: str):
         tool_name = tool_call.function.name
         parameters = self._parse_arguments(tool_call.function.arguments)
-        
+
         command = f"{server}.{tool_name}"
         result_str = str(result.content) if result.is_success else str(result.error)
         result_brief = result_str[:200] + "..." if len(result_str) > 200 else result_str
-        
+
         is_actual_success = result.is_success and not result_str.startswith("ERROR:")
-        
+
         step_info = await self._recorder.record_step(
             backend="mcp",
             tool=tool_name,
@@ -733,26 +749,26 @@ class RecordingManager:
             extra={
                 "server": server,
             },
-            auto_screenshot=self.enable_screenshot
+            auto_screenshot=self.enable_screenshot,
         )
-        
+
         # Add agent_name to step_info
         step_info["agent_name"] = self.agent_name
-    
+
     async def _record_gui(self, tool_call, result):
         tool_name = tool_call.function.name
         parameters = self._parse_arguments(tool_call.function.arguments)
-        
+
         # Extract actual pyautogui command (from action_history)
         command = "gui_agent"
-        if result.is_success and hasattr(result, 'metadata') and result.metadata:
+        if result.is_success and hasattr(result, "metadata") and result.metadata:
             action_history = result.metadata.get("action_history", [])
             if action_history:
                 # Get last successful execution action
                 for action in reversed(action_history):
                     planned_action = action.get("planned_action", {})
                     execution_result = action.get("execution_result", {})
-                    
+
                     if planned_action.get("action_type") == "PYAUTOGUI_COMMAND":
                         cmd = planned_action.get("command", "")
                         if cmd and execution_result.get("status") == "success":
@@ -768,23 +784,23 @@ class RecordingManager:
                             else:
                                 command = action_type
                             break
-        
+
         result_str = str(result.content) if result.is_success else str(result.error)
-        
+
         is_actual_success = result.is_success
         if result.is_success:
             first_200_chars = result_str[:200] if result_str else ""
             critical_failure_patterns = ["Task failed", "CRITICAL ERROR:", "FATAL:"]
             has_critical_failure = any(pattern in first_200_chars for pattern in critical_failure_patterns)
             is_actual_success = not has_critical_failure
-        
+
         # Extract intermediate_steps from metadata for embedding in traj.jsonl
         extra = {}
-        if hasattr(result, 'metadata') and result.metadata:
+        if hasattr(result, "metadata") and result.metadata:
             intermediate_steps = result.metadata.get("intermediate_steps")
             if intermediate_steps:
                 extra["intermediate_steps"] = intermediate_steps
-        
+
         step_info = await self._recorder.record_step(
             backend="gui",
             tool="gui_agent",
@@ -797,21 +813,21 @@ class RecordingManager:
             auto_screenshot=self.enable_screenshot,
             extra=extra if extra else None,
         )
-        
+
         step_info["agent_name"] = self.agent_name
-    
+
     async def _record_shell(self, tool_call, result):
         tool_name = tool_call.function.name
         parameters = self._parse_arguments(tool_call.function.arguments)
-        
+
         task = parameters.get("task", tool_name)
         exit_code = 0 if result.is_success else 1
-        
+
         stdout = str(result.content) if result.is_success else ""
         stderr = str(result.error) if result.is_error else ""
-        
-        command = task  
-        if hasattr(result, 'metadata') and result.metadata:
+
+        command = task
+        if hasattr(result, "metadata") and result.metadata:
             code_history = result.metadata.get("code_history", [])
             if code_history:
                 # Try to find the last successful execution
@@ -824,17 +840,17 @@ class RecordingManager:
                         command = f"```{lang}\n{code}\n```"
                         found_success = True
                         break
-                
+
                 # If no successful execution found, use last code block
                 if not found_success and code_history:
                     last_code = code_history[-1]
                     lang = last_code.get("lang", "bash")
                     code = last_code.get("code", "")
                     command = f"```{lang}\n{code}\n```"
-        
+
         stdout_brief = stdout[:200] + "..." if len(stdout) > 200 else stdout
         stderr_brief = stderr[:200] + "..." if len(stderr) > 200 else stderr
-        
+
         is_actual_success = result.is_success
         if result.is_success:
             first_500_chars = stdout[:500] if stdout else ""
@@ -846,7 +862,7 @@ class RecordingManager:
             ]
             has_critical_failure = any(pattern in first_500_chars for pattern in critical_failure_patterns)
             is_actual_success = not has_critical_failure
-        
+
         step_info = await self._recorder.record_step(
             backend="shell",
             tool="shell_agent",
@@ -857,31 +873,31 @@ class RecordingManager:
                 "stdout": stdout_brief,
                 "stderr": stderr_brief,
             },
-            auto_screenshot=self.enable_screenshot
+            auto_screenshot=self.enable_screenshot,
         )
-        
+
         step_info["agent_name"] = self.agent_name
-    
+
     async def _record_system(self, tool_call, result):
         tool_name = tool_call.function.name
         parameters = self._parse_arguments(tool_call.function.arguments)
-        
+
         command = tool_name
         if parameters:
             key_params = []
-            for key in ['path', 'file', 'directory', 'name', 'provider', 'backend']:
+            for key in ["path", "file", "directory", "name", "provider", "backend"]:
                 if key in parameters and parameters[key]:
                     key_params.append(f"{parameters[key]}")
             if key_params:
                 command = f"{tool_name}({', '.join(key_params[:2])})"
-        
+
         result_str = str(result.content) if result.is_success else str(result.error)
         result_brief = result_str[:200] + "..." if len(result_str) > 200 else result_str
-        
+
         is_actual_success = result.is_success
         if result.is_success and result_str:
             is_actual_success = not result_str.startswith("ERROR:")
-        
+
         step_info = await self._recorder.record_step(
             backend="system",
             tool=tool_name,
@@ -890,24 +906,24 @@ class RecordingManager:
                 "status": "success" if is_actual_success else "error",
                 "output": result_brief,
             },
-            auto_screenshot=self.enable_screenshot
+            auto_screenshot=self.enable_screenshot,
         )
-        
+
         step_info["agent_name"] = self.agent_name
-    
+
     async def _record_web(self, tool_call, result):
         tool_name = tool_call.function.name
         parameters = self._parse_arguments(tool_call.function.arguments)
-        
+
         query = parameters.get("query", "")
         command = query if query else "deep_research"
-        
+
         result_str = str(result.content) if result.is_success else str(result.error)
-        
+
         is_actual_success = result.is_success
         if result.is_success and result_str:
             is_actual_success = not result_str.startswith("ERROR:")
-        
+
         step_info = await self._recorder.record_step(
             backend="web",
             tool="deep_research_agent",
@@ -916,21 +932,21 @@ class RecordingManager:
                 "status": "success" if is_actual_success else "error",
                 "output": result_str,  # Full output preserved for training/replay
             },
-            auto_screenshot=self.enable_screenshot
+            auto_screenshot=self.enable_screenshot,
         )
-        
+
         # Add agent_name to step_info
         step_info["agent_name"] = self.agent_name
-    
+
     async def add_metadata(self, key: str, value: Any):
         if self._recorder:
             await self._recorder.add_metadata(key, value)
-    
+
     async def save_plan(self, plan: Dict[str, Any], agent_name: str = "GroundingAgent"):
         """
         Save agent plan to recording directory.
         This integrates planning information with execution trajectory.
-        
+
         Args:
             plan: The plan data (usually containing task_updates or plan steps)
             agent_name: Name of the agent creating the plan
@@ -938,43 +954,38 @@ class RecordingManager:
         if not self._recorder or not self._is_started:
             logger.warning("Cannot save plan: recording not started")
             return
-        
+
         try:
             plan_dir = Path(self._recorder.get_trajectory_dir()) / "plans"
             plan_dir.mkdir(exist_ok=True)
-            
+
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             plan_data = {
                 "version": timestamp,
                 "created_at": datetime.datetime.now().isoformat(),
                 "created_by": agent_name,
-                "plan": plan
+                "plan": plan,
             }
-            
+
             # Save versioned plan
             plan_file = plan_dir / f"plan_{timestamp}.json"
-            with open(plan_file, 'w', encoding='utf-8') as f:
+            with open(plan_file, "w", encoding="utf-8") as f:
                 json.dump(plan_data, f, indent=2, ensure_ascii=False)
-            
+
             # Save current plan (latest)
             current_plan_file = plan_dir / "current_plan.json"
-            with open(current_plan_file, 'w', encoding='utf-8') as f:
+            with open(current_plan_file, "w", encoding="utf-8") as f:
                 json.dump(plan_data, f, indent=2, ensure_ascii=False)
-            
+
             logger.debug(f"Saved plan to recording: {plan_file.name}")
         except Exception as e:
             logger.error(f"Failed to save plan: {e}")
-    
-    async def log_decision(
-        self, 
-        agent_name: str, 
-        decision: str, 
-        context: Optional[Dict[str, Any]] = None
-    ):
+
+    async def log_decision(self, agent_name: str, decision: str, context: Optional[Dict[str, Any]] = None):
         """
         Log agent decision with optional context.
         This provides insight into agent reasoning process.
-        
+
         Args:
             agent_name: Name of the agent making the decision
             decision: Description of the decision
@@ -983,24 +994,24 @@ class RecordingManager:
         if not self._recorder or not self._is_started:
             logger.warning("Cannot log decision: recording not started")
             return
-        
+
         try:
             traj_dir = Path(self._recorder.get_trajectory_dir())
             log_file = traj_dir / "decisions.log"
-            
+
             timestamp = datetime.datetime.now().isoformat()
             log_entry = f"[{timestamp}] {agent_name}: {decision}"
             if context:
                 log_entry += f"\n  Context: {json.dumps(context, ensure_ascii=False)}"
             log_entry += "\n"
-            
-            with open(log_file, 'a', encoding='utf-8') as f:
+
+            with open(log_file, "a", encoding="utf-8") as f:
                 f.write(log_entry)
-            
+
             logger.debug(f"Logged decision from {agent_name}")
         except Exception as e:
             logger.error(f"Failed to log decision: {e}")
-    
+
     async def record_agent_action(
         self,
         agent_name: str,
@@ -1014,7 +1025,7 @@ class RecordingManager:
     ) -> Optional[Dict[str, Any]]:
         """
         Record an agent's action and decision-making process.
-        
+
         Args:
             agent_name: Name of the agent performing the action
             action_type: Type of action (plan | execute | evaluate | monitor)
@@ -1024,14 +1035,14 @@ class RecordingManager:
             metadata: Additional metadata (LLM model, tokens, duration, etc.)
             related_tool_steps: List of tool execution step numbers related to this action
             correlation_id: Optional correlation ID to link related events
-            
+
         Returns:
             The recorded action info, or None if recording not started
         """
         if not self._action_recorder or not self._is_started:
             logger.debug("Cannot record agent action: recording not started")
             return None
-        
+
         try:
             action_info = await self._action_recorder.record_action(
                 agent_name=agent_name,
@@ -1043,14 +1054,14 @@ class RecordingManager:
                 related_tool_steps=related_tool_steps,
                 correlation_id=correlation_id,
             )
-            
+
             logger.debug(f"Recorded agent action: {agent_name} - {action_type}")
             return action_info
-            
+
         except Exception as e:
             logger.error(f"Failed to record agent action: {e}")
             return None
-    
+
     async def generate_summary(self) -> Dict[str, Any]:
         """
         Generate a comprehensive summary of the recording session.
@@ -1058,21 +1069,21 @@ class RecordingManager:
         if not self._recorder or not self._is_started:
             logger.warning("Cannot generate summary: recording not started")
             return {}
-        
+
         try:
-            from .action_recorder import load_agent_actions, analyze_agent_actions
-            from .utils import load_trajectory_from_jsonl, analyze_trajectory
-            
+            from .action_recorder import analyze_agent_actions, load_agent_actions
+            from .utils import analyze_trajectory, load_trajectory_from_jsonl
+
             traj_dir = self._recorder.get_trajectory_dir()
-            
+
             # Load all recorded data
             trajectory = load_trajectory_from_jsonl(f"{traj_dir}/traj.jsonl")
             agent_actions = load_agent_actions(traj_dir)
-            
+
             # Analyze data
             traj_stats = analyze_trajectory(trajectory)
             action_stats = analyze_agent_actions(agent_actions)
-            
+
             # Build summary
             summary = {
                 "task_id": self.task_id,
@@ -1089,47 +1100,47 @@ class RecordingManager:
                     "total_actions": action_stats.get("total_actions", 0),
                     "by_agent": action_stats.get("by_agent", {}),
                     "by_type": action_stats.get("by_type", {}),
-                }
+                },
             }
-            
+
             # Save summary to file
             summary_file = Path(traj_dir) / "summary.json"
-            with open(summary_file, 'w', encoding='utf-8') as f:
+            with open(summary_file, "w", encoding="utf-8") as f:
                 json.dump(summary, f, indent=2, ensure_ascii=False)
-            
+
             logger.info(f"Generated summary: {summary_file}")
             return summary
-            
+
         except Exception as e:
             logger.error(f"Failed to generate summary: {e}")
             return {}
-    
+
     async def __aenter__(self):
         await self.start()
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.stop()
         return False
-    
+
     @property
     def recording_status(self) -> bool:
         return self._is_started
-    
+
     @property
     def trajectory_dir(self) -> Optional[str]:
         if self._recorder:
             return str(self._recorder.get_trajectory_dir())
         return None
-    
+
     @property
     def recording_client(self):
         return self._recording_client
-    
+
     @property
     def screenshot_client(self):
         return self._screenshot_client
-    
+
     @property
     def step_count(self) -> int:
         """Get current step count"""
@@ -1137,5 +1148,5 @@ class RecordingManager:
 
 
 __all__ = [
-    'RecordingManager',
+    "RecordingManager",
 ]

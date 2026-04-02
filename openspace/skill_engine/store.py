@@ -22,6 +22,9 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional
 
+from openspace.config.constants import PROJECT_ROOT
+from openspace.utils.logging import Logger
+
 from .patch import collect_skill_snapshot, compute_unified_diff
 from .types import (
     EvolutionSuggestion,
@@ -33,8 +36,6 @@ from .types import (
     SkillRecord,
     SkillVisibility,
 )
-from openspace.utils.logging import Logger
-from openspace.config.constants import PROJECT_ROOT
 
 logger = Logger.get_logger(__name__)
 
@@ -59,15 +60,9 @@ def _db_retry(
                     return func(*args, **kwargs)
                 except (sqlite3.OperationalError, sqlite3.DatabaseError) as exc:
                     if attempt == max_retries - 1:
-                        logger.error(
-                            f"DB {func.__name__} failed after "
-                            f"{max_retries} retries: {exc}"
-                        )
+                        logger.error(f"DB {func.__name__} failed after {max_retries} retries: {exc}")
                         raise
-                    logger.warning(
-                        f"DB {func.__name__} retry {attempt + 1}"
-                        f"/{max_retries}: {exc}"
-                    )
+                    logger.warning(f"DB {func.__name__} retry {attempt + 1}/{max_retries}: {exc}")
                     time.sleep(delay)
                     delay *= backoff
 
@@ -247,12 +242,8 @@ class SkillStore:
             return
         wal = Path(f"{self._db_path}-wal")
         shm = Path(f"{self._db_path}-shm")
-        if self._db_path.stat().st_size == 0 and (
-            wal.exists() or shm.exists()
-        ):
-            logger.warning(
-                "Empty DB with WAL/SHM — removing for crash recovery"
-            )
+        if self._db_path.stat().st_size == 0 and (wal.exists() or shm.exists()):
+            logger.warning("Empty DB with WAL/SHM — removing for crash recovery")
             for f in (wal, shm):
                 if f.exists():
                     f.unlink()
@@ -324,12 +315,14 @@ class SkillStore:
             discovered_skills: List of ``SkillMeta`` objects.
         """
         return await asyncio.to_thread(
-            self._sync_from_registry_sync, discovered_skills,
+            self._sync_from_registry_sync,
+            discovered_skills,
         )
 
     @_db_retry()
     def _sync_from_registry_sync(
-        self, discovered_skills: List[Any],
+        self,
+        discovered_skills: List[Any],
     ) -> int:
         self._ensure_open()
         created = 0
@@ -339,9 +332,7 @@ class SkillStore:
             try:
                 # Fetch all existing records keyed by skill_id
                 rows = self._conn.execute(
-                    "SELECT skill_id, name, description, "
-                    "lineage_content_snapshot "
-                    "FROM skill_records"
+                    "SELECT skill_id, name, description, lineage_content_snapshot FROM skill_records"
                 ).fetchall()
                 existing: Dict[str, Any] = {r[0]: r for r in rows}
 
@@ -349,9 +340,7 @@ class SkillStore:
                 # After FIX evolution the DB skill_id changes but the
                 # filesystem path stays the same.  Matching by path
                 # prevents creating a duplicate imported record on restart.
-                path_rows = self._conn.execute(
-                    "SELECT path FROM skill_records WHERE is_active=1"
-                ).fetchall()
+                path_rows = self._conn.execute("SELECT path FROM skill_records WHERE is_active=1").fetchall()
                 existing_active_paths: set = {r[0] for r in path_rows}
 
                 for meta in discovered_skills:
@@ -388,16 +377,12 @@ class SkillStore:
                                         updates.append("lineage_content_diff=?")
                                         params.append(diff)
                             except Exception as e:
-                                logger.warning(
-                                    f"sync_from_registry: snapshot backfill failed "
-                                    f"for {meta.skill_id}: {e}"
-                                )
+                                logger.warning(f"sync_from_registry: snapshot backfill failed for {meta.skill_id}: {e}")
 
                         if updates:
                             params.append(meta.skill_id)
                             self._conn.execute(
-                                f"UPDATE skill_records SET {', '.join(updates)} "
-                                f"WHERE skill_id=?",
+                                f"UPDATE skill_records SET {', '.join(updates)} WHERE skill_id=?",
                                 params,
                             )
                             refreshed += 1
@@ -418,9 +403,7 @@ class SkillStore:
                             if compute_unified_diff("", text, filename=name)
                         )
                     except Exception as e:
-                        logger.warning(
-                            f"sync_from_registry: failed to snapshot {skill_dir}: {e}"
-                        )
+                        logger.warning(f"sync_from_registry: failed to snapshot {skill_dir}: {e}")
 
                     record = SkillRecord(
                         skill_id=meta.skill_id,
@@ -437,9 +420,7 @@ class SkillStore:
                     )
                     self._upsert(record)
                     created += 1
-                    logger.debug(
-                        f"sync_from_registry: created {meta.name} [{meta.skill_id}]"
-                    )
+                    logger.debug(f"sync_from_registry: created {meta.name} [{meta.skill_id}]")
 
                 self._conn.commit()
             except Exception:
@@ -496,9 +477,7 @@ class SkillStore:
             Parent skill_id list (FIXED exactly 1, DERIVED ≥ 1).
             For FIXED, parent is automatically deactivated.
         """
-        await asyncio.to_thread(
-            self._evolve_skill_sync, new_record, parent_skill_ids
-        )
+        await asyncio.to_thread(self._evolve_skill_sync, new_record, parent_skill_ids)
 
     async def deactivate_record(self, skill_id: str) -> bool:
         """Set a specific record's ``is_active`` to False."""
@@ -559,16 +538,8 @@ class SkillStore:
                 now_iso = datetime.now().isoformat()
                 for j in analysis.skill_judgments:
                     applied = 1 if j.skill_applied else 0
-                    completed = (
-                        1
-                        if (j.skill_applied and analysis.task_completed)
-                        else 0
-                    )
-                    fallback = (
-                        1
-                        if (not j.skill_applied and not analysis.task_completed)
-                        else 0
-                    )
+                    completed = 1 if (j.skill_applied and analysis.task_completed) else 0
+                    fallback = 1 if (not j.skill_applied and not analysis.task_completed) else 0
                     self._conn.execute(
                         """
                         UPDATE skill_records SET
@@ -602,8 +573,7 @@ class SkillStore:
                 if new_record.lineage.origin == SkillOrigin.FIXED:
                     for pid in parent_skill_ids:
                         self._conn.execute(
-                            "UPDATE skill_records SET is_active=0, "
-                            "last_updated=? WHERE skill_id=?",
+                            "UPDATE skill_records SET is_active=0, last_updated=? WHERE skill_id=?",
                             (datetime.now().isoformat(), pid),
                         )
 
@@ -629,8 +599,7 @@ class SkillStore:
         self._ensure_open()
         with self._mu:
             cur = self._conn.execute(
-                "UPDATE skill_records SET is_active=0, last_updated=? "
-                "WHERE skill_id=?",
+                "UPDATE skill_records SET is_active=0, last_updated=? WHERE skill_id=?",
                 (datetime.now().isoformat(), skill_id),
             )
             self._conn.commit()
@@ -641,8 +610,7 @@ class SkillStore:
         self._ensure_open()
         with self._mu:
             cur = self._conn.execute(
-                "UPDATE skill_records SET is_active=1, last_updated=? "
-                "WHERE skill_id=?",
+                "UPDATE skill_records SET is_active=1, last_updated=? WHERE skill_id=?",
                 (datetime.now().isoformat(), skill_id),
             )
             self._conn.commit()
@@ -654,9 +622,7 @@ class SkillStore:
         with self._mu:
             # ON DELETE CASCADE automatically cleans up lineage_parents / deps / tags
             # skill_judgments are NOT cascade-deleted (no FK to skill_records)
-            cur = self._conn.execute(
-                "DELETE FROM skill_records WHERE skill_id=?", (skill_id,)
-            )
+            cur = self._conn.execute("DELETE FROM skill_records WHERE skill_id=?", (skill_id,))
             self._conn.commit()
             return cur.rowcount > 0
 
@@ -672,9 +638,7 @@ class SkillStore:
             return self._to_record(conn, row) if row else None
 
     @_db_retry()
-    def load_all(
-        self, *, active_only: bool = False
-    ) -> Dict[str, SkillRecord]:
+    def load_all(self, *, active_only: bool = False) -> Dict[str, SkillRecord]:
         """Load skill records, keyed by ``skill_id``.
 
         Args:
@@ -682,9 +646,7 @@ class SkillStore:
         """
         with self._reader() as conn:
             if active_only:
-                rows = conn.execute(
-                    "SELECT * FROM skill_records WHERE is_active=1"
-                ).fetchall()
+                rows = conn.execute("SELECT * FROM skill_records WHERE is_active=1").fetchall()
             else:
                 rows = conn.execute("SELECT * FROM skill_records").fetchall()
             result: Dict[str, SkillRecord] = {}
@@ -717,9 +679,7 @@ class SkillStore:
         normalized = skill_dir.rstrip("/")
         with self._reader() as conn:
             row = conn.execute(
-                "SELECT * FROM skill_records "
-                "WHERE path LIKE ? AND is_active=1 "
-                "ORDER BY last_updated DESC LIMIT 1",
+                "SELECT * FROM skill_records WHERE path LIKE ? AND is_active=1 ORDER BY last_updated DESC LIMIT 1",
                 (f"{normalized}%",),
             ).fetchone()
             return self._to_record(conn, row) if row else None
@@ -729,16 +689,13 @@ class SkillStore:
         """Load all versions of a named skill (active + inactive), sorted by generation."""
         with self._reader() as conn:
             rows = conn.execute(
-                "SELECT * FROM skill_records WHERE name=? "
-                "ORDER BY lineage_generation ASC",
+                "SELECT * FROM skill_records WHERE name=? ORDER BY lineage_generation ASC",
                 (name,),
             ).fetchall()
             return [self._to_record(conn, r) for r in rows]
 
     @_db_retry()
-    def load_by_category(
-        self, category: SkillCategory, *, active_only: bool = True
-    ) -> List[SkillRecord]:
+    def load_by_category(self, category: SkillCategory, *, active_only: bool = True) -> List[SkillRecord]:
         """Load skill records filtered by category.
 
         Args:
@@ -747,8 +704,7 @@ class SkillStore:
         with self._reader() as conn:
             if active_only:
                 rows = conn.execute(
-                    "SELECT * FROM skill_records "
-                    "WHERE category=? AND is_active=1",
+                    "SELECT * FROM skill_records WHERE category=? AND is_active=1",
                     (category.value,),
                 ).fetchall()
             else:
@@ -792,9 +748,7 @@ class SkillStore:
             return [self._to_analysis(conn, r) for r in reversed(rows)]
 
     @_db_retry()
-    def load_analyses_for_task(
-        self, task_id: str
-    ) -> Optional[ExecutionAnalysis]:
+    def load_analyses_for_task(self, task_id: str) -> Optional[ExecutionAnalysis]:
         """Load the analysis for a specific task, or None."""
         with self._reader() as conn:
             row = conn.execute(
@@ -808,22 +762,17 @@ class SkillStore:
         """Load recent analyses across all tasks."""
         with self._reader() as conn:
             rows = conn.execute(
-                "SELECT * FROM execution_analyses "
-                "ORDER BY timestamp DESC LIMIT ?",
+                "SELECT * FROM execution_analyses ORDER BY timestamp DESC LIMIT ?",
                 (limit,),
             ).fetchall()
             return [self._to_analysis(conn, r) for r in reversed(rows)]
 
     @_db_retry()
-    def load_evolution_candidates(
-        self, limit: int = 50
-    ) -> List[ExecutionAnalysis]:
+    def load_evolution_candidates(self, limit: int = 50) -> List[ExecutionAnalysis]:
         """Load analyses marked as evolution candidates."""
         with self._reader() as conn:
             rows = conn.execute(
-                "SELECT * FROM execution_analyses "
-                "WHERE candidate_for_evolution=1 "
-                "ORDER BY timestamp DESC LIMIT ?",
+                "SELECT * FROM execution_analyses WHERE candidate_for_evolution=1 ORDER BY timestamp DESC LIMIT ?",
                 (limit,),
             ).fetchall()
             return [self._to_analysis(conn, r) for r in reversed(rows)]
@@ -849,8 +798,7 @@ class SkillStore:
         """Find skill_ids derived from the given parent."""
         with self._reader() as conn:
             rows = conn.execute(
-                "SELECT skill_id FROM skill_lineage_parents "
-                "WHERE parent_skill_id=?",
+                "SELECT skill_id FROM skill_lineage_parents WHERE parent_skill_id=?",
                 (parent_skill_id,),
             ).fetchall()
             return [r["skill_id"] for r in rows]
@@ -860,12 +808,8 @@ class SkillStore:
         """Total number of skill records."""
         with self._reader() as conn:
             if active_only:
-                return conn.execute(
-                    "SELECT COUNT(*) FROM skill_records WHERE is_active=1"
-                ).fetchone()[0]
-            return conn.execute(
-                "SELECT COUNT(*) FROM skill_records"
-            ).fetchone()[0]
+                return conn.execute("SELECT COUNT(*) FROM skill_records WHERE is_active=1").fetchone()[0]
+            return conn.execute("SELECT COUNT(*) FROM skill_records").fetchone()[0]
 
     # Analytics / Summary
     @_db_retry()
@@ -896,30 +840,23 @@ class SkillStore:
         """Aggregate statistics across skills."""
         with self._reader() as conn:
             where = " WHERE is_active=1" if active_only else ""
-            total = conn.execute(
-                f"SELECT COUNT(*) FROM skill_records{where}"
-            ).fetchone()[0]
+            total = conn.execute(f"SELECT COUNT(*) FROM skill_records{where}").fetchone()[0]
 
             by_category = {
                 r["category"]: r["cnt"]
                 for r in conn.execute(
-                    f"SELECT category, COUNT(*) AS cnt "
-                    f"FROM skill_records{where} GROUP BY category"
+                    f"SELECT category, COUNT(*) AS cnt FROM skill_records{where} GROUP BY category"
                 ).fetchall()
             }
             by_origin = {
                 r["lineage_origin"]: r["cnt"]
                 for r in conn.execute(
-                    f"SELECT lineage_origin, COUNT(*) AS cnt "
-                    f"FROM skill_records{where} GROUP BY lineage_origin"
+                    f"SELECT lineage_origin, COUNT(*) AS cnt FROM skill_records{where} GROUP BY lineage_origin"
                 ).fetchall()
             }
-            n_analyses = conn.execute(
-                "SELECT COUNT(*) FROM execution_analyses"
-            ).fetchone()[0]
+            n_analyses = conn.execute("SELECT COUNT(*) FROM execution_analyses").fetchone()[0]
             n_candidates = conn.execute(
-                "SELECT COUNT(*) FROM execution_analyses "
-                "WHERE candidate_for_evolution=1"
+                "SELECT COUNT(*) FROM execution_analyses WHERE candidate_for_evolution=1"
             ).fetchone()[0]
             agg = conn.execute(
                 f"""
@@ -932,9 +869,7 @@ class SkillStore:
             ).fetchone()
 
             # Also report total (including inactive) for context
-            total_all = conn.execute(
-                "SELECT COUNT(*) FROM skill_records"
-            ).fetchone()[0]
+            total_all = conn.execute("SELECT COUNT(*) FROM skill_records").fetchone()[0]
 
             return {
                 "total_skills": total,
@@ -970,8 +905,7 @@ class SkillStore:
                 return {}
 
             judgment_rows = conn.execute(
-                "SELECT skill_id, skill_applied, note "
-                "FROM skill_judgments WHERE analysis_id=?",
+                "SELECT skill_id, skill_applied, note FROM skill_judgments WHERE analysis_id=?",
                 (row["id"],),
             ).fetchall()
 
@@ -1017,16 +951,10 @@ class SkillStore:
             ``total_selections``— raw count
         """
         rate_exprs = {
-            "effective_rate": (
-                "CAST(total_completions AS REAL) / total_selections"
-            ),
-            "applied_rate": (
-                "CAST(total_applied AS REAL) / total_selections"
-            ),
+            "effective_rate": ("CAST(total_completions AS REAL) / total_selections"),
+            "applied_rate": ("CAST(total_applied AS REAL) / total_selections"),
             "completion_rate": (
-                "CASE WHEN total_applied > 0 "
-                "THEN CAST(total_completions AS REAL) / total_applied "
-                "ELSE 0.0 END"
+                "CASE WHEN total_applied > 0 THEN CAST(total_completions AS REAL) / total_applied ELSE 0.0 END"
             ),
             "total_selections": "total_selections",
         }
@@ -1049,15 +977,12 @@ class SkillStore:
             return results
 
     @_db_retry()
-    def get_count_and_timestamp(
-        self, *, active_only: bool = True
-    ) -> Dict[str, Any]:
+    def get_count_and_timestamp(self, *, active_only: bool = True) -> Dict[str, Any]:
         """Skill count + newest ``last_updated`` for cheap change detection."""
         with self._reader() as conn:
             where = " WHERE is_active=1" if active_only else ""
             row = conn.execute(
-                f"SELECT COUNT(*) AS cnt, MAX(last_updated) AS max_ts "
-                f"FROM skill_records{where}"
+                f"SELECT COUNT(*) AS cnt, MAX(last_updated) AS max_ts FROM skill_records{where}"
             ).fetchone()
             return {
                 "count": row["cnt"] if row else 0,
@@ -1066,9 +991,7 @@ class SkillStore:
 
     # Lineage / Ancestry
     @_db_retry()
-    def get_ancestry(
-        self, skill_id: str, max_depth: int = 10
-    ) -> List[SkillRecord]:
+    def get_ancestry(self, skill_id: str, max_depth: int = 10) -> List[SkillRecord]:
         """Walk up the lineage tree; returns ancestors oldest-first."""
         with self._reader() as conn:
             visited: set[str] = set()
@@ -1079,8 +1002,7 @@ class SkillStore:
                 next_frontier: List[str] = []
                 for sid in frontier:
                     for pr in conn.execute(
-                        "SELECT parent_skill_id "
-                        "FROM skill_lineage_parents WHERE skill_id=?",
+                        "SELECT parent_skill_id FROM skill_lineage_parents WHERE skill_id=?",
                         (sid,),
                     ).fetchall():
                         pid = pr["parent_skill_id"]
@@ -1102,9 +1024,7 @@ class SkillStore:
             return ancestors
 
     @_db_retry()
-    def get_lineage_tree(
-        self, skill_id: str, max_depth: int = 5
-    ) -> Dict[str, Any]:
+    def get_lineage_tree(self, skill_id: str, max_depth: int = 5) -> Dict[str, Any]:
         """Build a JSON-friendly tree rooted at *skill_id* (downward)."""
         with self._reader() as conn:
             return self._subtree(conn, skill_id, max_depth, set())
@@ -1118,8 +1038,7 @@ class SkillStore:
     ) -> Dict[str, Any]:
         visited.add(sid)
         row = conn.execute(
-            "SELECT skill_id, name, lineage_generation, lineage_origin, is_active "
-            "FROM skill_records WHERE skill_id=?",
+            "SELECT skill_id, name, lineage_generation, lineage_origin, is_active FROM skill_records WHERE skill_id=?",
             (sid,),
         ).fetchone()
         node: Dict[str, Any] = {
@@ -1133,15 +1052,12 @@ class SkillStore:
         if depth <= 0:
             return node
         for cr in conn.execute(
-            "SELECT skill_id FROM skill_lineage_parents "
-            "WHERE parent_skill_id=?",
+            "SELECT skill_id FROM skill_lineage_parents WHERE parent_skill_id=?",
             (sid,),
         ).fetchall():
             cid = cr["skill_id"]
             if cid not in visited:
-                node["children"].append(
-                    self._subtree(conn, cid, depth - 1, visited)
-                )
+                node["children"].append(self._subtree(conn, cid, depth - 1, visited))
         return node
 
     # Maintenance
@@ -1175,9 +1091,7 @@ class SkillStore:
         """
         lin = record.lineage
         # content_snapshot is Dict[str, str]; store as JSON text
-        snapshot_json = json.dumps(
-            lin.content_snapshot, ensure_ascii=False
-        )
+        snapshot_json = json.dumps(lin.content_snapshot, ensure_ascii=False)
         self._conn.execute(
             """
             INSERT INTO skill_records (
@@ -1246,8 +1160,7 @@ class SkillStore:
         )
         for pid in lin.parent_skill_ids:
             self._conn.execute(
-                "INSERT INTO skill_lineage_parents"
-                "(skill_id, parent_skill_id) VALUES(?,?)",
+                "INSERT INTO skill_lineage_parents(skill_id, parent_skill_id) VALUES(?,?)",
                 (record.skill_id, pid),
             )
 
@@ -1259,8 +1172,7 @@ class SkillStore:
         critical_set = set(record.critical_tools)
         for tk in record.tool_dependencies:
             self._conn.execute(
-                "INSERT INTO skill_tool_deps"
-                "(skill_id, tool_key, critical) VALUES(?,?,?)",
+                "INSERT INTO skill_tool_deps(skill_id, tool_key, critical) VALUES(?,?,?)",
                 (record.skill_id, tk, 1 if tk in critical_set else 0),
             )
 
@@ -1320,26 +1232,21 @@ class SkillStore:
 
         for j in a.skill_judgments:
             self._conn.execute(
-                "INSERT INTO skill_judgments "
-                "(analysis_id, skill_id, skill_applied, note) "
-                "VALUES (?,?,?,?)",
+                "INSERT INTO skill_judgments (analysis_id, skill_id, skill_applied, note) VALUES (?,?,?,?)",
                 (analysis_id, j.skill_id, int(j.skill_applied), j.note),
             )
 
         return analysis_id
 
     # Deserialization
-    def _to_record(
-        self, conn: sqlite3.Connection, row: sqlite3.Row
-    ) -> SkillRecord:
+    def _to_record(self, conn: sqlite3.Connection, row: sqlite3.Row) -> SkillRecord:
         """Deserialize a skill_records row + related rows → SkillRecord."""
         sid = row["skill_id"]
 
         parents = [
             r["parent_skill_id"]
             for r in conn.execute(
-                "SELECT parent_skill_id "
-                "FROM skill_lineage_parents WHERE skill_id=?",
+                "SELECT parent_skill_id FROM skill_lineage_parents WHERE skill_id=?",
                 (sid,),
             ).fetchall()
         ]
@@ -1362,14 +1269,11 @@ class SkillStore:
         )
 
         dep_rows = conn.execute(
-            "SELECT tool_key, critical "
-            "FROM skill_tool_deps WHERE skill_id=?",
+            "SELECT tool_key, critical FROM skill_tool_deps WHERE skill_id=?",
             (sid,),
         ).fetchall()
 
-        tag_rows = conn.execute(
-            "SELECT tag FROM skill_tags WHERE skill_id=?", (sid,)
-        ).fetchall()
+        tag_rows = conn.execute("SELECT tag FROM skill_tags WHERE skill_id=?", (sid,)).fetchall()
 
         # Load recent analyses involving this skill (via skill_judgments).
         # skill_judgments.skill_id stores the true skill_id (same as DB PK).
@@ -1389,37 +1293,27 @@ class SkillStore:
             is_active=bool(row["is_active"]),
             category=SkillCategory(row["category"]),
             tags=[r["tag"] for r in tag_rows],
-            visibility=(
-                SkillVisibility(row["visibility"])
-                if row["visibility"] else SkillVisibility.PRIVATE
-            ),
+            visibility=(SkillVisibility(row["visibility"]) if row["visibility"] else SkillVisibility.PRIVATE),
             creator_id=row["creator_id"] or "",
             lineage=lineage,
             tool_dependencies=[r["tool_key"] for r in dep_rows],
-            critical_tools=[
-                r["tool_key"] for r in dep_rows if r["critical"]
-            ],
+            critical_tools=[r["tool_key"] for r in dep_rows if r["critical"]],
             total_selections=row["total_selections"],
             total_applied=row["total_applied"],
             total_completions=row["total_completions"],
             total_fallbacks=row["total_fallbacks"],
-            recent_analyses=[
-                self._to_analysis(conn, r) for r in reversed(analysis_rows)
-            ],
+            recent_analyses=[self._to_analysis(conn, r) for r in reversed(analysis_rows)],
             first_seen=datetime.fromisoformat(row["first_seen"]),
             last_updated=datetime.fromisoformat(row["last_updated"]),
         )
 
     @staticmethod
-    def _to_analysis(
-        conn: sqlite3.Connection, row: sqlite3.Row
-    ) -> ExecutionAnalysis:
+    def _to_analysis(conn: sqlite3.Connection, row: sqlite3.Row) -> ExecutionAnalysis:
         """Deserialize an execution_analyses row + judgments → ExecutionAnalysis."""
         analysis_id = row["id"]
 
         judgment_rows = conn.execute(
-            "SELECT skill_id, skill_applied, note "
-            "FROM skill_judgments WHERE analysis_id=?",
+            "SELECT skill_id, skill_applied, note FROM skill_judgments WHERE analysis_id=?",
             (analysis_id,),
         ).fetchall()
 
@@ -1427,10 +1321,7 @@ class SkillStore:
         raw_suggestions = row["evolution_suggestions"]
         if raw_suggestions:
             try:
-                suggestions = [
-                    EvolutionSuggestion.from_dict(s)
-                    for s in json.loads(raw_suggestions)
-                ]
+                suggestions = [EvolutionSuggestion.from_dict(s) for s in json.loads(raw_suggestions)]
             except (json.JSONDecodeError, KeyError, ValueError):
                 pass
 

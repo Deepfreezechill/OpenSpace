@@ -11,33 +11,34 @@ Covers:
 from __future__ import annotations
 
 import base64
-import time
-import threading
 import json
+import threading
+import time
+
 import pytest
 
 from openspace.auth.provider import (
+    _MAX_TTL_SECONDS,
+    DEFAULT_TOOL_POLICIES,
+    TIER_DEFAULT_SCOPES,
     AuthClaims,
-    AuthProvider,
     AuthError,
-    TokenInvalidError,
-    TokenExpiredError,
-    TokenRevokedError,
+    AuthProvider,
     InsufficientScopeError,
     InsufficientTierError,
-    ToolNotAuthorizedError,
     RegistryFullError,
-    TokenScope,
+    TokenExpiredError,
+    TokenInvalidError,
     TokenRegistry,
+    TokenRevokedError,
+    TokenScope,
+    ToolNotAuthorizedError,
     ToolPolicy,
-    TIER_DEFAULT_SCOPES,
-    DEFAULT_TOOL_POLICIES,
-    _MAX_TTL_SECONDS,
+    authorize_lease,
+    authorize_tool,
+    check_tier_ceiling,
     create_token,
     validate_token,
-    authorize_tool,
-    authorize_lease,
-    check_tier_ceiling,
 )
 from openspace.sandbox.leases import TrustTier
 
@@ -60,14 +61,17 @@ class TestTokenScope:
 
     def test_tier_default_scopes_monotonic(self) -> None:
         """Higher tiers should have superset scopes of lower tiers."""
-        tiers = [TrustTier.T0_UNTRUSTED, TrustTier.T1_BASIC,
-                 TrustTier.T2_STANDARD, TrustTier.T3_ELEVATED, TrustTier.T4_FULL]
+        tiers = [
+            TrustTier.T0_UNTRUSTED,
+            TrustTier.T1_BASIC,
+            TrustTier.T2_STANDARD,
+            TrustTier.T3_ELEVATED,
+            TrustTier.T4_FULL,
+        ]
         for i in range(len(tiers) - 1):
             lower = TIER_DEFAULT_SCOPES[tiers[i]]
             higher = TIER_DEFAULT_SCOPES[tiers[i + 1]]
-            assert lower <= higher, (
-                f"{tiers[i].value} scopes are not subset of {tiers[i+1].value}"
-            )
+            assert lower <= higher, f"{tiers[i].value} scopes are not subset of {tiers[i + 1].value}"
 
 
 class TestAuthClaims:
@@ -152,14 +156,18 @@ class TestTokenCreation:
 
     def test_create_with_custom_ttl(self) -> None:
         token = create_token(
-            secret=TEST_SECRET, subject="svc-d", ttl_seconds=60,
+            secret=TEST_SECRET,
+            subject="svc-d",
+            ttl_seconds=60,
         )
         claims = validate_token(token, secret=TEST_SECRET)
         assert claims.remaining_seconds <= 60
 
     def test_create_with_custom_token_id(self) -> None:
         token = create_token(
-            secret=TEST_SECRET, subject="svc-e", token_id="my-custom-id",
+            secret=TEST_SECRET,
+            subject="svc-e",
+            token_id="my-custom-id",
         )
         claims = validate_token(token, secret=TEST_SECRET)
         assert claims.token_id == "my-custom-id"
@@ -176,13 +184,15 @@ class TestTokenCreation:
         """F2: TTL above MAX_TTL_SECONDS is rejected."""
         with pytest.raises(ValueError, match="must not exceed"):
             create_token(
-                secret=TEST_SECRET, subject="x",
+                secret=TEST_SECRET,
+                subject="x",
                 ttl_seconds=_MAX_TTL_SECONDS + 1,
             )
 
     def test_create_at_max_ttl_succeeds(self) -> None:
         token = create_token(
-            secret=TEST_SECRET, subject="x",
+            secret=TEST_SECRET,
+            subject="x",
             ttl_seconds=_MAX_TTL_SECONDS,
         )
         claims = validate_token(token, secret=TEST_SECRET)
@@ -192,7 +202,8 @@ class TestTokenCreation:
         """F3: T1 token cannot be minted with T3 scopes."""
         with pytest.raises(ValueError, match="exceed tier"):
             create_token(
-                secret=TEST_SECRET, subject="svc",
+                secret=TEST_SECRET,
+                subject="svc",
                 trust_tier=TrustTier.T1_BASIC,
                 scopes=frozenset({TokenScope.SECRET_WRITE, TokenScope.LEASE_ADMIN}),
             )
@@ -200,7 +211,8 @@ class TestTokenCreation:
     def test_scope_subset_of_tier_allowed(self) -> None:
         """Explicit scopes that are a subset of tier defaults succeed."""
         token = create_token(
-            secret=TEST_SECRET, subject="svc",
+            secret=TEST_SECRET,
+            subject="svc",
             trust_tier=TrustTier.T2_STANDARD,
             scopes=frozenset({TokenScope.TOOL_SEARCH}),
         )
@@ -249,10 +261,14 @@ class TestTokenValidation:
 
     def test_expired_token_rejected(self) -> None:
         token = create_token(
-            secret=TEST_SECRET, subject="svc", ttl_seconds=1,
+            secret=TEST_SECRET,
+            subject="svc",
+            ttl_seconds=1,
         )
         # Manually create an already-expired token
-        import json, base64
+        import base64
+        import json
+
         payload_b64 = token.split(".")[0]
         padding = 4 - (len(payload_b64) % 4)
         if padding != 4:
@@ -263,10 +279,10 @@ class TestTokenValidation:
         new_payload = json.dumps(payload, separators=(",", ":"), sort_keys=True)
         new_b64 = base64.urlsafe_b64encode(new_payload.encode()).rstrip(b"=").decode()
 
-        import hashlib, hmac as _hmac
-        sig = _hmac.new(
-            TEST_SECRET.encode(), new_b64.encode(), hashlib.sha256
-        ).digest()
+        import hashlib
+        import hmac as _hmac
+
+        sig = _hmac.new(TEST_SECRET.encode(), new_b64.encode(), hashlib.sha256).digest()
         sig_b64 = base64.urlsafe_b64encode(sig).rstrip(b"=").decode()
 
         expired_token = f"{new_b64}.{sig_b64}"
@@ -275,7 +291,8 @@ class TestTokenValidation:
 
     def test_t0_token_no_scopes(self) -> None:
         token = create_token(
-            secret=TEST_SECRET, subject="svc",
+            secret=TEST_SECRET,
+            subject="svc",
             trust_tier=TrustTier.T0_UNTRUSTED,
         )
         claims = validate_token(token, secret=TEST_SECRET)
@@ -292,8 +309,11 @@ class TestAuthorizeToolScope:
 
     def _claims(self, scopes, tier=TrustTier.T4_FULL) -> AuthClaims:
         return AuthClaims(
-            subject="svc", trust_tier=tier, scopes=frozenset(scopes),
-            issued_at=time.time(), expires_at=time.time() + 3600,
+            subject="svc",
+            trust_tier=tier,
+            scopes=frozenset(scopes),
+            issued_at=time.time(),
+            expires_at=time.time() + 3600,
             token_id="t1",
         )
 
@@ -315,9 +335,13 @@ class TestAuthorizeToolScope:
             authorize_tool(claims, policy)
 
     def test_superset_scopes_pass(self) -> None:
-        claims = self._claims([
-            TokenScope.TOOL_EXECUTE, TokenScope.TOOL_ADMIN, TokenScope.TOOL_SEARCH,
-        ])
+        claims = self._claims(
+            [
+                TokenScope.TOOL_EXECUTE,
+                TokenScope.TOOL_ADMIN,
+                TokenScope.TOOL_SEARCH,
+            ]
+        )
         policy = ToolPolicy(
             tool_name="run",
             required_scopes=frozenset({TokenScope.TOOL_EXECUTE}),
@@ -335,9 +359,11 @@ class TestAuthorizeToolTier:
 
     def _claims(self, tier) -> AuthClaims:
         return AuthClaims(
-            subject="svc", trust_tier=tier,
+            subject="svc",
+            trust_tier=tier,
             scopes=frozenset({TokenScope.TOOL_EXECUTE, TokenScope.TOOL_ADMIN}),
-            issued_at=time.time(), expires_at=time.time() + 3600,
+            issued_at=time.time(),
+            expires_at=time.time() + 3600,
             token_id="t1",
         )
 
@@ -363,9 +389,11 @@ class TestAuthorizeToolSubject:
 
     def _claims(self, subject="svc-a") -> AuthClaims:
         return AuthClaims(
-            subject=subject, trust_tier=TrustTier.T4_FULL,
+            subject=subject,
+            trust_tier=TrustTier.T4_FULL,
             scopes=frozenset({TokenScope.TOOL_EXECUTE}),
-            issued_at=time.time(), expires_at=time.time() + 3600,
+            issued_at=time.time(),
+            expires_at=time.time() + 3600,
             token_id="t1",
         )
 
@@ -443,8 +471,11 @@ class TestTierCeiling:
 
     def _claims(self, tier) -> AuthClaims:
         return AuthClaims(
-            subject="svc", trust_tier=tier, scopes=frozenset(),
-            issued_at=time.time(), expires_at=time.time() + 3600,
+            subject="svc",
+            trust_tier=tier,
+            scopes=frozenset(),
+            issued_at=time.time(),
+            expires_at=time.time() + 3600,
             token_id="t1",
         )
 
@@ -460,9 +491,7 @@ class TestTierCeiling:
 
     def test_t0_cannot_request_t1(self) -> None:
         with pytest.raises(InsufficientTierError):
-            check_tier_ceiling(
-                self._claims(TrustTier.T0_UNTRUSTED), TrustTier.T1_BASIC
-            )
+            check_tier_ceiling(self._claims(TrustTier.T0_UNTRUSTED), TrustTier.T1_BASIC)
 
     def test_t4_can_request_any(self) -> None:
         for tier in TrustTier:
@@ -474,8 +503,11 @@ class TestAuthorizeLease:
 
     def _claims(self, tier, scopes=frozenset()) -> AuthClaims:
         return AuthClaims(
-            subject="svc", trust_tier=tier, scopes=scopes,
-            issued_at=time.time(), expires_at=time.time() + 3600,
+            subject="svc",
+            trust_tier=tier,
+            scopes=scopes,
+            issued_at=time.time(),
+            expires_at=time.time() + 3600,
             token_id="t1",
         )
 
@@ -716,7 +748,8 @@ class TestAuthProvider:
     def test_authorize_success(self) -> None:
         provider = self._provider()
         token = provider.create_token(
-            subject="svc", trust_tier=TrustTier.T2_STANDARD,
+            subject="svc",
+            trust_tier=TrustTier.T2_STANDARD,
         )
         claims = provider.authorize(token, "execute_task")
         assert claims.subject == "svc"
@@ -724,7 +757,8 @@ class TestAuthProvider:
     def test_authorize_insufficient_tier(self) -> None:
         provider = self._provider()
         token = provider.create_token(
-            subject="svc", trust_tier=TrustTier.T1_BASIC,
+            subject="svc",
+            trust_tier=TrustTier.T1_BASIC,
         )
         with pytest.raises(InsufficientTierError):
             provider.authorize(token, "execute_task")
@@ -732,7 +766,8 @@ class TestAuthProvider:
     def test_authorize_unknown_tool_requires_admin(self) -> None:
         provider = self._provider()
         token = provider.create_token(
-            subject="svc", trust_tier=TrustTier.T2_STANDARD,
+            subject="svc",
+            trust_tier=TrustTier.T2_STANDARD,
         )
         with pytest.raises(InsufficientTierError):
             provider.authorize(token, "unknown_tool")
@@ -740,7 +775,8 @@ class TestAuthProvider:
     def test_authorize_unknown_tool_with_admin(self) -> None:
         provider = self._provider()
         token = provider.create_token(
-            subject="admin", trust_tier=TrustTier.T4_FULL,
+            subject="admin",
+            trust_tier=TrustTier.T4_FULL,
         )
         claims = provider.authorize(token, "unknown_tool")
         assert claims.subject == "admin"
@@ -748,7 +784,8 @@ class TestAuthProvider:
     def test_tier_ceiling(self) -> None:
         provider = self._provider()
         token = provider.create_token(
-            subject="svc", trust_tier=TrustTier.T2_STANDARD,
+            subject="svc",
+            trust_tier=TrustTier.T2_STANDARD,
         )
         claims = provider.validate_and_check(token)
         provider.check_tier_ceiling(claims, TrustTier.T2_STANDARD)
@@ -806,7 +843,8 @@ class TestAuthProviderCustomPolicies:
         }
         provider = AuthProvider(signing_secret=TEST_SECRET, tool_policies=custom)
         token = provider.create_token(
-            subject="svc", trust_tier=TrustTier.T3_ELEVATED,
+            subject="svc",
+            trust_tier=TrustTier.T3_ELEVATED,
         )
         # T3 has SECRET_READ in default scopes
         claims = provider.authorize(token, "my_tool")
@@ -821,7 +859,8 @@ class TestAuthProviderCustomPolicies:
         }
         provider = AuthProvider(signing_secret=TEST_SECRET, tool_policies=custom)
         token = provider.create_token(
-            subject="svc", trust_tier=TrustTier.T1_BASIC,
+            subject="svc",
+            trust_tier=TrustTier.T1_BASIC,
         )
         with pytest.raises(InsufficientTierError):
             provider.authorize(token, "my_tool")
@@ -844,11 +883,9 @@ class TestSecurityRegressions:
             provider.validate_and_check(token)
 
     def test_cannot_forge_token_with_different_secret(self) -> None:
-        legit = create_token(secret=TEST_SECRET, subject="admin",
-                             trust_tier=TrustTier.T4_FULL)
+        legit = create_token(secret=TEST_SECRET, subject="admin", trust_tier=TrustTier.T4_FULL)
         forged_secret = "attacker-secret-that-is-at-least-32-characters"
-        forged = create_token(secret=forged_secret, subject="admin",
-                              trust_tier=TrustTier.T4_FULL)
+        forged = create_token(secret=forged_secret, subject="admin", trust_tier=TrustTier.T4_FULL)
         # Legit works
         validate_token(legit, secret=TEST_SECRET)
         # Forged fails
@@ -859,7 +896,8 @@ class TestSecurityRegressions:
         """T1 token cannot access T3 tool."""
         provider = AuthProvider(signing_secret=TEST_SECRET)
         token = provider.create_token(
-            subject="basic-svc", trust_tier=TrustTier.T1_BASIC,
+            subject="basic-svc",
+            trust_tier=TrustTier.T1_BASIC,
         )
         with pytest.raises(InsufficientTierError):
             provider.authorize(token, "fix_skill")
@@ -868,7 +906,8 @@ class TestSecurityRegressions:
         """T2 token without TOOL_ADMIN cannot access admin tools."""
         provider = AuthProvider(signing_secret=TEST_SECRET)
         token = provider.create_token(
-            subject="svc", trust_tier=TrustTier.T2_STANDARD,
+            subject="svc",
+            trust_tier=TrustTier.T2_STANDARD,
         )
         with pytest.raises(InsufficientTierError):
             provider.authorize(token, "upload_skill")
@@ -877,7 +916,8 @@ class TestSecurityRegressions:
         """T0 tokens have no scopes and fail all tool authorization."""
         provider = AuthProvider(signing_secret=TEST_SECRET)
         token = provider.create_token(
-            subject="untrusted", trust_tier=TrustTier.T0_UNTRUSTED,
+            subject="untrusted",
+            trust_tier=TrustTier.T0_UNTRUSTED,
         )
         for tool_name in DEFAULT_TOOL_POLICIES:
             with pytest.raises(AuthError):
@@ -886,6 +926,7 @@ class TestSecurityRegressions:
     def test_timing_safe_comparison(self) -> None:
         """Token validation uses hmac.compare_digest (timing-safe)."""
         import hmac as _hmac
+
         # This is a design assertion — hmac.compare_digest is used in
         # _compute_signature verification path
         assert hasattr(_hmac, "compare_digest")
@@ -893,9 +934,11 @@ class TestSecurityRegressions:
     def test_deny_before_allow_in_tool_auth(self) -> None:
         """Blocked subjects are rejected even if in allowed list."""
         claims = AuthClaims(
-            subject="evil", trust_tier=TrustTier.T4_FULL,
+            subject="evil",
+            trust_tier=TrustTier.T4_FULL,
             scopes=frozenset({TokenScope.TOOL_EXECUTE}),
-            issued_at=time.time(), expires_at=time.time() + 3600,
+            issued_at=time.time(),
+            expires_at=time.time() + 3600,
             token_id="t1",
         )
         policy = ToolPolicy(
@@ -923,7 +966,9 @@ class TestSecurityRegressions:
         """F6: error messages should not contain server timestamps."""
         # Create an expired token by time manipulation
         token = create_token(
-            secret=TEST_SECRET, subject="x", ttl_seconds=1,
+            secret=TEST_SECRET,
+            subject="x",
+            ttl_seconds=1,
         )
         # Wait for expiry
         time.sleep(1.1)
@@ -944,17 +989,19 @@ class TestSecurityRegressions:
     def test_nan_expires_at_rejected(self) -> None:
         """NaN in expires_at must not bypass expiry check."""
         payload = {
-            "sub": "attacker", "tier": "T1", "scopes": [],
-            "iat": time.time(), "exp": float("nan"), "jti": "nan-test",
+            "sub": "attacker",
+            "tier": "T1",
+            "scopes": [],
+            "iat": time.time(),
+            "exp": float("nan"),
+            "jti": "nan-test",
         }
         payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
-        payload_b64 = base64.urlsafe_b64encode(
-            payload_json.encode()
-        ).rstrip(b"=").decode("ascii")
-        import hmac as _hmac, hashlib as _hashlib
-        sig = _hmac.new(
-            TEST_SECRET.encode(), payload_b64.encode(), _hashlib.sha256
-        ).digest()
+        payload_b64 = base64.urlsafe_b64encode(payload_json.encode()).rstrip(b"=").decode("ascii")
+        import hashlib as _hashlib
+        import hmac as _hmac
+
+        sig = _hmac.new(TEST_SECRET.encode(), payload_b64.encode(), _hashlib.sha256).digest()
         sig_b64 = base64.urlsafe_b64encode(sig).rstrip(b"=").decode("ascii")
         evil_token = f"{payload_b64}.{sig_b64}"
         with pytest.raises(TokenInvalidError, match="finite"):
@@ -963,17 +1010,19 @@ class TestSecurityRegressions:
     def test_infinity_expires_at_rejected(self) -> None:
         """Infinity in expires_at must not create immortal tokens."""
         payload = {
-            "sub": "attacker", "tier": "T1", "scopes": [],
-            "iat": time.time(), "exp": float("inf"), "jti": "inf-test",
+            "sub": "attacker",
+            "tier": "T1",
+            "scopes": [],
+            "iat": time.time(),
+            "exp": float("inf"),
+            "jti": "inf-test",
         }
         payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
-        payload_b64 = base64.urlsafe_b64encode(
-            payload_json.encode()
-        ).rstrip(b"=").decode("ascii")
-        import hmac as _hmac, hashlib as _hashlib
-        sig = _hmac.new(
-            TEST_SECRET.encode(), payload_b64.encode(), _hashlib.sha256
-        ).digest()
+        payload_b64 = base64.urlsafe_b64encode(payload_json.encode()).rstrip(b"=").decode("ascii")
+        import hashlib as _hashlib
+        import hmac as _hmac
+
+        sig = _hmac.new(TEST_SECRET.encode(), payload_b64.encode(), _hashlib.sha256).digest()
         sig_b64 = base64.urlsafe_b64encode(sig).rstrip(b"=").decode("ascii")
         evil_token = f"{payload_b64}.{sig_b64}"
         with pytest.raises(TokenInvalidError, match="finite"):
@@ -983,19 +1032,21 @@ class TestSecurityRegressions:
         """Token where exp <= iat is rejected."""
         now = time.time()
         payload = {
-            "sub": "attacker", "tier": "T1", "scopes": [],
-            "iat": now, "exp": now + 3600, "jti": "backwards",
+            "sub": "attacker",
+            "tier": "T1",
+            "scopes": [],
+            "iat": now,
+            "exp": now + 3600,
+            "jti": "backwards",
         }
         # Manually set exp <= iat AFTER normal creation to bypass create_token
         payload["exp"] = now - 1
         payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
-        payload_b64 = base64.urlsafe_b64encode(
-            payload_json.encode()
-        ).rstrip(b"=").decode("ascii")
-        import hmac as _hmac, hashlib as _hashlib
-        sig = _hmac.new(
-            TEST_SECRET.encode(), payload_b64.encode(), _hashlib.sha256
-        ).digest()
+        payload_b64 = base64.urlsafe_b64encode(payload_json.encode()).rstrip(b"=").decode("ascii")
+        import hashlib as _hashlib
+        import hmac as _hmac
+
+        sig = _hmac.new(TEST_SECRET.encode(), payload_b64.encode(), _hashlib.sha256).digest()
         sig_b64 = base64.urlsafe_b64encode(sig).rstrip(b"=").decode("ascii")
         evil_token = f"{payload_b64}.{sig_b64}"
         # Could raise either TokenExpiredError or TokenInvalidError
@@ -1005,19 +1056,16 @@ class TestSecurityRegressions:
     def test_audience_mismatch_rejected(self) -> None:
         """Token minted for service-A is rejected by service-B."""
         token = create_token(
-            secret=TEST_SECRET, subject="svc",
+            secret=TEST_SECRET,
+            subject="svc",
             audience="service-a",
         )
         # Accepted by service-a
-        claims = validate_token(
-            token, secret=TEST_SECRET, expected_audience="service-a"
-        )
+        claims = validate_token(token, secret=TEST_SECRET, expected_audience="service-a")
         assert claims.audience == "service-a"
         # Rejected by service-b
         with pytest.raises(TokenInvalidError, match="audience"):
-            validate_token(
-                token, secret=TEST_SECRET, expected_audience="service-b"
-            )
+            validate_token(token, secret=TEST_SECRET, expected_audience="service-b")
 
     def test_audience_not_enforced_when_empty(self) -> None:
         """Tokens without audience work when validator has no expectation."""
@@ -1027,12 +1075,8 @@ class TestSecurityRegressions:
 
     def test_provider_audience_binding(self) -> None:
         """AuthProvider enforces audience on validate_and_check."""
-        provider_a = AuthProvider(
-            signing_secret=TEST_SECRET, audience="svc-a"
-        )
-        provider_b = AuthProvider(
-            signing_secret=TEST_SECRET, audience="svc-b"
-        )
+        provider_a = AuthProvider(signing_secret=TEST_SECRET, audience="svc-a")
+        provider_b = AuthProvider(signing_secret=TEST_SECRET, audience="svc-b")
         token = provider_a.create_token(subject="user")
         # Works on provider_a
         claims = provider_a.validate_and_check(token)
@@ -1045,11 +1089,13 @@ class TestSecurityRegressions:
         """Provider B cannot revoke provider A's tokens via high-level API."""
         shared_registry = TokenRegistry()
         provider_a = AuthProvider(
-            signing_secret=TEST_SECRET, audience="svc-a",
+            signing_secret=TEST_SECRET,
+            audience="svc-a",
             registry=shared_registry,
         )
         provider_b = AuthProvider(
-            signing_secret=TEST_SECRET, audience="svc-b",
+            signing_secret=TEST_SECRET,
+            audience="svc-b",
             registry=shared_registry,
         )
         token_a = provider_a.create_token(subject="user", token_id="cross-rev")

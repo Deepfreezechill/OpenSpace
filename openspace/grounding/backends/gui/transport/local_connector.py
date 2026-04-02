@@ -60,12 +60,14 @@ class LocalGUIConnector(BaseConnector[Any]):
     def _get_screenshot_helper(self):
         if self._screenshot_helper is None:
             from openspace.local_server.utils import ScreenshotHelper
+
             self._screenshot_helper = ScreenshotHelper()
         return self._screenshot_helper
 
     def _get_accessibility_helper(self):
         if self._accessibility_helper is None:
             from openspace.local_server.utils import AccessibilityHelper
+
             self._accessibility_helper = AccessibilityHelper()
         return self._accessibility_helper
 
@@ -97,21 +99,25 @@ class LocalGUIConnector(BaseConnector[Any]):
                 result = await operation_func(*args, **kwargs)
                 logger.debug(
                     "%s executed successfully (attempt %d/%d)",
-                    operation_name, attempt, self.retry_times,
+                    operation_name,
+                    attempt,
+                    self.retry_times,
                 )
                 return result
             except asyncio.TimeoutError as exc:
                 logger.error("%s timed out", operation_name)
-                raise RuntimeError(
-                    f"{operation_name} timed out after {self.timeout} seconds"
-                ) from exc
+                raise RuntimeError(f"{operation_name} timed out after {self.timeout} seconds") from exc
             except Exception as exc:
                 last_exc = exc
                 if attempt == self.retry_times:
                     break
                 logger.warning(
                     "%s failed (attempt %d/%d): %s, retrying in %.1f seconds...",
-                    operation_name, attempt, self.retry_times, exc, self.retry_interval,
+                    operation_name,
+                    attempt,
+                    self.retry_times,
+                    exc,
+                    self.retry_interval,
                 )
                 await asyncio.sleep(self.retry_interval)
 
@@ -150,15 +156,11 @@ class LocalGUIConnector(BaseConnector[Any]):
             for i, part in enumerate(parts):
                 if i == 0:
                     if part:
-                        result_parts.append(
-                            f"pyautogui.typewrite({quote_char}{part}{quote_char})"
-                        )
+                        result_parts.append(f"pyautogui.typewrite({quote_char}{part}{quote_char})")
                 else:
                     result_parts.append('pyautogui.hotkey("shift", ",")')
                     if part:
-                        result_parts.append(
-                            f"pyautogui.typewrite({quote_char}{part}{quote_char})"
-                        )
+                        result_parts.append(f"pyautogui.typewrite({quote_char}{part}{quote_char})")
             return "; ".join(result_parts)
 
         command = re.sub(typewrite_pattern, process_typewrite_match, command)
@@ -206,11 +208,10 @@ class LocalGUIConnector(BaseConnector[Any]):
     async def get_screenshot(self) -> Optional[bytes]:
         """Capture screenshot locally using ScreenshotHelper."""
         try:
+
             async def _get():
                 helper = self._get_screenshot_helper()
-                tmp_path = os.path.join(
-                    tempfile.gettempdir(), f"screenshot_{uuid.uuid4().hex}.png"
-                )
+                tmp_path = os.path.join(tempfile.gettempdir(), f"screenshot_{uuid.uuid4().hex}.png")
                 if helper.capture(tmp_path, with_cursor=True):
                     with open(tmp_path, "rb") as f:
                         data = f.read()
@@ -233,13 +234,13 @@ class LocalGUIConnector(BaseConnector[Any]):
             async def _execute():
                 python_cmd = "python" if platform_name == "Windows" else "python3"
                 proc = await asyncio.create_subprocess_exec(
-                    python_cmd, "-c", full_command,
+                    python_cmd,
+                    "-c",
+                    full_command,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-                stdout_b, stderr_b = await asyncio.wait_for(
-                    proc.communicate(), timeout=self.timeout
-                )
+                stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=self.timeout)
                 stdout = stdout_b.decode("utf-8", errors="replace") if stdout_b else ""
                 stderr = stderr_b.decode("utf-8", errors="replace") if stderr_b else ""
                 returncode = proc.returncode or 0
@@ -255,9 +256,7 @@ class LocalGUIConnector(BaseConnector[Any]):
             logger.error("Failed to execute command: %s", e)
             return None
 
-    async def execute_action(
-        self, action_type: str, parameters: Dict[str, Any] | None = None
-    ) -> Dict[str, Any]:
+    async def execute_action(self, action_type: str, parameters: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Execute a desktop action (same logic as GUIConnector)."""
         parameters = parameters or {}
 
@@ -270,8 +269,8 @@ class LocalGUIConnector(BaseConnector[Any]):
 
         # Import action builder (same module used by GUIConnector)
         from openspace.grounding.backends.gui.transport.actions import (
-            build_pyautogui_command,
             KEYBOARD_KEYS,
+            build_pyautogui_command,
         )
 
         if action_type in ["PRESS", "KEY_DOWN", "KEY_UP"]:
@@ -316,11 +315,10 @@ class LocalGUIConnector(BaseConnector[Any]):
                 "error": "Command execution failed",
             }
 
-    async def get_accessibility_tree(
-        self, max_depth: int = 5
-    ) -> Optional[Dict[str, Any]]:
+    async def get_accessibility_tree(self, max_depth: int = 5) -> Optional[Dict[str, Any]]:
         """Get accessibility tree locally."""
         try:
+
             async def _get():
                 helper = self._get_accessibility_helper()
                 return helper.get_tree(max_depth=max_depth)
@@ -333,6 +331,7 @@ class LocalGUIConnector(BaseConnector[Any]):
     async def get_cursor_position(self) -> Optional[tuple[int, int]]:
         """Get cursor position locally."""
         try:
+
             async def _get():
                 helper = self._get_screenshot_helper()
                 return helper.get_cursor_position()
@@ -358,7 +357,4 @@ class LocalGUIConnector(BaseConnector[Any]):
             return await self.execute_action(name.upper(), params or {})
 
     async def request(self, *args: Any, **kwargs: Any) -> Any:
-        raise NotImplementedError(
-            "LocalGUIConnector does not support raw HTTP requests"
-        )
-
+        raise NotImplementedError("LocalGUIConnector does not support raw HTTP requests")

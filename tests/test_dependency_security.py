@@ -4,6 +4,7 @@ Verifies that all dependencies in pyproject.toml have upper-bound
 version constraints and that critical security infrastructure
 (Dependabot, pip-audit CI job) is in place.
 """
+
 from __future__ import annotations
 
 import re
@@ -42,10 +43,7 @@ class TestDependencyPinning:
             spec = dep.split(";")[0].strip()
             if not _UPPER_BOUND_RE.search(spec):
                 violations.append(spec)
-        assert violations == [], (
-            f"[{section}] deps without upper bounds:\n"
-            + "\n".join(f"  - {v}" for v in violations)
-        )
+        assert violations == [], f"[{section}] deps without upper bounds:\n" + "\n".join(f"  - {v}" for v in violations)
 
     def test_core_deps_have_upper_bounds(self, pyproject):
         deps = pyproject["project"]["dependencies"]
@@ -79,6 +77,7 @@ class TestDependencyPinning:
 # Infrastructure tests
 # ---------------------------------------------------------------------------
 
+
 class TestSecurityInfrastructure:
     """Dependabot and pip-audit must be configured."""
 
@@ -107,9 +106,7 @@ class TestSecurityInfrastructure:
         for dep in core_deps:
             # Extract package name (before any version specifier)
             pkg_name = re.split(r"[><=!~\[]", dep)[0].strip().lower()
-            assert pkg_name in req_content.lower(), (
-                f"{pkg_name} in pyproject.toml but missing from requirements.txt"
-            )
+            assert pkg_name in req_content.lower(), f"{pkg_name} in pyproject.toml but missing from requirements.txt"
 
     def test_no_black_or_flake8_in_dev_deps(self, pyproject):
         """Dev deps should use ruff, not black+flake8 (replaced in EPIC 0.8)."""

@@ -10,9 +10,9 @@ for backward compatibility.  New code should prefer these frozen variants.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, FrozenSet, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, Optional, Tuple
 
 
 def _deep_freeze(value: Any) -> Any:
@@ -128,9 +128,7 @@ class TaskResult:
         tool_execs = tuple(
             ToolExecution(
                 tool_name=te["tool_name"],
-                arguments=_deep_freeze(te.get("arguments", {}))
-                if isinstance(te.get("arguments"), dict)
-                else (),
+                arguments=_deep_freeze(te.get("arguments", {})) if isinstance(te.get("arguments"), dict) else (),
                 status=te.get("status", "success"),
                 duration_ms=te.get("duration_ms", 0.0),
                 error=te.get("error"),

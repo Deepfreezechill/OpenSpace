@@ -19,9 +19,8 @@ Direct construction is also supported for testing::
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from openspace.domain.ports import (
     AgentExecutorPort,
@@ -38,7 +37,6 @@ from openspace.domain.ports import (
     TelemetryPort,
     ToolBackendPort,
 )
-
 
 # ── Lifecycle callback type ───────────────────────────────────────────
 
@@ -90,12 +88,8 @@ class AppContainer:
     tool_backend: Optional[ToolBackendPort] = None
 
     # ── Lifecycle hooks ───────────────────────────────────────────────
-    _startup_hooks: List[LifecycleHook] = field(
-        default_factory=list, repr=False
-    )
-    _shutdown_hooks: List[LifecycleHook] = field(
-        default_factory=list, repr=False
-    )
+    _startup_hooks: List[LifecycleHook] = field(default_factory=list, repr=False)
+    _shutdown_hooks: List[LifecycleHook] = field(default_factory=list, repr=False)
     _started: bool = field(default=False, repr=False)
 
     # ── Lifecycle management ──────────────────────────────────────────
@@ -155,12 +149,23 @@ class AppContainer:
     # ── Convenience accessors ─────────────────────────────────────────
 
     # Service slot names (for validation in require())
-    _SERVICE_SLOTS = frozenset({
-        "llm", "agent_executor", "telemetry",
-        "skill_store", "skill_evolution", "analysis", "cloud_skill",
-        "sandbox", "policy_engine", "auth", "secret_broker",
-        "capability_lease_resolver", "tool_backend",
-    })
+    _SERVICE_SLOTS = frozenset(
+        {
+            "llm",
+            "agent_executor",
+            "telemetry",
+            "skill_store",
+            "skill_evolution",
+            "analysis",
+            "cloud_skill",
+            "sandbox",
+            "policy_engine",
+            "auth",
+            "secret_broker",
+            "capability_lease_resolver",
+            "tool_backend",
+        }
+    )
 
     def require(self, service_name: str) -> Any:
         """Get a service by name, raising if it is ``None``.
@@ -175,13 +180,8 @@ class AppContainer:
             RuntimeError: If the service is known but not wired (``None``).
         """
         if service_name not in self._SERVICE_SLOTS:
-            raise AttributeError(
-                f"Unknown service '{service_name}'. "
-                f"Known services: {sorted(self._SERVICE_SLOTS)}"
-            )
+            raise AttributeError(f"Unknown service '{service_name}'. Known services: {sorted(self._SERVICE_SLOTS)}")
         value = getattr(self, service_name)
         if value is None:
-            raise RuntimeError(
-                f"Required service '{service_name}' is not wired in AppContainer"
-            )
+            raise RuntimeError(f"Required service '{service_name}' is not wired in AppContainer")
         return value

@@ -27,12 +27,11 @@ import json
 import logging
 import os
 import shutil
-import subprocess
-import sys
-import time
-import urllib.request
-import urllib.error
 import ssl
+import subprocess
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -46,6 +45,7 @@ _HF_CACHE_SUBDIR = "gdpval_cache"
 # ═══════════════════════════════════════════════════════════════════
 # Public API
 # ═══════════════════════════════════════════════════════════════════
+
 
 def load_tasks(
     clawwork_root: str = "",
@@ -104,7 +104,7 @@ def load_tasks(
         if ex_path.exists():
             tasks = _load_from_jsonl(ex_path)
             source = f"example_tasks.jsonl ({ex_path})"
-            print(f"   ⚠️  Using 5 demo tasks only — for full 220 tasks, provide GDPVal dataset")
+            print("   ⚠️  Using 5 demo tasks only — for full 220 tasks, provide GDPVal dataset")
 
     # ── Source 5: task_values.jsonl (220 tasks, summary only) ──
     if not tasks and root:
@@ -112,8 +112,8 @@ def load_tasks(
         if tv_path.exists():
             tasks = _load_from_task_values(tv_path)
             source = f"task_values.jsonl ({tv_path})"
-            print(f"   ⚠️  Using task_summary as prompt (short descriptions)")
-            print(f"       For full prompts, provide GDPVal parquet or HuggingFace dataset")
+            print("   ⚠️  Using task_summary as prompt (short descriptions)")
+            print("       For full prompts, provide GDPVal parquet or HuggingFace dataset")
 
     # ── Enrich with pricing data ──
     if tasks and root:
@@ -143,17 +143,11 @@ def load_tasks(
 
     if sectors:
         sectors_lower = [s.lower() for s in sectors]
-        tasks = [
-            t for t in tasks
-            if any(sl in t.get("sector", "").lower() for sl in sectors_lower)
-        ]
+        tasks = [t for t in tasks if any(sl in t.get("sector", "").lower() for sl in sectors_lower)]
 
     if occupations:
         occ_lower = [o.lower() for o in occupations]
-        tasks = [
-            t for t in tasks
-            if any(ol in t.get("occupation", "").lower() for ol in occ_lower)
-        ]
+        tasks = [t for t in tasks if any(ol in t.get("occupation", "").lower() for ol in occ_lower)]
 
     # ── Stratified sampling (N per occupation) ──
     if per_occupation is not None and per_occupation > 0:
@@ -180,6 +174,7 @@ def load_tasks(
 # ═══════════════════════════════════════════════════════════════════
 # HuggingFace auto-download
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _try_huggingface() -> tuple:
     """Try to load from HuggingFace datasets library. Returns (tasks, source_desc) or ([], '')."""
@@ -219,6 +214,7 @@ def _try_huggingface() -> tuple:
 # Local file loaders
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _find_parquet(path: Path) -> Optional[Path]:
     """Find parquet file — handles both file path and directory."""
     if not path.exists():
@@ -253,9 +249,7 @@ def _load_from_parquet(parquet_path: Path, gdpval_dir: Path) -> List[Dict[str, A
             "occupation": str(row.get("occupation", "")),
             "sector": str(row.get("sector", "")),
             "prompt": str(row.get("prompt", "")),
-            "reference_files": _resolve_references(
-                row.get("reference_files", []), gdpval_dir
-            ),
+            "reference_files": _resolve_references(row.get("reference_files", []), gdpval_dir),
             "task_value_usd": 0.0,
             "hourly_wage": 0.0,
             "hours_estimate": 0.0,
@@ -328,6 +322,7 @@ def _load_from_task_values(tv_path: Path) -> List[Dict[str, Any]]:
 # Enrichment & utilities
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _enrich_with_pricing(tasks: List[Dict], clawwork_root: Path) -> None:
     """Merge pricing data from task_values.jsonl into tasks that lack it."""
     tv_path = clawwork_root / "scripts" / "task_value_estimates" / "task_values.jsonl"
@@ -361,9 +356,7 @@ def _enrich_with_pricing(tasks: List[Dict], clawwork_root: Path) -> None:
         print(f"   [pricing] Enriched {enriched} tasks with task values")
 
 
-def _stratified_sample(
-    tasks: List[Dict[str, Any]], per_occupation: int
-) -> List[Dict[str, Any]]:
+def _stratified_sample(tasks: List[Dict[str, Any]], per_occupation: int) -> List[Dict[str, Any]]:
     """Pick N tasks per occupation for balanced coverage.
 
     Groups tasks by ``occupation``, takes the first ``per_occupation`` from
@@ -380,8 +373,7 @@ def _stratified_sample(
         sampled.extend(by_occ[occ][:per_occupation])
 
     n_occ = len(by_occ)
-    print(f"   [stratified] {per_occupation} per occupation × {n_occ} occupations "
-          f"→ {len(sampled)} tasks")
+    print(f"   [stratified] {per_occupation} per occupation × {n_occ} occupations → {len(sampled)} tasks")
     return sampled
 
 
@@ -434,7 +426,7 @@ def prefetch_reference_files(
 
     # Collect all unique (rel_path, url) pairs across tasks
     # Use rel_path as the cache key (preserves directory structure)
-    file_map: Dict[str, str] = {}   # rel_path → url
+    file_map: Dict[str, str] = {}  # rel_path → url
     task_files: Dict[str, List[str]] = {}  # task_id → [rel_path, …]
 
     for task in tasks:
@@ -481,8 +473,7 @@ def prefetch_reference_files(
             failed_list.append(filename)
             logger.error(f"Prefetch failed: {filename} from {url}: {e}")
 
-    print(f"\n📦 Prefetch complete: {already} cached, {downloaded} downloaded, "
-          f"{len(failed_list)} failed")
+    print(f"\n📦 Prefetch complete: {already} cached, {downloaded} downloaded, {len(failed_list)} failed")
     if failed_list:
         print(f"  ⚠️  Failed files: {failed_list}")
         logger.warning(f"Prefetch failures: {failed_list}")
@@ -503,6 +494,7 @@ def prefetch_reference_files(
 # ═══════════════════════════════════════════════════════════════════
 # Reference file download & prompt augmentation
 # ═══════════════════════════════════════════════════════════════════
+
 
 def prepare_task_workspace(task: Dict[str, Any], workspace_dir: str) -> str:
     """Download reference files and return the augmented prompt.
@@ -642,6 +634,7 @@ def _download_file(url: str, dest: Path, timeout: int = 60, retries: int = 5) ->
     # ---------- Strategy 3: requests ----------
     try:
         import requests as _requests
+
         _download_via_requests(url, dest, timeout=timeout, retries=retries)
         return
     except ImportError:
@@ -662,17 +655,24 @@ def _download_via_curl(url: str, dest: Path, timeout: int = 60, retries: int = 5
     """Download using curl subprocess — bypasses Python SSL entirely."""
     cmd = [
         "curl",
-        "-fSL",                     # fail on HTTP errors, show errors, follow redirects
-        "--retry", str(retries),
-        "--retry-delay", "3",
-        "--retry-all-errors",       # retry on connection errors too, not just HTTP
-        "--connect-timeout", "30",
+        "-fSL",  # fail on HTTP errors, show errors, follow redirects
+        "--retry",
+        str(retries),
+        "--retry-delay",
+        "3",
+        "--retry-all-errors",  # retry on connection errors too, not just HTTP
+        "--connect-timeout",
+        "30",
         # No --max-time: large files (zips, videos) need unlimited transfer time.
         # Instead use --speed-limit/--speed-time to abort only if truly stalled.
-        "--speed-limit", "1024",    # abort if speed drops below 1 KB/s …
-        "--speed-time", "30",       # … for 30 consecutive seconds
-        "-o", str(dest),
-        "-H", "User-Agent: gdpval-bench/1.0",
+        "--speed-limit",
+        "1024",  # abort if speed drops below 1 KB/s …
+        "--speed-time",
+        "30",  # … for 30 consecutive seconds
+        "-o",
+        str(dest),
+        "-H",
+        "User-Agent: gdpval-bench/1.0",
         url,
     ]
     logger.info(f"curl: downloading {dest.name}")
@@ -689,14 +689,20 @@ def _download_via_wget(url: str, dest: Path, timeout: int = 60, retries: int = 5
     """Download using wget subprocess — bypasses Python SSL entirely."""
     cmd = [
         "wget",
-        "-q",                           # quiet
-        "--tries", str(retries),
-        "--timeout", str(timeout),
-        "--wait", "3",
-        "--waitretry", "5",
+        "-q",  # quiet
+        "--tries",
+        str(retries),
+        "--timeout",
+        str(timeout),
+        "--wait",
+        "3",
+        "--waitretry",
+        "5",
         "--no-dns-cache",
-        "-O", str(dest),
-        "--header", "User-Agent: gdpval-bench/1.0",
+        "-O",
+        str(dest),
+        "--header",
+        "User-Agent: gdpval-bench/1.0",
         url,
     ]
     logger.info(f"wget: downloading {dest.name}")
@@ -762,10 +768,12 @@ def _download_via_urllib(url: str, dest: Path, timeout: int = 60, retries: int =
 
     proxy = os.environ.get("https_proxy") or os.environ.get("HTTPS_PROXY")
     if proxy:
-        proxy_handler = urllib.request.ProxyHandler({
-            "https": proxy,
-            "http": os.environ.get("http_proxy") or os.environ.get("HTTP_PROXY") or proxy,
-        })
+        proxy_handler = urllib.request.ProxyHandler(
+            {
+                "https": proxy,
+                "http": os.environ.get("http_proxy") or os.environ.get("HTTP_PROXY") or proxy,
+            }
+        )
         opener = urllib.request.build_opener(proxy_handler, handler)
     else:
         opener = urllib.request.build_opener(handler)

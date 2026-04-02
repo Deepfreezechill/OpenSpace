@@ -13,10 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from unittest.mock import patch
 
 import pytest
-
 
 # ═══════════════════════════════════════════════════════════════════════
 #  Context Variable Tests
@@ -279,7 +277,7 @@ class TestRedaction:
         assert result["status"] == "ok"
 
     def test_truncates_long_values(self):
-        from openspace.domain.logging import _MAX_VALUE_LENGTH, _redact_sensitive
+        from openspace.domain.logging import _redact_sensitive
 
         long_value = "x" * 2000
         event = {"event": "test", "output": long_value}
@@ -382,7 +380,7 @@ class TestIntegration:
 
     def test_stdlib_logger_still_works(self):
         """stdlib loggers produce output and go through shared processors."""
-        from openspace.domain.logging import configure_logging, bind_context
+        from openspace.domain.logging import bind_context, configure_logging
 
         configure_logging(level=logging.DEBUG, colors=False)
         bind_context(task_id="stdlib-t1")
@@ -390,6 +388,7 @@ class TestIntegration:
         stdlib_logger = logging.getLogger("openspace.test_stdlib_bridge")
         # Capture output from the root handler
         import io
+
         capture = io.StringIO()
         handler = logging.StreamHandler(capture)
         handler.setLevel(logging.DEBUG)

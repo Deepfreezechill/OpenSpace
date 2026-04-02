@@ -8,15 +8,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from openspace.agents import GroundingAgent
-from openspace.llm import LLMClient
-from openspace.grounding.core.grounding_client import GroundingClient
+from openspace.app.container import AppContainer
 from openspace.config import get_config, load_config
 from openspace.config.loader import get_agent_config
+from openspace.grounding.core.grounding_client import GroundingClient
+from openspace.llm import LLMClient
 from openspace.recording import RecordingManager
-from openspace.skill_engine import SkillRegistry, ExecutionAnalyzer, SkillStore
+from openspace.skill_engine import ExecutionAnalyzer, SkillRegistry, SkillStore
 from openspace.skill_engine.evolver import SkillEvolver
 from openspace.utils.logging import Logger
-from openspace.app.container import AppContainer
 
 logger = Logger.get_logger(__name__)
 
@@ -30,28 +30,28 @@ class OpenSpaceConfig:
     llm_max_retries: int = 3
     llm_rate_limit_delay: float = 0.0
     llm_kwargs: Dict[str, Any] = field(default_factory=dict)
-    
+
     # Separate models for specific tasks (None = use llm_model)
     tool_retrieval_model: Optional[str] = None  # Model for tool retrieval LLM filter
     visual_analysis_model: Optional[str] = None  # Model for visual analysis
-    
+
     # Skill Engine Models — names map to class names (None = use llm_model)
-    skill_registry_model: Optional[str] = None        # SkillRegistry: skill selection
-    execution_analyzer_model: Optional[str] = None    # ExecutionAnalyzer: post-execution analysis
-    skill_evolver_model: Optional[str] = None         # (future) SkillEvolver: skill evolution
-    
+    skill_registry_model: Optional[str] = None  # SkillRegistry: skill selection
+    execution_analyzer_model: Optional[str] = None  # ExecutionAnalyzer: post-execution analysis
+    skill_evolver_model: Optional[str] = None  # (future) SkillEvolver: skill evolution
+
     # Grounding Configuration
     grounding_config_path: Optional[str] = None
     grounding_max_iterations: int = 20
     grounding_system_prompt: Optional[str] = None
-    
+
     # Backend Configuration
     backend_scope: Optional[List[str]] = None  # None = All backends ["shell", "gui", "mcp", "web", "system"]
     use_clawwork_productivity: bool = False  # If True, add ClawWork productivity tools (search_web, create_file, etc.) for fair comparison with ClawWork; requires livebench installed.
-    
+
     # Workspace Configuration
     workspace_dir: Optional[str] = None
-    
+
     # Recording Configuration
     enable_recording: bool = True
     recording_backends: Optional[List[str]] = None
@@ -59,20 +59,20 @@ class OpenSpaceConfig:
     enable_screenshot: bool = False
     enable_video: bool = False
     enable_conversation_log: bool = True  # Save LLM conversations to conversations.jsonl
-    
+
     # Skill Evolution
-    evolution_max_concurrent: int = 3        # Max parallel evolutions per trigger
-    
+    evolution_max_concurrent: int = 3  # Max parallel evolutions per trigger
+
     # Logging Configuration
     log_level: str = "INFO"
     log_to_file: bool = False
     log_file_path: Optional[str] = None
-    
+
     def __post_init__(self):
         """Validate configuration"""
         if not self.llm_model:
             raise ValueError("llm_model is required")
-        
+
         logger.debug(f"OpenSpaceConfig initialized with model: {self.llm_model}")
 
 
@@ -119,7 +119,7 @@ class OpenSpace:
     ):
         self.config = config or OpenSpaceConfig()
         self._container = container or AppContainer()
-        
+
         self._llm_client: Optional[LLMClient] = None
         self._grounding_client: Optional[GroundingClient] = None
         self._grounding_config = None  # GroundingConfig reference for skill settings
@@ -131,12 +131,12 @@ class OpenSpace:
         self._skill_evolver: Optional[SkillEvolver] = None
         self._execution_count: int = 0  # For periodic metric-based evolution
         self._last_evolved_skills: List[Dict[str, Any]] = []  # Tracks skills evolved during last execute()
-        
+
         self._initialized = False
         self._running = False
         self._task_done = asyncio.Event()
         self._task_done.set()  # Initially not running, so "done"
-        
+
         logger.debug("OpenSpace instance created")
 
     # ── Factory methods ───────────────────────────────────────────────
@@ -194,14 +194,14 @@ class OpenSpace:
     def skill_evolver(self) -> Optional[SkillEvolver]:
         """The skill evolution engine, or ``None`` if not initialized."""
         return self._skill_evolver
-    
+
     async def initialize(self) -> None:
         if self._initialized:
             logger.warning("OpenSpace already initialized")
             return
-        
+
         logger.info("Initializing OpenSpace...")
-        
+
         try:
             self._llm_client = LLMClient(
                 model=self.config.llm_model,
@@ -209,27 +209,26 @@ class OpenSpace:
                 rate_limit_delay=self.config.llm_rate_limit_delay,
                 max_retries=self.config.llm_max_retries,
                 timeout=self.config.llm_timeout,
-                **self.config.llm_kwargs
+                **self.config.llm_kwargs,
             )
             logger.info(f"✓ LLM Client: {self.config.llm_model}")
-            
+
             # Load grounding config
             # If custom config is provided, merge it with default configs
             # load_config supports multiple files and deep merges them (later files override earlier ones)
             if self.config.grounding_config_path:
-                from openspace.config.loader import CONFIG_DIR
                 from openspace.config.constants import CONFIG_GROUNDING, CONFIG_SECURITY
+                from openspace.config.loader import CONFIG_DIR
+
                 # Load default configs + custom config (custom values will override defaults)
                 grounding_config = load_config(
-                    CONFIG_DIR / CONFIG_GROUNDING,
-                    CONFIG_DIR / CONFIG_SECURITY,
-                    self.config.grounding_config_path
+                    CONFIG_DIR / CONFIG_GROUNDING, CONFIG_DIR / CONFIG_SECURITY, self.config.grounding_config_path
                 )
                 logger.info(f"Merged custom grounding config: {self.config.grounding_config_path}")
             else:
                 # Load default configs only
                 grounding_config = get_config()
-            
+
             # Optional: enable ClawWork productivity tools for fair benchmark comparison
             if getattr(self.config, "use_clawwork_productivity", False):
                 shell_cfg = grounding_config.shell.model_copy(
@@ -240,7 +239,7 @@ class OpenSpace:
                 )
                 grounding_config = grounding_config.model_copy(update={"shell": shell_cfg})
                 logger.info("ClawWork productivity tools enabled (shell.working_dir used as sandbox root)")
-            
+
             # Resolve backend_scope early so we can skip initializing
             # providers that are not in scope (e.g. web when only shell is needed).
             agent_config = get_agent_config("GroundingAgent")
@@ -252,10 +251,16 @@ class OpenSpace:
                     max_iterations = _cli_max_iter
                 else:
                     max_iterations = cfg_max_iter
-                backend_scope = self.config.backend_scope or agent_config.get("backend_scope") or ["gui", "shell", "mcp", "web", "system"]
+                backend_scope = (
+                    self.config.backend_scope
+                    or agent_config.get("backend_scope")
+                    or ["gui", "shell", "mcp", "web", "system"]
+                )
                 visual_analysis_timeout = agent_config.get("visual_analysis_timeout", 30.0)
                 self.config.grounding_max_iterations = max_iterations
-                logger.info(f"Loaded GroundingAgent config from config_agents.json (max_iterations={max_iterations}, visual_analysis_timeout={visual_analysis_timeout}s)")
+                logger.info(
+                    f"Loaded GroundingAgent config from config_agents.json (max_iterations={max_iterations}, visual_analysis_timeout={visual_analysis_timeout}s)"
+                )
             else:
                 max_iterations = self.config.grounding_max_iterations
                 backend_scope = self.config.backend_scope or ["gui", "shell", "mcp", "web", "system"]
@@ -267,27 +272,25 @@ class OpenSpace:
             if grounding_config.enabled_backends:
                 scope_set = set(backend_scope)
                 filtered = [
-                    entry for entry in grounding_config.enabled_backends
-                    if entry.get("name", "").lower() in scope_set
+                    entry for entry in grounding_config.enabled_backends if entry.get("name", "").lower() in scope_set
                 ]
                 if len(filtered) != len(grounding_config.enabled_backends):
                     skipped = [
-                        entry.get("name") for entry in grounding_config.enabled_backends
+                        entry.get("name")
+                        for entry in grounding_config.enabled_backends
                         if entry.get("name", "").lower() not in scope_set
                     ]
                     logger.info(f"Skipping backends not in scope: {skipped}")
-                    grounding_config = grounding_config.model_copy(
-                        update={"enabled_backends": filtered}
-                    )
+                    grounding_config = grounding_config.model_copy(update={"enabled_backends": filtered})
 
             self._grounding_config = grounding_config
             self._grounding_client = GroundingClient(config=grounding_config)
             await self._grounding_client.initialize_all_providers()
-            
+
             backends = list(self._grounding_client.list_providers().keys())
             logger.info(f"✓ Grounding Client: {len(backends)} backends")
             logger.debug(f"  Available backends: {[b.value for b in backends]}")
-            
+
             if self.config.enable_recording:
                 self._recording_manager = RecordingManager(
                     enabled=True,
@@ -303,7 +306,7 @@ class OpenSpace:
                 self._grounding_client.recording_manager = self._recording_manager
                 self._recording_manager.register_to_llm(self._llm_client)
                 logger.info(f"✓ Recording enabled: {len(self._recording_manager.backends or [])} backends")
-            
+
             # Create separate LLM client for tool retrieval if configured
             # Inherits llm_kwargs (api_key, api_base, etc.) so credentials
             # from the host agent are shared across all internal LLM clients.
@@ -316,7 +319,7 @@ class OpenSpace:
                     **self.config.llm_kwargs,
                 )
                 logger.info(f"✓ Tool retrieval LLM: {self.config.tool_retrieval_model}")
-            
+
             self._grounding_agent = GroundingAgent(
                 name="OpenSpace-GroundingAgent",
                 backend_scope=backend_scope,
@@ -330,7 +333,7 @@ class OpenSpace:
                 visual_analysis_model=self.config.visual_analysis_model,
             )
             logger.info(f"✓ GroundingAgent: {', '.join(backend_scope)}")
-            
+
             # Initialize SkillRegistry (settings from config_grounding.json → skills)
             if self._grounding_config and self._grounding_config.skills.enabled:
                 self._skill_registry = self._init_skill_registry()
@@ -348,16 +351,11 @@ class OpenSpace:
                     # Sync filesystem skills → DB (creates initial records
                     # for newly discovered skills so that analysis stats
                     # can be recorded against them from the very first run).
-                    await skill_store.sync_from_registry(
-                        self._skill_registry.list_skills()
-                    )
+                    await skill_store.sync_from_registry(self._skill_registry.list_skills())
 
                     # Bridge: pass quality_manager so analysis can feed back
                     # LLM-identified tool issues to the tool quality system.
-                    quality_mgr = (
-                        self._grounding_client.quality_manager
-                        if self._grounding_client else None
-                    )
+                    quality_mgr = self._grounding_client.quality_manager if self._grounding_client else None
                     self._execution_analyzer = ExecutionAnalyzer(
                         store=skill_store,
                         llm_client=self._llm_client,
@@ -380,23 +378,20 @@ class OpenSpace:
                         model=self.config.skill_evolver_model,
                         max_concurrent=self.config.evolution_max_concurrent,
                     )
-                    logger.info(
-                        f"✓ Skill evolution enabled "
-                        f"(concurrent={self.config.evolution_max_concurrent})"
-                    )
+                    logger.info(f"✓ Skill evolution enabled (concurrent={self.config.evolution_max_concurrent})")
                 except Exception as e:
                     logger.warning(f"Execution analyzer init failed (non-fatal): {e}")
-            
+
             self._initialized = True
-            logger.info("="*60)
+            logger.info("=" * 60)
             logger.info("OpenSpace ready to use!")
-            logger.info("="*60)
-            
+            logger.info("=" * 60)
+
         except Exception as e:
             logger.error(f"Failed to initialize OpenSpace: {e}")
             await self.cleanup()
             raise
-    
+
     async def execute(
         self,
         task: str,
@@ -407,7 +402,7 @@ class OpenSpace:
     ) -> Dict[str, Any]:
         """
         Execute a task with OpenSpace.
-        
+
         Args:
             task: Task instruction
             context: Additional context
@@ -418,11 +413,8 @@ class OpenSpace:
                      so recordings can be easily matched with benchmark results.
         """
         if not self._initialized:
-            raise RuntimeError(
-                "OpenSpace not initialized. "
-                "Call await tool_layer.initialize() first or use async with."
-            )
-        
+            raise RuntimeError("OpenSpace not initialized. Call await tool_layer.initialize() first or use async with.")
+
         _TASK_WAIT_TIMEOUT = 660  # slightly longer than MCP tool timeout (600s)
         if self._running:
             logger.info(
@@ -430,19 +422,16 @@ class OpenSpace:
                 _TASK_WAIT_TIMEOUT,
             )
             try:
-                await asyncio.wait_for(
-                    self._task_done.wait(), timeout=_TASK_WAIT_TIMEOUT
-                )
+                await asyncio.wait_for(self._task_done.wait(), timeout=_TASK_WAIT_TIMEOUT)
             except asyncio.TimeoutError:
                 raise RuntimeError(
-                    f"OpenSpace is still running after waiting {_TASK_WAIT_TIMEOUT}s. "
-                    "Please try again later."
+                    f"OpenSpace is still running after waiting {_TASK_WAIT_TIMEOUT}s. Please try again later."
                 )
-        
-        logger.info("="*60)
+
+        logger.info("=" * 60)
         logger.info(f"Task: {task[:100]}...")
-        logger.info("="*60)
-        
+        logger.info("=" * 60)
+
         self._running = True
         self._task_done.clear()
         self._last_evolved_skills = []  # Reset per-execution tracking
@@ -459,20 +448,20 @@ class OpenSpace:
             execution_context = context or {}
             execution_context["task_id"] = task_id
             execution_context["instruction"] = task
-            
+
             if max_iterations is not None:
                 execution_context["max_iterations"] = max_iterations
-            
+
             if self._recording_manager:
                 if self._recording_manager.recording_status:
                     await self._recording_manager.stop()
                     logger.debug("Stopped previous recording session")
-                
+
                 self._recording_manager.task_id = task_id
                 await self._recording_manager.start()
                 await self._recording_manager.add_metadata("instruction", task)
                 logger.info(f"Recording started: {task_id}")
-            
+
             if workspace_dir:
                 execution_context["workspace_dir"] = workspace_dir
                 logger.info(f"Workspace: {workspace_dir}")
@@ -485,6 +474,7 @@ class OpenSpace:
             else:
                 import tempfile
                 from pathlib import Path
+
                 workspace = Path(tempfile.gettempdir()) / "openspace_workspace" / task_id
                 workspace.mkdir(parents=True, exist_ok=True)
                 execution_context["workspace_dir"] = str(workspace)
@@ -496,12 +486,13 @@ class OpenSpace:
             resolved_ws = execution_context["workspace_dir"]
             try:
                 from openspace.grounding.core.types import BackendType as _BT
+
                 shell_prov = self._grounding_client._registry.get(_BT.SHELL)
                 for sess in shell_prov._sessions.values():
                     sess.default_working_dir = resolved_ws
             except Exception:
                 pass
-            
+
             # Resolve iteration budget: use the larger of the caller's value
             # and the configured value so external callers can't accidentally
             # starve the agent with a too-low budget.
@@ -519,10 +510,7 @@ class OpenSpace:
                 has_skills = await self._select_and_inject_skills(task)
 
             if has_skills:
-                logger.info(
-                    f"[Phase 1 — Skill] Executing with skill guidance "
-                    f"(max {max_iterations} iterations)..."
-                )
+                logger.info(f"[Phase 1 — Skill] Executing with skill guidance (max {max_iterations} iterations)...")
                 execution_context_p1 = {**execution_context}
                 execution_context_p1["max_iterations"] = max_iterations
 
@@ -532,9 +520,10 @@ class OpenSpace:
                 if workspace_path:
                     try:
                         from pathlib import Path as _P
-                        pre_skill_files = {
-                            f.name for f in _P(workspace_path).iterdir()
-                        } if _P(workspace_path).exists() else set()
+
+                        pre_skill_files = (
+                            {f.name for f in _P(workspace_path).iterdir()} if _P(workspace_path).exists() else set()
+                        )
                     except Exception:
                         pass
 
@@ -550,10 +539,7 @@ class OpenSpace:
                 if skill_status == "success":
                     result = skill_phase_result
                     result["active_skills"] = injected_skill_ids
-                    logger.info(
-                        f"[Phase 1 — Skill] Completed successfully "
-                        f"({skill_iterations} iterations)"
-                    )
+                    logger.info(f"[Phase 1 — Skill] Completed successfully ({skill_iterations} iterations)")
                 else:
                     # Skill failed — fall back to pure tool execution.
                     # Fallback gets the full budget because we clean the
@@ -571,6 +557,7 @@ class OpenSpace:
                         try:
                             import shutil
                             from pathlib import Path as _P
+
                             ws = _P(workspace_path)
                             removed = 0
                             if ws.exists():
@@ -583,8 +570,7 @@ class OpenSpace:
                                         removed += 1
                             if removed:
                                 logger.info(
-                                    f"[Phase 2 — Fallback] Cleaned {removed} artifact(s) "
-                                    f"from failed skill-guided phase"
+                                    f"[Phase 2 — Fallback] Cleaned {removed} artifact(s) from failed skill-guided phase"
                                 )
                         except Exception as e:
                             logger.debug(f"Workspace cleanup failed: {e}")
@@ -600,38 +586,32 @@ class OpenSpace:
                     )
             else:
                 # No skills matched — standard tool-only execution
-                logger.info(
-                    f"Executing with GroundingAgent "
-                    f"(max {max_iterations} iterations, no skills)..."
-                )
+                logger.info(f"Executing with GroundingAgent (max {max_iterations} iterations, no skills)...")
                 result = await self._grounding_agent.process(execution_context)
 
             execution_time = asyncio.get_event_loop().time() - start_time
-            
-            status = result.get('status', 'unknown')
-            iterations = result.get('iterations', 0)
-            tool_count = len(result.get('tool_executions', []))
-            
-            logger.info("="*60)
+
+            status = result.get("status", "unknown")
+            iterations = result.get("iterations", 0)
+            tool_count = len(result.get("tool_executions", []))
+
+            logger.info("=" * 60)
             if status == "success":
                 logger.info(
                     f"Task completed successfully! "
                     f"({iterations} iterations, {tool_count} tool calls, {execution_time:.2f}s)"
                 )
             elif status == "incomplete":
-                logger.warning(
-                    f"Task incomplete after {iterations} iterations. "
-                    f"Consider increasing max_iterations."
-                )
+                logger.warning(f"Task incomplete after {iterations} iterations. Consider increasing max_iterations.")
             else:
                 logger.error(f"Task failed: {result.get('error', 'Unknown error')}")
-            logger.info("="*60)
-            
+            logger.info("=" * 60)
+
         except Exception as e:
             execution_time = asyncio.get_event_loop().time() - start_time
             tb = traceback.format_exc(limit=10)
             logger.error(f"Task execution failed: {e}", exc_info=True)
-            
+
             result = {
                 "status": "error",
                 "error": str(e),
@@ -642,7 +622,7 @@ class OpenSpace:
                 "iterations": 0,
                 "tool_executions": [],
             }
-        
+
         finally:
             recording_dir = None
             if self._recording_manager and self._recording_manager.recording_status:
@@ -667,9 +647,7 @@ class OpenSpace:
 
             # Run execution analysis + evolution BEFORE building the return
             # value, so evolved_skills is populated.
-            await self._maybe_analyze_execution(
-                task_id, recording_dir, result
-            )
+            await self._maybe_analyze_execution(task_id, recording_dir, result)
 
             # Trigger quality evolution periodically
             await self._maybe_evolve_quality()
@@ -681,12 +659,12 @@ class OpenSpace:
                 "skills_used": result.get("active_skills", []),
                 "evolved_skills": list(self._last_evolved_skills),
             }
-            
+
             self._running = False
             self._task_done.set()
-            
+
             return final_result
-    
+
     # Skills helpers
     def _init_skill_registry(self) -> Optional[SkillRegistry]:
         """Build and populate the SkillRegistry from configured directories.
@@ -706,6 +684,7 @@ class OpenSpace:
 
         # 1. Host agent skill directories from env (standalone mode support)
         import os
+
         host_dirs_raw = os.environ.get("OPENSPACE_HOST_SKILL_DIRS", "")
         if host_dirs_raw:
             for d in host_dirs_raw.split(","):
@@ -835,7 +814,7 @@ class OpenSpace:
             )
 
         # 2. Tool retrieval model
-        if hasattr(self._grounding_agent, '_tool_retrieval_llm') and self._grounding_agent._tool_retrieval_llm:
+        if hasattr(self._grounding_agent, "_tool_retrieval_llm") and self._grounding_agent._tool_retrieval_llm:
             return self._grounding_agent._tool_retrieval_llm
 
         # 3. Main LLM client
@@ -859,9 +838,7 @@ class OpenSpace:
         try:
             # Pass the agent's tools so the analyzer can reuse them
             # for error reproduction / verification when needed.
-            agent_tools = getattr(
-                self._grounding_agent, "_last_tools", []
-            ) if self._grounding_agent else []
+            agent_tools = getattr(self._grounding_agent, "_last_tools", []) if self._grounding_agent else []
 
             analysis = await self._execution_analyzer.analyze_execution(
                 task_id=task_id,
@@ -885,16 +862,18 @@ class OpenSpace:
 
                 # Track evolved skills for the caller
                 for rec in evolved_records:
-                    self._last_evolved_skills.append({
-                        "skill_id": rec.skill_id,
-                        "name": rec.name,
-                        "description": rec.description,
-                        "path": str(rec.path) if rec.path else "",
-                        "origin": rec.lineage.origin.value,
-                        "generation": rec.lineage.generation,
-                        "parent_skill_ids": rec.lineage.parent_skill_ids,
-                        "change_summary": rec.lineage.change_summary,
-                    })
+                    self._last_evolved_skills.append(
+                        {
+                            "skill_id": rec.skill_id,
+                            "name": rec.name,
+                            "description": rec.description,
+                            "path": str(rec.path) if rec.path else "",
+                            "origin": rec.lineage.origin.value,
+                            "generation": rec.lineage.generation,
+                            "parent_skill_ids": rec.lineage.parent_skill_ids,
+                            "change_summary": rec.lineage.change_summary,
+                        }
+                    )
 
         except Exception as e:
             # Analysis failure must never break the main execution flow
@@ -913,10 +892,7 @@ class OpenSpace:
         via ``cleanup() → evolver.wait_background()``.
         """
         self._execution_count += 1
-        quality_mgr = (
-            self._grounding_client.quality_manager
-            if self._grounding_client else None
-        )
+        quality_mgr = self._grounding_client.quality_manager if self._grounding_client else None
 
         # Ensure evolver has up-to-date tools for agent loop
         if self._skill_evolver and self._grounding_agent:
@@ -935,10 +911,7 @@ class OpenSpace:
                 if self._skill_evolver:
                     problematic = quality_mgr.get_problematic_tools()
                     if problematic:
-                        logger.info(
-                            f"[Trigger:tool_degradation] {len(problematic)} "
-                            f"problematic tool(s) detected"
-                        )
+                        logger.info(f"[Trigger:tool_degradation] {len(problematic)} problematic tool(s) detected")
                         self._skill_evolver.schedule_background(
                             self._skill_evolver.process_tool_degradation(problematic),
                             label="trigger2_tool_degradation",
@@ -956,14 +929,14 @@ class OpenSpace:
                 )
             except Exception as e:
                 logger.debug(f"Skill metric check skipped: {e}")
-    
+
     async def cleanup(self) -> None:
         """
         Close all sessions and release resources.
         Automatically called when using context manager.
         """
         logger.info("Cleaning up OpenSpace resources...")
-        
+
         try:
             # Wait for background evolution tasks before tearing down
             if self._skill_evolver:
@@ -972,7 +945,7 @@ class OpenSpace:
             if self._grounding_client:
                 await self._grounding_client.close_all_sessions()
                 logger.debug("All grounding sessions closed")
-            
+
             if self._recording_manager and self._recording_manager.recording_status:
                 try:
                     await self._recording_manager.stop()
@@ -986,45 +959,45 @@ class OpenSpace:
                     logger.debug("Execution analyzer closed")
                 except Exception as e:
                     logger.debug(f"Failed to close execution analyzer: {e}")
-            
+
             self._initialized = False
             self._running = False
             self._task_done.set()
-            
+
             logger.info("OpenSpace cleanup complete")
-            
+
         except Exception as e:
             logger.error(f"Error during cleanup: {e}", exc_info=True)
-    
+
     def is_initialized(self) -> bool:
         return self._initialized
-    
+
     def is_running(self) -> bool:
         return self._running
-    
+
     def get_config(self) -> OpenSpaceConfig:
         return self.config
-    
+
     def list_backends(self) -> List[str]:
         if not self._initialized:
             raise RuntimeError("OpenSpace not initialized")
         return [backend.value for backend in self._grounding_client.list_providers().keys()]
-    
+
     def list_sessions(self) -> List[str]:
         if not self._initialized:
             raise RuntimeError("OpenSpace not initialized")
         return self._grounding_client.list_sessions()
-    
+
     async def __aenter__(self):
         """Context manager entry"""
         await self.initialize()
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit"""
         await self.cleanup()
         return False
-    
+
     def __repr__(self) -> str:
         status = "initialized" if self._initialized else "not initialized"
         if self._running:

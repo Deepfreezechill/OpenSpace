@@ -5,11 +5,10 @@ This module provides a connector for communicating with MCP implementations
 through the standard input/output streams.
 """
 
-import sys
-
-from mcp import ClientSession, StdioServerParameters
+from mcp import StdioServerParameters
 
 from openspace.utils.logging import Logger
+
 from ..task_managers import StdioConnectionManager
 from .base import MCPBaseConnector
 
@@ -42,7 +41,7 @@ class StdioConnector(MCPBaseConnector):
         """
         self.command = command
         self.args = args or []  # Ensure args is never None
-        
+
         # Ensure env is not None and add settings to suppress non-JSON output from servers
         self.env = env or {}
         # Add environment variables to encourage MCP servers to suppress non-JSON output
@@ -52,9 +51,9 @@ class StdioConnector(MCPBaseConnector):
         # Add flag to suppress informational messages (some servers respect this)
         if "MCP_SILENT" not in self.env:
             self.env["MCP_SILENT"] = "true"
-        
+
         self.errlog = errlog
-        
+
         # Create server parameters and connection manager
         # StdioConnectionManager will wrap errlog in FilteredStderrWrapper
         server_params = StdioServerParameters(command=self.command, args=self.args, env=self.env)

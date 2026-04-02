@@ -19,20 +19,20 @@ logger = logging.getLogger("openspace.host_detection")
 
 PROVIDER_REGISTRY: List[tuple] = [
     # Gateways
-    ("openrouter",  ("openrouter",),                  "https://openrouter.ai/api/v1"),
-    ("aihubmix",    ("aihubmix",),                    "https://aihubmix.com/v1"),
-    ("siliconflow", ("siliconflow",),                 "https://api.siliconflow.cn/v1"),
-    ("volcengine",  ("volcengine", "volces", "ark"),  "https://ark.cn-beijing.volces.com/api/v3"),
+    ("openrouter", ("openrouter",), "https://openrouter.ai/api/v1"),
+    ("aihubmix", ("aihubmix",), "https://aihubmix.com/v1"),
+    ("siliconflow", ("siliconflow",), "https://api.siliconflow.cn/v1"),
+    ("volcengine", ("volcengine", "volces", "ark"), "https://ark.cn-beijing.volces.com/api/v3"),
     # Standard providers
-    ("anthropic",   ("anthropic", "claude"),           ""),
-    ("openai",      ("openai", "gpt"),                 ""),
-    ("deepseek",    ("deepseek",),                     ""),
-    ("gemini",      ("gemini",),                       ""),
-    ("zhipu",       ("zhipu", "glm", "zai"),           ""),
-    ("dashscope",   ("qwen", "dashscope"),             ""),
-    ("moonshot",    ("moonshot", "kimi"),               "https://api.moonshot.ai/v1"),
-    ("minimax",     ("minimax",),                      "https://api.minimax.io/v1"),
-    ("groq",        ("groq",),                         ""),
+    ("anthropic", ("anthropic", "claude"), ""),
+    ("openai", ("openai", "gpt"), ""),
+    ("deepseek", ("deepseek",), ""),
+    ("gemini", ("gemini",), ""),
+    ("zhipu", ("zhipu", "glm", "zai"), ""),
+    ("dashscope", ("qwen", "dashscope"), ""),
+    ("moonshot", ("moonshot", "kimi"), "https://api.moonshot.ai/v1"),
+    ("minimax", ("minimax",), "https://api.minimax.io/v1"),
+    ("groq", ("groq",), ""),
 ]
 
 NANOBOT_CONFIG_PATH = Path.home() / ".nanobot" / "config.json"
@@ -68,6 +68,7 @@ def match_provider(
         ``{"api_key": ..., "api_base": ..., "extra_headers": ...}``
         (litellm-compatible), or None.
     """
+
     def _extract(prov_dict: Dict[str, Any], default_base: str = "") -> Optional[Dict[str, Any]]:
         api_key = prov_dict.get("apiKey") or prov_dict.get("api_key") or ""
         if not api_key:
@@ -155,9 +156,9 @@ def try_read_nanobot_config(model: str) -> Optional[Dict[str, Any]]:
 
     if result:
         logger.info(
-            "Auto-detected LLM credentials from nanobot config (%s), "
-            "provider matched for model=%r",
-            NANOBOT_CONFIG_PATH, match_model,
+            "Auto-detected LLM credentials from nanobot config (%s), provider matched for model=%r",
+            NANOBOT_CONFIG_PATH,
+            match_model,
         )
 
     return result
@@ -194,6 +195,7 @@ def get_openai_api_key() -> Optional[str]:
       3. None
     """
     import os
+
     key = os.environ.get("OPENAI_API_KEY")
     if key:
         return key
@@ -209,4 +211,3 @@ def get_openai_api_key() -> Optional[str]:
                     logger.debug("Using OpenAI API key from nanobot config for embeddings")
                     return api_key
     return None
-

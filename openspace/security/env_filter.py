@@ -18,12 +18,14 @@ __all__ = ["get_safe_env", "is_sensitive_key", "ENV_ALLOWLIST"]
 # Allowlist — the ONLY env vars that may reach the sandbox
 # ---------------------------------------------------------------------------
 
-ENV_ALLOWLIST: FrozenSet[str] = frozenset({
-    "OPENSPACE_LOG_LEVEL",
-    "PATH",
-    "HOME",
-    "LANG",
-})
+ENV_ALLOWLIST: FrozenSet[str] = frozenset(
+    {
+        "OPENSPACE_LOG_LEVEL",
+        "PATH",
+        "HOME",
+        "LANG",
+    }
+)
 
 # ---------------------------------------------------------------------------
 # Sensitive-key heuristic

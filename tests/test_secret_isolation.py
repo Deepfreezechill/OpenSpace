@@ -13,22 +13,22 @@ import textwrap
 
 import pytest
 
+from openspace.security import check_code_safety
+from openspace.security.ast_scanner import (
+    Severity,
+    load_blocklist,
+    scan_code,
+)
 from openspace.security.env_filter import (
     ENV_ALLOWLIST,
     get_safe_env,
     is_sensitive_key,
 )
-from openspace.security.ast_scanner import (
-    Severity,
-    scan_code,
-    load_blocklist,
-)
-from openspace.security import check_code_safety
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _names(findings):
     return {f.pattern_name for f in findings}
@@ -41,6 +41,7 @@ def _severities_for(findings, pattern_name):
 # ---------------------------------------------------------------------------
 # Issue #13 — get_safe_env() allowlist
 # ---------------------------------------------------------------------------
+
 
 class TestGetSafeEnv:
     """get_safe_env() must return ONLY allowlisted variables."""
@@ -73,24 +74,27 @@ class TestGetSafeEnv:
         safe = get_safe_env()
         assert "OPENSPACE_LOG_LEVEL" not in safe
 
-    @pytest.mark.parametrize("dangerous_key", [
-        "AWS_SECRET_ACCESS_KEY",
-        "AWS_ACCESS_KEY_ID",
-        "GITHUB_TOKEN",
-        "OPENAI_API_KEY",
-        "AZURE_CLIENT_SECRET",
-        "DATABASE_URL",
-        "DB_PASSWORD",
-        "PRIVATE_KEY",
-        "GH_TOKEN",
-        "ANTHROPIC_API_KEY",
-        "SLACK_BOT_TOKEN",
-        "STRIPE_SECRET_KEY",
-        "SENDGRID_API_KEY",
-        "JWT_SECRET",
-        "SESSION_SECRET",
-        "SIGNING_KEY",
-    ])
+    @pytest.mark.parametrize(
+        "dangerous_key",
+        [
+            "AWS_SECRET_ACCESS_KEY",
+            "AWS_ACCESS_KEY_ID",
+            "GITHUB_TOKEN",
+            "OPENAI_API_KEY",
+            "AZURE_CLIENT_SECRET",
+            "DATABASE_URL",
+            "DB_PASSWORD",
+            "PRIVATE_KEY",
+            "GH_TOKEN",
+            "ANTHROPIC_API_KEY",
+            "SLACK_BOT_TOKEN",
+            "STRIPE_SECRET_KEY",
+            "SENDGRID_API_KEY",
+            "JWT_SECRET",
+            "SESSION_SECRET",
+            "SIGNING_KEY",
+        ],
+    )
     def test_dangerous_vars_stripped(self, mock_env, dangerous_key):
         mock_env.set(dangerous_key, "secret-value")
         safe = get_safe_env()
@@ -111,39 +115,46 @@ class TestGetSafeEnv:
 # Issue #13 — is_sensitive_key() heuristic
 # ---------------------------------------------------------------------------
 
+
 class TestIsSensitiveKey:
     """Heuristic must catch common sensitive variable naming patterns."""
 
-    @pytest.mark.parametrize("key", [
-        "AWS_SECRET_ACCESS_KEY",
-        "GITHUB_TOKEN",
-        "OPENAI_API_KEY",
-        "DATABASE_URL",
-        "DB_URL",
-        "DB_PASSWORD",
-        "AZURE_CLIENT_SECRET",
-        "PRIVATE_KEY",
-        "GH_AUTH_TOKEN",
-        "MY_CREDENTIAL",
-        "SIGNING_KEY",
-        "CONNECTION_STRING",
-        "ACCESS_KEY_ID",
-    ])
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "AWS_SECRET_ACCESS_KEY",
+            "GITHUB_TOKEN",
+            "OPENAI_API_KEY",
+            "DATABASE_URL",
+            "DB_URL",
+            "DB_PASSWORD",
+            "AZURE_CLIENT_SECRET",
+            "PRIVATE_KEY",
+            "GH_AUTH_TOKEN",
+            "MY_CREDENTIAL",
+            "SIGNING_KEY",
+            "CONNECTION_STRING",
+            "ACCESS_KEY_ID",
+        ],
+    )
     def test_detects_sensitive_keys(self, key):
         assert is_sensitive_key(key) is True
 
-    @pytest.mark.parametrize("key", [
-        "PATH",
-        "HOME",
-        "LANG",
-        "SHELL",
-        "TERM",
-        "USER",
-        "HOSTNAME",
-        "OPENSPACE_LOG_LEVEL",
-        "PYTHONPATH",
-        "NODE_ENV",
-    ])
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "PATH",
+            "HOME",
+            "LANG",
+            "SHELL",
+            "TERM",
+            "USER",
+            "HOSTNAME",
+            "OPENSPACE_LOG_LEVEL",
+            "PYTHONPATH",
+            "NODE_ENV",
+        ],
+    )
     def test_safe_keys_not_flagged(self, key):
         assert is_sensitive_key(key) is False
 
@@ -159,6 +170,7 @@ class TestIsSensitiveKey:
 # ---------------------------------------------------------------------------
 # Issue #14 — AST blocklist severity upgrades
 # ---------------------------------------------------------------------------
+
 
 class TestBlocklistSeverityUpgrades:
     """os.environ and os.getenv must be HIGH; os.environ.get must be present."""
@@ -191,14 +203,13 @@ class TestBlocklistSeverityUpgrades:
         env_patterns = [p for p in patterns if p.name.startswith("env_")]
         assert len(env_patterns) >= 3
         for p in env_patterns:
-            assert p.severity == Severity.HIGH, (
-                f"Pattern {p.name!r} should be HIGH, got {p.severity}"
-            )
+            assert p.severity == Severity.HIGH, f"Pattern {p.name!r} should be HIGH, got {p.severity}"
 
 
 # ---------------------------------------------------------------------------
 # Issue #14 — check_code_safety with upgraded severity
 # ---------------------------------------------------------------------------
+
 
 class TestCheckCodeSafetyEnv:
     """HIGH env findings warn but do not block execution."""
@@ -209,16 +220,12 @@ class TestCheckCodeSafetyEnv:
         assert any(f.severity == Severity.HIGH for f in findings)
 
     def test_environ_get_does_not_block(self):
-        is_safe, findings = check_code_safety(
-            "import os\nos.environ.get('HOME')"
-        )
+        is_safe, findings = check_code_safety("import os\nos.environ.get('HOME')")
         assert is_safe is True
         assert any(f.pattern_name == "env_environ_get" for f in findings)
 
     def test_getenv_does_not_block(self):
-        is_safe, findings = check_code_safety(
-            "import os\nos.getenv('HOME')"
-        )
+        is_safe, findings = check_code_safety("import os\nos.getenv('HOME')")
         assert is_safe is True
         assert any(f.pattern_name == "env_getenv" for f in findings)
 
@@ -226,6 +233,7 @@ class TestCheckCodeSafetyEnv:
 # ---------------------------------------------------------------------------
 # Issue #15 — End-to-end sandbox isolation
 # ---------------------------------------------------------------------------
+
 
 class TestSandboxSecretIsolation:
     """Verify that a realistic sandbox scenario strips all host secrets."""
@@ -251,8 +259,14 @@ class TestSandboxSecretIsolation:
         assert safe["HOME"] == "/home/dev"
 
         # All secrets stripped (including E2B_API_KEY — host-side only)
-        for key in ("E2B_API_KEY", "AWS_SECRET_ACCESS_KEY", "GITHUB_TOKEN",
-                     "OPENAI_API_KEY", "DATABASE_URL", "STRIPE_SECRET_KEY"):
+        for key in (
+            "E2B_API_KEY",
+            "AWS_SECRET_ACCESS_KEY",
+            "GITHUB_TOKEN",
+            "OPENAI_API_KEY",
+            "DATABASE_URL",
+            "STRIPE_SECRET_KEY",
+        ):
             assert key not in safe, f"{key} leaked into sandbox env!"
 
     def test_ast_scanner_flags_env_access_as_high(self):
@@ -264,10 +278,7 @@ class TestSandboxSecretIsolation:
             all_env = os.environ
         """)
         findings = scan_code(code)
-        env_findings = [
-            f for f in findings
-            if f.pattern_name in ("env_access", "env_getenv", "env_environ_get")
-        ]
+        env_findings = [f for f in findings if f.pattern_name in ("env_access", "env_getenv", "env_environ_get")]
         assert len(env_findings) >= 3
         assert all(f.severity == Severity.HIGH for f in env_findings)
 
@@ -285,16 +296,19 @@ class TestSandboxSecretIsolation:
 
     def test_allowlist_exact_members(self):
         """Lock down the exact allowlist to prevent accidental expansion."""
-        assert ENV_ALLOWLIST == frozenset({
-            "OPENSPACE_LOG_LEVEL",
-            "PATH",
-            "HOME",
-            "LANG",
-        })
+        assert ENV_ALLOWLIST == frozenset(
+            {
+                "OPENSPACE_LOG_LEVEL",
+                "PATH",
+                "HOME",
+                "LANG",
+            }
+        )
 
     def test_sandbox_connector_filters_env(self):
         """SandboxConnector must strip secrets from env before passing to sandbox."""
         from unittest.mock import MagicMock
+
         from openspace.grounding.backends.mcp.transport.connectors.sandbox import SandboxConnector
 
         mock_sandbox = MagicMock()
@@ -324,8 +338,12 @@ class TestSandboxSecretIsolation:
     def test_heuristic_catches_url_secrets(self):
         """is_sensitive_key() must flag URL-based connection strings."""
         url_secrets = [
-            "REDIS_URL", "MONGO_URL", "POSTGRES_URL", "MYSQL_URL",
-            "CELERY_BROKER_URL", "SQLALCHEMY_DATABASE_URI",
+            "REDIS_URL",
+            "MONGO_URL",
+            "POSTGRES_URL",
+            "MYSQL_URL",
+            "CELERY_BROKER_URL",
+            "SQLALCHEMY_DATABASE_URI",
             "SENTRY_DSN",
         ]
         for key in url_secrets:

@@ -11,9 +11,8 @@ Covers:
 import ast
 import json
 import os
-import re
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -24,12 +23,14 @@ ROOT = Path(__file__).resolve().parent.parent
 # Issue #4: Sandbox must be enforced, not optional bypass
 # ---------------------------------------------------------------------------
 
+
 class TestSandboxEnforcement:
     """Sandbox defaults must be True everywhere."""
 
     def test_mcp_config_defaults_sandbox_true(self):
         """MCPConfig.sandbox defaults to True."""
         from openspace.config.grounding import MCPConfig
+
         cfg = MCPConfig()
         assert cfg.sandbox is True, "MCPConfig.sandbox must default to True"
 
@@ -37,29 +38,23 @@ class TestSandboxEnforcement:
         """config_grounding.json ships with sandbox: true."""
         config_path = ROOT / "openspace" / "config" / "config_grounding.json"
         data = json.loads(config_path.read_text())
-        assert data["mcp"]["sandbox"] is True, (
-            "config_grounding.json mcp.sandbox must be true"
-        )
+        assert data["mcp"]["sandbox"] is True, "config_grounding.json mcp.sandbox must be true"
 
     def test_config_security_json_sandbox_enabled(self):
         """config_security.json ships with sandbox_enabled: true globally."""
         config_path = ROOT / "openspace" / "config" / "config_security.json"
         data = json.loads(config_path.read_text())
         policies = data["security_policies"]
-        assert policies["global"]["sandbox_enabled"] is True, (
-            "Global sandbox_enabled must be true"
-        )
-        assert policies["backend"]["shell"]["sandbox_enabled"] is True, (
-            "Shell sandbox_enabled must be true"
-        )
-        assert policies["backend"]["mcp"]["sandbox_enabled"] is True, (
-            "MCP sandbox_enabled must be true"
-        )
+        assert policies["global"]["sandbox_enabled"] is True, "Global sandbox_enabled must be true"
+        assert policies["backend"]["shell"]["sandbox_enabled"] is True, "Shell sandbox_enabled must be true"
+        assert policies["backend"]["mcp"]["sandbox_enabled"] is True, "MCP sandbox_enabled must be true"
 
     def test_mcp_client_constructor_defaults_sandbox_true(self):
         """MCPClient.__init__ defaults sandbox=True."""
         import inspect
+
         from openspace.grounding.backends.mcp.client import MCPClient
+
         sig = inspect.signature(MCPClient.__init__)
         default = sig.parameters["sandbox"].default
         assert default is True, f"MCPClient sandbox default must be True, got {default}"
@@ -67,7 +62,9 @@ class TestSandboxEnforcement:
     def test_mcp_client_from_dict_defaults_sandbox_true(self):
         """MCPClient.from_dict defaults sandbox=True."""
         import inspect
+
         from openspace.grounding.backends.mcp.client import MCPClient
+
         sig = inspect.signature(MCPClient.from_dict)
         default = sig.parameters["sandbox"].default
         assert default is True, f"from_dict sandbox default must be True, got {default}"
@@ -75,7 +72,9 @@ class TestSandboxEnforcement:
     def test_mcp_client_from_config_file_defaults_sandbox_true(self):
         """MCPClient.from_config_file defaults sandbox=True."""
         import inspect
+
         from openspace.grounding.backends.mcp.client import MCPClient
+
         sig = inspect.signature(MCPClient.from_config_file)
         default = sig.parameters["sandbox"].default
         assert default is True, f"from_config_file sandbox default must be True, got {default}"
@@ -83,7 +82,9 @@ class TestSandboxEnforcement:
     def test_create_connector_defaults_sandbox_true(self):
         """create_connector_from_config defaults sandbox=True."""
         import inspect
+
         from openspace.grounding.backends.mcp.config import create_connector_from_config
+
         sig = inspect.signature(create_connector_from_config)
         default = sig.parameters["sandbox"].default
         assert default is True, f"create_connector sandbox default must be True, got {default}"
@@ -101,26 +102,22 @@ class TestSandboxEnforcement:
 # Issue #5: Config from env/config only, no user-supplied API keys
 # ---------------------------------------------------------------------------
 
+
 class TestConfigSourceRestriction:
     """Sandbox config must come from trusted sources only."""
 
     def test_e2b_sandbox_ignores_caller_api_key(self):
         """E2BSandbox reads API key from env only, not options."""
-        source = (
-            ROOT / "openspace" / "grounding" / "core" / "security" / "e2b_sandbox.py"
-        ).read_text()
+        source = (ROOT / "openspace" / "grounding" / "core" / "security" / "e2b_sandbox.py").read_text()
         # Must NOT contain options.get("api_key")
-        assert 'options.get("api_key")' not in source, (
-            "E2BSandbox must not accept api_key from caller options"
-        )
+        assert 'options.get("api_key")' not in source, "E2BSandbox must not accept api_key from caller options"
         # Must use os.environ.get("E2B_API_KEY")
-        assert 'os.environ.get("E2B_API_KEY")' in source, (
-            "E2BSandbox must read API key from E2B_API_KEY env var"
-        )
+        assert 'os.environ.get("E2B_API_KEY")' in source, "E2BSandbox must read API key from E2B_API_KEY env var"
 
     def test_trusted_sandbox_options_strips_api_key(self):
         """_build_trusted_sandbox_options strips api_key from caller input."""
         from openspace.grounding.backends.mcp.config import _build_trusted_sandbox_options
+
         caller_options = {
             "api_key": "EVIL_INJECTED_KEY",
             "timeout": 120,
@@ -136,6 +133,7 @@ class TestConfigSourceRestriction:
     def test_trusted_sandbox_options_with_none_input(self):
         """_build_trusted_sandbox_options handles None caller options."""
         from openspace.grounding.backends.mcp.config import _build_trusted_sandbox_options
+
         result = _build_trusted_sandbox_options(None, 30.0, 300.0)
         assert result["timeout"] == 30.0
         assert result["sse_read_timeout"] == 300.0
@@ -144,6 +142,7 @@ class TestConfigSourceRestriction:
 # ---------------------------------------------------------------------------
 # Issue #6: Fallback behavior must be deny, not allow
 # ---------------------------------------------------------------------------
+
 
 class TestFailClosedBehavior:
     """All failure modes must deny execution, not silently allow."""
@@ -159,7 +158,9 @@ class TestFailClosedBehavior:
             os.environ.pop("OPENSPACE_ALLOW_UNSANDBOXED", None)
             with pytest.raises(RuntimeError, match="Unsandboxed stdio execution denied"):
                 await create_connector_from_config(
-                    config, server_name="test", sandbox=False,
+                    config,
+                    server_name="test",
+                    sandbox=False,
                     check_dependencies=False,
                 )
 
@@ -172,7 +173,9 @@ class TestFailClosedBehavior:
         config = {"command": "python", "args": ["-m", "some_server"]}
         with patch.dict(os.environ, {"OPENSPACE_ALLOW_UNSANDBOXED": "1"}):
             connector = await create_connector_from_config(
-                config, server_name="test", sandbox=False,
+                config,
+                server_name="test",
+                sandbox=False,
                 check_dependencies=False,
             )
             assert isinstance(connector, StdioConnector)
@@ -187,7 +190,9 @@ class TestFailClosedBehavior:
             with patch.dict(os.environ, {"OPENSPACE_ALLOW_UNSANDBOXED": bad_value}):
                 with pytest.raises(RuntimeError, match="Unsandboxed stdio execution denied"):
                     await create_connector_from_config(
-                        config, server_name="test", sandbox=False,
+                        config,
+                        server_name="test",
+                        sandbox=False,
                         check_dependencies=False,
                     )
 
@@ -203,7 +208,9 @@ class TestFailClosedBehavior:
             cfg_module.E2B_AVAILABLE = False
             with pytest.raises(ImportError, match="E2B sandbox support not available"):
                 await _create(
-                    config, server_name="test", sandbox=True,
+                    config,
+                    server_name="test",
+                    sandbox=True,
                     check_dependencies=False,
                 )
         finally:
@@ -213,37 +220,27 @@ class TestFailClosedBehavior:
         """Config loader raises on validation failure, not silently defaults."""
         source = (ROOT / "openspace" / "config" / "loader.py").read_text()
         # Must NOT contain "using default configuration"
-        assert "using default configuration" not in source, (
-            "Config loader must not silently fall back to defaults"
-        )
+        assert "using default configuration" not in source, "Config loader must not silently fall back to defaults"
         # Must raise RuntimeError on validation failure
-        assert "raise RuntimeError" in source, (
-            "Config loader must raise on validation failure"
-        )
+        assert "raise RuntimeError" in source, "Config loader must raise on validation failure"
 
     def test_security_config_is_critical(self):
         """Security config file is loaded with critical=True."""
         source = (ROOT / "openspace" / "config" / "loader.py").read_text()
         assert "CONFIG_SECURITY" in source
         assert "_CRITICAL_CONFIG_FILES" in source
-        assert "critical_files" in source, (
-            "Config loader must pass critical_files for security config"
-        )
+        assert "critical_files" in source, "Config loader must pass critical_files for security config"
 
     @pytest.mark.asyncio
     async def test_sandbox_enforcement_before_ensure_dependencies(self):
         """Sandbox enforcement must happen BEFORE ensure_dependencies."""
-        source = (
-            ROOT / "openspace" / "grounding" / "backends" / "mcp" / "config.py"
-        ).read_text()
+        source = (ROOT / "openspace" / "grounding" / "backends" / "mcp" / "config.py").read_text()
         # Find positions of key operations
         sandbox_check_pos = source.find("Sandbox enforcement BEFORE")
         deps_check_pos = source.find("ensure_dependencies")
         assert sandbox_check_pos != -1, "Sandbox enforcement comment must exist"
         assert deps_check_pos != -1, "ensure_dependencies must exist"
-        assert sandbox_check_pos < deps_check_pos, (
-            "Sandbox enforcement must come before ensure_dependencies"
-        )
+        assert sandbox_check_pos < deps_check_pos, "Sandbox enforcement must come before ensure_dependencies"
 
     @pytest.mark.asyncio
     async def test_unsandboxed_denied_before_deps_installed(self):
@@ -265,7 +262,9 @@ class TestFailClosedBehavior:
             ):
                 with pytest.raises(RuntimeError, match="Unsandboxed stdio execution denied"):
                     await create_connector_from_config(
-                        config, server_name="test", sandbox=False,
+                        config,
+                        server_name="test",
+                        sandbox=False,
                         check_dependencies=True,
                     )
         assert not install_called, "ensure_dependencies must NOT run before sandbox denial"
@@ -282,9 +281,7 @@ class TestFailClosedBehavior:
             for k, v in obj.items():
                 current = f"{key_path}.{k}" if key_path else k
                 if k in ("sandbox", "sandbox_enabled") and v is False:
-                    pytest.fail(
-                        f"{path} has {current}=false — sandbox must be enabled"
-                    )
+                    pytest.fail(f"{path} has {current}=false — sandbox must be enabled")
                 self._check_no_sandbox_false(v, path, current)
         elif isinstance(obj, list):
             for i, item in enumerate(obj):
@@ -295,6 +292,7 @@ class TestFailClosedBehavior:
 # Issue #7: Documentation validation
 # ---------------------------------------------------------------------------
 
+
 class TestSandboxDocumentation:
     """Sandbox env/config must be properly documented."""
 
@@ -303,10 +301,7 @@ class TestSandboxDocumentation:
         env_example = (ROOT / "openspace" / ".env.example").read_text()
         assert "E2B_API_KEY" in env_example
         # Must not say "Optional"
-        lines_around = [
-            line for line in env_example.splitlines()
-            if "E2B" in line.upper() or "sandbox" in line.lower()
-        ]
+        lines_around = [line for line in env_example.splitlines() if "E2B" in line.upper() or "sandbox" in line.lower()]
         text = "\n".join(lines_around).lower()
         assert "optional" not in text or "not recommended" in text, (
             ".env.example should not describe E2B as merely optional"
@@ -322,17 +317,14 @@ class TestSandboxDocumentation:
         readme = (ROOT / "openspace" / "config" / "README.md").read_text()
         assert "E2B Sandbox" in readme, "README must have E2B sandbox section"
         assert "E2B_API_KEY" in readme, "README must document E2B_API_KEY"
-        assert "OPENSPACE_ALLOW_UNSANDBOXED" in readme, (
-            "README must document OPENSPACE_ALLOW_UNSANDBOXED"
-        )
-        assert "Fail-closed" in readme or "fail-closed" in readme.lower(), (
-            "README must document fail-closed behavior"
-        )
+        assert "OPENSPACE_ALLOW_UNSANDBOXED" in readme, "README must document OPENSPACE_ALLOW_UNSANDBOXED"
+        assert "Fail-closed" in readme or "fail-closed" in readme.lower(), "README must document fail-closed behavior"
 
 
 # ---------------------------------------------------------------------------
 # Issue #8: Integration test for sandbox creation path
 # ---------------------------------------------------------------------------
+
 
 class TestSandboxCreationIntegration:
     """Integration tests proving the sandbox creation path works end-to-end."""
@@ -346,19 +338,20 @@ class TestSandboxCreationIntegration:
         mock_e2b = MagicMock()
         config = {"command": "python", "args": ["-m", "server"]}
 
-        with patch(
-            "openspace.grounding.backends.mcp.config.E2BSandbox",
-            return_value=mock_e2b,
-        ), patch(
-            "openspace.grounding.backends.mcp.config.E2B_AVAILABLE", True
+        with (
+            patch(
+                "openspace.grounding.backends.mcp.config.E2BSandbox",
+                return_value=mock_e2b,
+            ),
+            patch("openspace.grounding.backends.mcp.config.E2B_AVAILABLE", True),
         ):
             connector = await create_connector_from_config(
-                config, server_name="test", sandbox=True,
+                config,
+                server_name="test",
+                sandbox=True,
                 check_dependencies=False,
             )
-            assert isinstance(connector, SandboxConnector), (
-                f"Expected SandboxConnector, got {type(connector).__name__}"
-            )
+            assert isinstance(connector, SandboxConnector), f"Expected SandboxConnector, got {type(connector).__name__}"
 
     @pytest.mark.asyncio
     async def test_sandbox_connector_receives_filtered_env(self):
@@ -368,24 +361,29 @@ class TestSandboxCreationIntegration:
         mock_e2b = MagicMock()
         config = {"command": "python", "args": ["-m", "server"]}
 
-        with patch(
-            "openspace.grounding.backends.mcp.config.E2BSandbox",
-            return_value=mock_e2b,
-        ), patch(
-            "openspace.grounding.backends.mcp.config.E2B_AVAILABLE", True
-        ), patch.dict(os.environ, {
-            "SECRET_KEY": "leaked",
-            "PATH": "/usr/bin",
-        }):
+        with (
+            patch(
+                "openspace.grounding.backends.mcp.config.E2BSandbox",
+                return_value=mock_e2b,
+            ),
+            patch("openspace.grounding.backends.mcp.config.E2B_AVAILABLE", True),
+            patch.dict(
+                os.environ,
+                {
+                    "SECRET_KEY": "leaked",
+                    "PATH": "/usr/bin",
+                },
+            ),
+        ):
             connector = await create_connector_from_config(
-                config, server_name="test", sandbox=True,
+                config,
+                server_name="test",
+                sandbox=True,
                 check_dependencies=False,
             )
             # SandboxConnector filters env in __init__
-            if hasattr(connector, 'user_env') and connector.user_env:
-                assert "SECRET_KEY" not in connector.user_env, (
-                    "SECRET_KEY must not leak into sandbox"
-                )
+            if hasattr(connector, "user_env") and connector.user_env:
+                assert "SECRET_KEY" not in connector.user_env, "SECRET_KEY must not leak into sandbox"
 
     @pytest.mark.asyncio
     async def test_http_config_unaffected_by_sandbox_enforcement(self):
@@ -395,7 +393,9 @@ class TestSandboxCreationIntegration:
 
         config = {"url": "http://localhost:8080"}
         connector = await create_connector_from_config(
-            config, server_name="test", sandbox=True,
+            config,
+            server_name="test",
+            sandbox=True,
             check_dependencies=False,
         )
         assert isinstance(connector, HttpConnector)
@@ -408,7 +408,9 @@ class TestSandboxCreationIntegration:
 
         config = {"ws_url": "ws://localhost:8080"}
         connector = await create_connector_from_config(
-            config, server_name="test", sandbox=True,
+            config,
+            server_name="test",
+            sandbox=True,
             check_dependencies=False,
         )
         assert isinstance(connector, WebSocketConnector)
@@ -419,6 +421,7 @@ class TestSandboxCreationIntegration:
         from openspace.grounding.backends.mcp.config import create_connector_from_config
 
         captured_options = {}
+
         def mock_e2b_init(options):
             captured_options.update(options)
             return MagicMock()
@@ -430,20 +433,21 @@ class TestSandboxCreationIntegration:
             "sandbox_template_id": "custom-template",
         }
 
-        with patch(
-            "openspace.grounding.backends.mcp.config.E2BSandbox",
-            side_effect=mock_e2b_init,
-        ), patch(
-            "openspace.grounding.backends.mcp.config.E2B_AVAILABLE", True
+        with (
+            patch(
+                "openspace.grounding.backends.mcp.config.E2BSandbox",
+                side_effect=mock_e2b_init,
+            ),
+            patch("openspace.grounding.backends.mcp.config.E2B_AVAILABLE", True),
         ):
             await create_connector_from_config(
-                config, server_name="test", sandbox=True,
+                config,
+                server_name="test",
+                sandbox=True,
                 sandbox_options=caller_options,
                 check_dependencies=False,
             )
-            assert "api_key" not in captured_options, (
-                "api_key must not reach E2BSandbox from caller options"
-            )
+            assert "api_key" not in captured_options, "api_key must not reach E2BSandbox from caller options"
             assert captured_options.get("timeout") == 120
             assert captured_options.get("sandbox_template_id") == "custom-template"
 
@@ -451,6 +455,7 @@ class TestSandboxCreationIntegration:
 # ---------------------------------------------------------------------------
 # Regression: AST scan for sandbox=False defaults in production code
 # ---------------------------------------------------------------------------
+
 
 class TestNoSandboxFalseInProduction:
     """Regression test: no production code should default sandbox to False."""
@@ -476,16 +481,8 @@ class TestNoSandboxFalseInProduction:
                             reversed(node.args.args),
                             reversed(node.args.defaults),
                         ):
-                            if (
-                                arg.arg == "sandbox"
-                                and isinstance(default, ast.Constant)
-                                and default.value is False
-                            ):
+                            if arg.arg == "sandbox" and isinstance(default, ast.Constant) and default.value is False:
                                 violations.append(
-                                    f"{py_file.relative_to(ROOT)}:{node.lineno} "
-                                    f"def {node.name}(sandbox=False)"
+                                    f"{py_file.relative_to(ROOT)}:{node.lineno} def {node.name}(sandbox=False)"
                                 )
-        assert not violations, (
-            f"Found sandbox=False defaults in production code:\n"
-            + "\n".join(violations)
-        )
+        assert not violations, "Found sandbox=False defaults in production code:\n" + "\n".join(violations)

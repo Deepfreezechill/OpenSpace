@@ -17,20 +17,19 @@ Validates:
 
 from __future__ import annotations
 
-import asyncio
+from typing import Any
+
 import pytest
-from typing import Any, Dict, List, Optional
 
 from openspace.app.container import AppContainer
 from openspace.app.factory import (
-    build_container,
-    build_test_container,
     _StubLLM,
     _StubSkillStore,
     _StubTelemetry,
+    build_container,
+    build_test_container,
 )
 from openspace.domain.ports import LLMClientPort, SkillStorePort, TelemetryPort
-
 
 # ══════════════════════════════════════════════════════════════════════
 # Container construction

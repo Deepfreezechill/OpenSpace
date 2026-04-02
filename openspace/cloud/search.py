@@ -23,12 +23,15 @@ logger = logging.getLogger("openspace.cloud")
 def _check_safety(text: str) -> list[str]:
     """Lazy wrapper — avoids importing skill_engine at module load time."""
     from openspace.skill_engine.skill_utils import check_skill_safety
+
     return check_skill_safety(text)
 
 
 def _is_safe(flags: list[str]) -> bool:
     from openspace.skill_engine.skill_utils import is_skill_safe
+
     return is_skill_safe(flags)
+
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
@@ -44,23 +47,15 @@ def _lexical_boost(query_tokens: list[str], name: str, slug: str) -> float:
     boost = 0.0
 
     # Slug exact / prefix
-    if slug_tokens and all(
-        any(ct == qt for ct in slug_tokens) for qt in query_tokens
-    ):
+    if slug_tokens and all(any(ct == qt for ct in slug_tokens) for qt in query_tokens):
         boost += 1.4
-    elif slug_tokens and all(
-        any(ct.startswith(qt) for ct in slug_tokens) for qt in query_tokens
-    ):
+    elif slug_tokens and all(any(ct.startswith(qt) for ct in slug_tokens) for qt in query_tokens):
         boost += 0.8
 
     # Name exact / prefix
-    if name_tokens and all(
-        any(ct == qt for ct in name_tokens) for qt in query_tokens
-    ):
+    if name_tokens and all(any(ct == qt for ct in name_tokens) for qt in query_tokens):
         boost += 1.1
-    elif name_tokens and all(
-        any(ct.startswith(qt) for ct in name_tokens) for qt in query_tokens
-    ):
+    elif name_tokens and all(any(ct.startswith(qt) for ct in name_tokens) for qt in query_tokens):
         boost += 0.6
 
     return boost
@@ -128,7 +123,7 @@ class SkillSearchEngine:
         limit: int,
     ) -> List[Dict[str, Any]]:
         """BM25 rough-rank to keep top candidates for embedding stage."""
-        from openspace.skill_engine.skill_ranker import SkillRanker, SkillCandidate
+        from openspace.skill_engine.skill_ranker import SkillCandidate, SkillRanker
 
         ranker = SkillRanker(enable_cache=True)
         bm25_candidates = [
@@ -232,7 +227,7 @@ def build_local_candidates(
         try:
             raw = s.path.read_text(encoding="utf-8")
             m = re.match(r"^---\n.*?\n---\n?", raw, re.DOTALL)
-            readme_body = raw[m.end():].strip() if m else raw
+            readme_body = raw[m.end() :].strip() if m else raw
         except Exception:
             pass
 
@@ -244,16 +239,18 @@ def build_local_candidates(
             logger.info(f"BLOCKED local skill {s.skill_id} — {flags}")
             continue
 
-        candidates.append({
-            "skill_id": s.skill_id,
-            "name": s.name,
-            "description": s.description,
-            "source": "openspace-local",
-            "path": str(s.path),
-            "is_local": True,
-            "safety_flags": flags if flags else None,
-            "_embedding_text": embedding_text,
-        })
+        candidates.append(
+            {
+                "skill_id": s.skill_id,
+                "name": s.name,
+                "description": s.description,
+                "source": "openspace-local",
+                "path": str(s.path),
+                "is_local": True,
+                "safety_flags": flags if flags else None,
+                "_embedding_text": embedding_text,
+            }
+        )
 
     # Enrich with quality data
     if store and candidates:
@@ -360,11 +357,14 @@ async def hybrid_search_skills(
                 client = OpenSpaceClient(auth_headers, api_base)
                 try:
                     from openspace.cloud.embedding import resolve_embedding_api
+
                     has_emb = bool(resolve_embedding_api()[0])
                 except Exception:
                     has_emb = False
                 items = await asyncio.to_thread(
-                    client.fetch_metadata, include_embedding=has_emb, limit=200,
+                    client.fetch_metadata,
+                    include_embedding=has_emb,
+                    limit=200,
                 )
                 candidates.extend(build_cloud_candidates(items))
         except Exception as e:
@@ -381,7 +381,8 @@ async def hybrid_search_skills(
             for c in candidates:
                 if not c.get("_embedding") and c.get("_embedding_text"):
                     emb = await asyncio.to_thread(
-                        generate_embedding, c["_embedding_text"],
+                        generate_embedding,
+                        c["_embedding_text"],
                     )
                     if emb:
                         c["_embedding"] = emb
@@ -390,4 +391,3 @@ async def hybrid_search_skills(
 
     engine = SkillSearchEngine()
     return engine.search(q, candidates, query_embedding=query_embedding, limit=limit)
-

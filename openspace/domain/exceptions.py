@@ -226,10 +226,10 @@ class InternalError(OpenSpaceError):
 
 # Built-in exceptions that map to specific MCP codes.
 _BUILTIN_TO_CODE: list[tuple[type, str]] = [
-    (TimeoutError, "TIMEOUT_ERROR"),           # builtin TimeoutError
-    (PermissionError, "PERMISSION_DENIED"),     # builtin PermissionError
-    (FileNotFoundError, "SKILL_NOT_FOUND"),     # builtin FileNotFoundError
-    (ValueError, "VALIDATION_ERROR"),           # builtin ValueError
+    (TimeoutError, "TIMEOUT_ERROR"),  # builtin TimeoutError
+    (PermissionError, "PERMISSION_DENIED"),  # builtin PermissionError
+    (FileNotFoundError, "SKILL_NOT_FOUND"),  # builtin FileNotFoundError
+    (ValueError, "VALIDATION_ERROR"),  # builtin ValueError
 ]
 
 
