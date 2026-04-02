@@ -7,8 +7,8 @@ which handles authentication, initialization, and tool discovery.
 
 from typing import Any, Dict
 
-from openspace.grounding.backends.mcp.transport.connectors import MCPBaseConnector
 from openspace.grounding.backends.mcp.tool_converter import convert_mcp_tool_to_base_tool
+from openspace.grounding.backends.mcp.transport.connectors import MCPBaseConnector
 from openspace.grounding.core.session import BaseSession
 from openspace.grounding.core.types import BackendType
 from openspace.utils.logging import Logger
@@ -64,12 +64,9 @@ class MCPSession(BaseSession):
         # List tools from MCP server and convert to BaseTool
         mcp_tools = self.connector.tools  # MCPBaseConnector caches tools after initialize
         logger.debug(f"Converting {len(mcp_tools)} MCP tools to BaseTool")
-        
-        self.tools = [
-            convert_mcp_tool_to_base_tool(mcp_tool, self.connector)
-            for mcp_tool in mcp_tools
-        ]
-        
+
+        self.tools = [convert_mcp_tool_to_base_tool(mcp_tool, self.connector) for mcp_tool in mcp_tools]
+
         logger.debug(f"MCP session {self.session_id} initialized with {len(self.tools)} tools")
 
         return session_info

@@ -25,8 +25,40 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
+from openspace.prompts import SkillEnginePrompts
+from openspace.utils.logging import Logger
+
+from .patch import (
+    SKILL_FILENAME,
+    PatchType,
+    SkillEditResult,
+    collect_skill_snapshot,
+    create_skill,
+    derive_skill,
+    fix_skill,
+)
+from .registry import write_skill_id
+from .skill_utils import (
+    extract_change_summary as _extract_change_summary,
+)
+from .skill_utils import (
+    get_frontmatter_field as _extract_frontmatter_field,
+)
+from .skill_utils import (
+    set_frontmatter_field as _set_frontmatter_field,
+)
+from .skill_utils import (
+    strip_markdown_fences as _strip_markdown_fences,
+)
+from .skill_utils import (
+    truncate as _truncate,
+)
+from .skill_utils import (
+    validate_skill_dir as _validate_skill_dir,
+)
+from .store import SkillStore
 from .types import (
     EvolutionSuggestion,
     EvolutionType,
@@ -36,41 +68,21 @@ from .types import (
     SkillOrigin,
     SkillRecord,
 )
-from .patch import (
-    PatchType,
-    SkillEditResult,
-    collect_skill_snapshot,
-    create_skill,
-    fix_skill,
-    derive_skill,
-    SKILL_FILENAME,
-)
-from .skill_utils import (
-    extract_change_summary as _extract_change_summary,
-    get_frontmatter_field as _extract_frontmatter_field,
-    set_frontmatter_field as _set_frontmatter_field,
-    strip_markdown_fences as _strip_markdown_fences,
-    truncate as _truncate,
-    validate_skill_dir as _validate_skill_dir,
-)
-from .registry import write_skill_id
-from .store import SkillStore
-from openspace.prompts import SkillEnginePrompts
-from openspace.utils.logging import Logger
 
 if TYPE_CHECKING:
-    from .registry import SkillRegistry
-    from openspace.llm import LLMClient
-    from openspace.grounding.core.tool import BaseTool
     from openspace.grounding.core.quality.types import ToolQualityRecord
+    from openspace.grounding.core.tool import BaseTool
+    from openspace.llm import LLMClient
+
+    from .registry import SkillRegistry
 
 logger = Logger.get_logger(__name__)
 
 EVOLUTION_COMPLETE = SkillEnginePrompts.EVOLUTION_COMPLETE
 EVOLUTION_FAILED = SkillEnginePrompts.EVOLUTION_FAILED
 
-_SKILL_CONTENT_MAX_CHARS = 12_000   # Max chars of SKILL.md in evolution prompt
-_MAX_SKILL_NAME_LENGTH = 50         # Max chars for a skill name (directory name)
+_SKILL_CONTENT_MAX_CHARS = 12_000  # Max chars of SKILL.md in evolution prompt
+_MAX_SKILL_NAME_LENGTH = 50  # Max chars for a skill name (directory name)
 
 
 def _sanitize_skill_name(name: str) -> str:
@@ -95,26 +107,28 @@ def _sanitize_skill_name(name: str) -> str:
         truncated = truncated[:last_hyphen]
     return truncated.strip("-")
 
-_ANALYSIS_CONTEXT_MAX = 5           # Max recent analyses to include in prompt
-_ANALYSIS_NOTE_MAX_CHARS = 500      # Per-analysis note truncation
+
+_ANALYSIS_CONTEXT_MAX = 5  # Max recent analyses to include in prompt
+_ANALYSIS_NOTE_MAX_CHARS = 500  # Per-analysis note truncation
 
 # Agent loop / retry constants
-_MAX_EVOLUTION_ITERATIONS = 5       # Max tool-calling rounds for evolution agent
-_MAX_EVOLUTION_ATTEMPTS = 3         # Max apply-retry attempts per evolution
+_MAX_EVOLUTION_ITERATIONS = 5  # Max tool-calling rounds for evolution agent
+_MAX_EVOLUTION_ATTEMPTS = 3  # Max apply-retry attempts per evolution
 
 # Rule-based thresholds for candidate screening (relaxed — LLM confirms)
-_FALLBACK_THRESHOLD = 0.4           # Relaxed from 0.5 for wider screening
-_LOW_COMPLETION_THRESHOLD = 0.35    # Relaxed from 0.3
-_HIGH_APPLIED_FOR_FIX = 0.4        # Relaxed from 0.5
+_FALLBACK_THRESHOLD = 0.4  # Relaxed from 0.5 for wider screening
+_LOW_COMPLETION_THRESHOLD = 0.35  # Relaxed from 0.3
+_HIGH_APPLIED_FOR_FIX = 0.4  # Relaxed from 0.5
 _MODERATE_EFFECTIVE_THRESHOLD = 0.55  # Relaxed from 0.5
-_MIN_APPLIED_FOR_DERIVED = 0.25    # Relaxed from 0.3
+_MIN_APPLIED_FOR_DERIVED = 0.25  # Relaxed from 0.3
 
 
 class EvolutionTrigger(str, Enum):
     """What initiated this evolution."""
-    ANALYSIS         = "analysis"           # Post-execution analysis suggestion
-    TOOL_DEGRADATION = "tool_degradation"   # Tool quality degradation detected
-    METRIC_MONITOR   = "metric_monitor"     # Periodic skill health check
+
+    ANALYSIS = "analysis"  # Post-execution analysis suggestion
+    TOOL_DEGRADATION = "tool_degradation"  # Tool quality degradation detected
+    METRIC_MONITOR = "metric_monitor"  # Periodic skill health check
 
 
 @dataclass
@@ -126,6 +140,7 @@ class EvolutionContext:
     For triggers 2/3: source_task_id is None, recent_analyses are loaded
     from the skill's historical records.
     """
+
     trigger: EvolutionTrigger
     suggestion: EvolutionSuggestion
 
@@ -139,8 +154,8 @@ class EvolutionContext:
     recent_analyses: List[ExecutionAnalysis] = field(default_factory=list)
 
     # Trigger-specific context
-    tool_issue_summary: str = ""             # For TOOL_DEGRADATION
-    metric_summary: str = ""                 # For METRIC_MONITOR
+    tool_issue_summary: str = ""  # For TOOL_DEGRADATION
+    metric_summary: str = ""  # For METRIC_MONITOR
 
     # Available tools for agent loop (read_file, web_search, shell, MCP, etc.)
     available_tools: List["BaseTool"] = field(default_factory=list)
@@ -215,10 +230,7 @@ class SkillEvolver:
         Call this during shutdown / cleanup to ensure nothing is lost.
         """
         if self._background_tasks:
-            logger.info(
-                f"Waiting for {len(self._background_tasks)} background "
-                f"evolution task(s) to finish..."
-            )
+            logger.info(f"Waiting for {len(self._background_tasks)} background evolution task(s) to finish...")
             await asyncio.gather(*self._background_tasks, return_exceptions=True)
             self._background_tasks.clear()
 
@@ -246,7 +258,8 @@ class SkillEvolver:
 
     # Trigger 1: post-analysis
     async def process_analysis(
-        self, analysis: ExecutionAnalysis,
+        self,
+        analysis: ExecutionAnalysis,
     ) -> List[SkillRecord]:
         """Process all evolution suggestions from a completed analysis.
 
@@ -271,15 +284,13 @@ class SkillEvolver:
 
         if results:
             names = [r.name for r in results]
-            logger.info(
-                f"[Trigger:analysis] Evolved {len(results)} skill(s): {names} "
-                f"from task {analysis.task_id}"
-            )
+            logger.info(f"[Trigger:analysis] Evolved {len(results)} skill(s): {names} from task {analysis.task_id}")
         return results
 
     # Trigger 2: tool quality degradation
     async def process_tool_degradation(
-        self, problematic_tools: List["ToolQualityRecord"],
+        self,
+        problematic_tools: List["ToolQualityRecord"],
     ) -> List[SkillRecord]:
         """Fix skills that depend on degraded tools.
 
@@ -367,32 +378,30 @@ class SkillEvolver:
                     )
                     # Even if LLM rejected, mark as addressed to avoid
                     # repeated LLM confirmation calls on every cycle.
-                    self._addressed_degradations.setdefault(
-                        tool_rec.tool_key, set()
-                    ).add(skill_record.skill_id)
+                    self._addressed_degradations.setdefault(tool_rec.tool_key, set()).add(skill_record.skill_id)
                     continue
 
                 skill_dir = Path(skill_record.path).parent if skill_record.path else None
-                confirmed_contexts.append(EvolutionContext(
-                    trigger=EvolutionTrigger.TOOL_DEGRADATION,
-                    suggestion=EvolutionSuggestion(
-                        evolution_type=EvolutionType.FIX,
-                        target_skill_ids=[skill_record.skill_id],
-                        direction=direction,
-                    ),
-                    skill_records=[skill_record],
-                    skill_contents=[content],
-                    skill_dirs=[skill_dir] if skill_dir else [],
-                    recent_analyses=recent,
-                    tool_issue_summary=issue_summary,
-                    available_tools=self._available_tools,
-                ))
+                confirmed_contexts.append(
+                    EvolutionContext(
+                        trigger=EvolutionTrigger.TOOL_DEGRADATION,
+                        suggestion=EvolutionSuggestion(
+                            evolution_type=EvolutionType.FIX,
+                            target_skill_ids=[skill_record.skill_id],
+                            direction=direction,
+                        ),
+                        skill_records=[skill_record],
+                        skill_contents=[content],
+                        skill_dirs=[skill_dir] if skill_dir else [],
+                        recent_analyses=recent,
+                        tool_issue_summary=issue_summary,
+                        available_tools=self._available_tools,
+                    )
+                )
 
                 # Mark as addressed regardless of whether evolution succeeds
                 # (if it fails, Trigger 1/3 can pick it up on new data)
-                self._addressed_degradations.setdefault(
-                    tool_rec.tool_key, set()
-                ).add(skill_record.skill_id)
+                self._addressed_degradations.setdefault(tool_rec.tool_key, set()).add(skill_record.skill_id)
 
         if not confirmed_contexts:
             return []
@@ -403,7 +412,8 @@ class SkillEvolver:
 
     # Trigger 3: periodic metric check
     async def process_metric_check(
-        self, min_selections: int = 5,
+        self,
+        min_selections: int = 5,
     ) -> List[SkillRecord]:
         """Scan active skills and evolve those with poor health metrics.
 
@@ -452,26 +462,27 @@ class SkillEvolver:
             )
             if not confirmed:
                 logger.debug(
-                    f"[Trigger:metric_monitor] LLM rejected evolution "
-                    f"for skill '{record.name}' ({evo_type.value})"
+                    f"[Trigger:metric_monitor] LLM rejected evolution for skill '{record.name}' ({evo_type.value})"
                 )
                 continue
 
             skill_dir = Path(record.path).parent if record.path else None
-            confirmed_contexts.append(EvolutionContext(
-                trigger=EvolutionTrigger.METRIC_MONITOR,
-                suggestion=EvolutionSuggestion(
-                    evolution_type=evo_type,
-                    target_skill_ids=[record.skill_id],
-                    direction=direction,
-                ),
-                skill_records=[record],
-                skill_contents=[content],
-                skill_dirs=[skill_dir] if skill_dir else [],
-                recent_analyses=recent,
-                metric_summary=metric_summary,
-                available_tools=self._available_tools,
-            ))
+            confirmed_contexts.append(
+                EvolutionContext(
+                    trigger=EvolutionTrigger.METRIC_MONITOR,
+                    suggestion=EvolutionSuggestion(
+                        evolution_type=evo_type,
+                        target_skill_ids=[record.skill_id],
+                        direction=direction,
+                    ),
+                    skill_records=[record],
+                    skill_contents=[content],
+                    skill_dirs=[skill_dir] if skill_dir else [],
+                    recent_analyses=recent,
+                    metric_summary=metric_summary,
+                    available_tools=self._available_tools,
+                )
+            )
 
         if not confirmed_contexts:
             return []
@@ -489,6 +500,7 @@ class SkillEvolver:
 
         Used by all three triggers after building/confirming contexts.
         """
+
         async def _throttled(c: EvolutionContext) -> Optional[SkillRecord]:
             async with self._semaphore:
                 return await self.evolve(c)
@@ -506,9 +518,7 @@ class SkillEvolver:
 
         if results:
             names = [r.name for r in results]
-            logger.info(
-                f"[Trigger:{trigger_label}] Evolved {len(results)} skill(s): {names}"
-            )
+            logger.info(f"[Trigger:{trigger_label}] Evolved {len(results)} skill(s): {names}")
         return results
 
     def schedule_background(
@@ -641,14 +651,18 @@ class SkillEvolver:
         #   LLM variants like "confirmed", "rejected", "skipping" still
         #   parse correctly.
         _wb = re.search  # shorthand
-        if any(w in response for w in ("\"proceed\": true", "proceed: true")) \
-                or _wb(r"\byes\b", response) \
-                or _wb(r"\bconfirm\w*\b", response):
+        if (
+            any(w in response for w in ('"proceed": true', "proceed: true"))
+            or _wb(r"\byes\b", response)
+            or _wb(r"\bconfirm\w*\b", response)
+        ):
             return True
-        if any(w in response for w in ("\"proceed\": false", "proceed: false")) \
-                or _wb(r"\bno\b", response) \
-                or _wb(r"\breject\w*\b", response) \
-                or _wb(r"\bskip\w*\b", response):
+        if (
+            any(w in response for w in ('"proceed": false', "proceed: false"))
+            or _wb(r"\bno\b", response)
+            or _wb(r"\breject\w*\b", response)
+            or _wb(r"\bskip\w*\b", response)
+        ):
             return False
         # Default: skip — ambiguous response should not trigger costly evolution
         logger.debug("LLM confirmation response was ambiguous, defaulting to skip")
@@ -734,6 +748,7 @@ class SkillEvolver:
         write_skill_id(parent_dir, new_id)
 
         from .registry import SkillMeta
+
         new_meta = SkillMeta(
             skill_id=new_id,
             name=fixed_name,
@@ -743,11 +758,10 @@ class SkillEvolver:
         self._registry.update_skill(parent.skill_id, new_meta)
 
         logger.info(
-            f"FIX: {parent.name} gen{parent.lineage.generation} → "
-            f"gen{new_record.lineage.generation} [{new_id}]"
+            f"FIX: {parent.name} gen{parent.lineage.generation} → gen{new_record.lineage.generation} [{new_id}]"
         )
         return new_record
-    
+
     async def _evolve_derived(self, ctx: EvolutionContext) -> Optional[SkillRecord]:
         """Create enhanced version in a new directory.
 
@@ -758,7 +772,7 @@ class SkillEvolver:
             logger.warning("DERIVED requires at least one parent skill_record + content + dir")
             return None
 
-        first_parent = ctx.skill_records[0]   # For fallback defaults only
+        first_parent = ctx.skill_records[0]  # For fallback defaults only
         is_merge = len(ctx.skill_records) > 1
 
         # Build prompt — include all parent contents for multi-parent merge
@@ -868,6 +882,7 @@ class SkillEvolver:
 
         # Register the new skill so it's immediately available for selection
         from .registry import SkillMeta
+
         new_meta = SkillMeta(
             skill_id=new_id,
             name=new_name,
@@ -890,9 +905,7 @@ class SkillEvolver:
         task_descriptions = []
         for a in ctx.recent_analyses[:_ANALYSIS_CONTEXT_MAX]:
             if a.execution_note:
-                task_descriptions.append(
-                    f"- task={a.task_id}: {a.execution_note[:200]}"
-                )
+                task_descriptions.append(f"- task={a.task_id}: {a.execution_note[:200]}")
 
         prompt = SkillEnginePrompts.evolution_captured(
             direction=ctx.suggestion.direction,
@@ -976,6 +989,7 @@ class SkillEvolver:
 
         # Register the new skill so it's immediately available
         from .registry import SkillMeta
+
         new_meta = SkillMeta(
             skill_id=new_id,
             name=new_name,
@@ -1046,19 +1060,21 @@ class SkillEvolver:
 
             # Final round: disable tools and force a decision
             if is_last:
-                messages.append({
-                    "role": "system",
-                    "content": (
-                        f"This is your FINAL round (iteration "
-                        f"{iteration + 1}/{_MAX_EVOLUTION_ITERATIONS}) — "
-                        f"no more tool calls allowed. "
-                        f"You MUST output the skill edit content now based on "
-                        f"all information gathered so far. Follow the output "
-                        f"format specified in the original instructions. "
-                        f"End with {EVOLUTION_COMPLETE} if the edit is satisfactory, "
-                        f"or {EVOLUTION_FAILED} with a reason if you cannot produce one."
-                    ),
-                })
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            f"This is your FINAL round (iteration "
+                            f"{iteration + 1}/{_MAX_EVOLUTION_ITERATIONS}) — "
+                            f"no more tool calls allowed. "
+                            f"You MUST output the skill edit content now based on "
+                            f"all information gathered so far. Follow the output "
+                            f"format specified in the original instructions. "
+                            f"End with {EVOLUTION_COMPLETE} if the edit is satisfactory, "
+                            f"or {EVOLUTION_FAILED} with a reason if you cannot produce one."
+                        ),
+                    }
+                )
 
             try:
                 result = await self._llm_client.complete(
@@ -1115,10 +1131,7 @@ class SkillEvolver:
                 return None
 
             if has_tool_calls:
-                logger.debug(
-                    f"Evolution agent used tools "
-                    f"(iter {iteration + 1}/{_MAX_EVOLUTION_ITERATIONS})"
-                )
+                logger.debug(f"Evolution agent used tools (iter {iteration + 1}/{_MAX_EVOLUTION_ITERATIONS})")
             else:
                 # No tools, no token — nudge the LLM
                 logger.debug(
@@ -1128,18 +1141,20 @@ class SkillEvolver:
 
             # Iteration guidance
             remaining = _MAX_EVOLUTION_ITERATIONS - iteration - 1
-            messages.append({
-                "role": "system",
-                "content": (
-                    f"Iteration {iteration + 1}/{_MAX_EVOLUTION_ITERATIONS} complete "
-                    f"({remaining} remaining). "
-                    f"If your edit is ready, output it and include {EVOLUTION_COMPLETE} "
-                    f"at the end. "
-                    f"If you cannot complete this evolution, output {EVOLUTION_FAILED} "
-                    f"with a reason. "
-                    f"Otherwise, continue gathering information with tools."
-                ),
-            })
+            messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        f"Iteration {iteration + 1}/{_MAX_EVOLUTION_ITERATIONS} complete "
+                        f"({remaining} remaining). "
+                        f"If your edit is ready, output it and include {EVOLUTION_COMPLETE} "
+                        f"at the end. "
+                        f"If you cannot complete this evolution, output {EVOLUTION_FAILED} "
+                        f"with a reason. "
+                        f"Otherwise, continue gathering information with tools."
+                    ),
+                }
+            )
 
         # Should never reach here (is_last handles the final iteration)
         return None
@@ -1160,9 +1175,9 @@ class SkillEvolver:
         # Failure takes priority (if both tokens appear, treat as failure)
         if EVOLUTION_FAILED in stripped:
             idx = stripped.index(EVOLUTION_FAILED)
-            reason_part = stripped[idx + len(EVOLUTION_FAILED):].strip()
+            reason_part = stripped[idx + len(EVOLUTION_FAILED) :].strip()
             if reason_part.lower().startswith("reason:"):
-                reason_part = reason_part[len("reason:"):].strip()
+                reason_part = reason_part[len("reason:") :].strip()
             reason = reason_part[:500] if reason_part else "LLM declined to produce edit (no reason given)"
             return None, reason
 
@@ -1227,9 +1242,7 @@ class SkillEvolver:
                 validation_error = _validate_skill_dir(skill_dir)
                 if validation_error is None:
                     if attempt > 0:
-                        logger.info(
-                            f"Apply-retry succeeded on attempt {attempt + 1}/{_MAX_EVOLUTION_ATTEMPTS}"
-                        )
+                        logger.info(f"Apply-retry succeeded on attempt {attempt + 1}/{_MAX_EVOLUTION_ATTEMPTS}")
                     return edit_result
                 else:
                     # Validation failed — treat as error for retry
@@ -1241,17 +1254,11 @@ class SkillEvolver:
                     )
             else:
                 error_msg = edit_result.error or "Unknown apply error"
-                logger.warning(
-                    f"Apply failed (attempt {attempt + 1}/{_MAX_EVOLUTION_ATTEMPTS}): "
-                    f"{error_msg}"
-                )
+                logger.warning(f"Apply failed (attempt {attempt + 1}/{_MAX_EVOLUTION_ATTEMPTS}): {error_msg}")
 
             # Last attempt? Give up.
             if attempt >= _MAX_EVOLUTION_ATTEMPTS - 1:
-                logger.error(
-                    f"Apply-retry exhausted after {_MAX_EVOLUTION_ATTEMPTS} attempts. "
-                    f"Last error: {error_msg}"
-                )
+                logger.error(f"Apply-retry exhausted after {_MAX_EVOLUTION_ATTEMPTS} attempts. Last error: {error_msg}")
                 # Clean up any partially created directory
                 if cleanup_on_retry and cleanup_on_retry.exists():
                     shutil.rmtree(cleanup_on_retry, ignore_errors=True)
@@ -1273,20 +1280,14 @@ class SkillEvolver:
             # Feed error back to LLM for retry, including current file
             # content so the LLM doesn't hallucinate what's on disk.
             current_on_disk = self._format_skill_dir_content(skill_dir) if skill_dir.is_dir() else ""
-            retry_prompt = (
-                f"The previous edit was not successful. "
-                f"This was the error:\n\n{error_msg}\n\n"
-            )
+            retry_prompt = f"The previous edit was not successful. This was the error:\n\n{error_msg}\n\n"
             if current_on_disk:
                 retry_prompt += (
                     f"Here is the CURRENT content of the skill files on disk "
                     f"(use this as the ground truth for any SEARCH/REPLACE or "
                     f"context anchors):\n\n{_truncate(current_on_disk, _SKILL_CONTENT_MAX_CHARS)}\n\n"
                 )
-            retry_prompt += (
-                f"Please fix the issue and generate the edit again. "
-                f"Follow the same output format as before."
-            )
+            retry_prompt += "Please fix the issue and generate the edit again. Follow the same output format as before."
             msg_history.append({"role": "user", "content": retry_prompt})
 
             # Call LLM for corrected version (no tools — just fix the edit)
@@ -1368,10 +1369,7 @@ class SkillEvolver:
 
             # FIX must target exactly one skill
             if suggestion.evolution_type == EvolutionType.FIX and len(records) != 1:
-                logger.warning(
-                    f"FIX requires exactly 1 target, got {len(records)}: "
-                    f"{suggestion.target_skill_ids}"
-                )
+                logger.warning(f"FIX requires exactly 1 target, got {len(records)}: {suggestion.target_skill_ids}")
                 return None
 
         return EvolutionContext(
@@ -1482,8 +1480,7 @@ class SkillEvolver:
             )
 
         # Applied often but rarely completes → instructions are wrong → FIX candidate
-        if (record.applied_rate > _HIGH_APPLIED_FOR_FIX
-                and record.completion_rate < _LOW_COMPLETION_THRESHOLD):
+        if record.applied_rate > _HIGH_APPLIED_FOR_FIX and record.completion_rate < _LOW_COMPLETION_THRESHOLD:
             return EvolutionType.FIX, (
                 f"Low completion rate ({record.completion_rate:.0%}) despite "
                 f"high applied rate ({record.applied_rate:.0%}): "
@@ -1491,8 +1488,7 @@ class SkillEvolver:
             )
 
         # Moderate effectiveness → could be better → DERIVED candidate
-        if (record.effective_rate < _MODERATE_EFFECTIVE_THRESHOLD
-                and record.applied_rate > _MIN_APPLIED_FOR_DERIVED):
+        if record.effective_rate < _MODERATE_EFFECTIVE_THRESHOLD and record.applied_rate > _MIN_APPLIED_FOR_DERIVED:
             return EvolutionType.DERIVED, (
                 f"Moderate effectiveness ({record.effective_rate:.0%}): "
                 f"skill works sometimes but could be enhanced with "

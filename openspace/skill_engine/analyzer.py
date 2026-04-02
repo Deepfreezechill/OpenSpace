@@ -18,10 +18,14 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from openspace.grounding.core.tool import BaseTool
+from openspace.prompts import SkillEnginePrompts
+from openspace.utils.logging import Logger
 
+from .conversation_formatter import format_conversations
+from .store import SkillStore
 from .types import (
     EvolutionSuggestion,
     EvolutionType,
@@ -29,14 +33,11 @@ from .types import (
     SkillCategory,
     SkillJudgment,
 )
-from .store import SkillStore
-from openspace.prompts import SkillEnginePrompts
-from openspace.utils.logging import Logger
-from .conversation_formatter import format_conversations
 
 if TYPE_CHECKING:
-    from openspace.llm import LLMClient
     from openspace.grounding.core.quality import ToolQualityManager
+    from openspace.llm import LLMClient
+
     from .registry import SkillRegistry
 
 logger = Logger.get_logger(__name__)
@@ -46,18 +47,19 @@ logger = Logger.get_logger(__name__)
 _MAX_CONVERSATION_CHARS = 80_000
 
 # Per-section truncation limits
-_TOOL_ERROR_MAX_CHARS = 1000      # Errors: keep key info, no full stack traces
-_TOOL_SUCCESS_MAX_CHARS = 800     # Success results
-_TOOL_ARGS_MAX_CHARS = 500        # Tool call arguments
-_TOOL_SUMMARY_MAX_CHARS = 1500    # Embedded execution summaries from inner agents
+_TOOL_ERROR_MAX_CHARS = 1000  # Errors: keep key info, no full stack traces
+_TOOL_SUCCESS_MAX_CHARS = 800  # Success results
+_TOOL_ARGS_MAX_CHARS = 500  # Tool call arguments
+_TOOL_SUMMARY_MAX_CHARS = 1500  # Embedded execution summaries from inner agents
 
 # Skill & analysis-agent constants
-_SKILL_CONTENT_MAX_CHARS = 8000   # Max chars per skill SKILL.md in prompt
-_ANALYSIS_MAX_ITERATIONS = 5      # Max tool-calling rounds for analysis agent
+_SKILL_CONTENT_MAX_CHARS = 8000  # Max chars per skill SKILL.md in prompt
+_ANALYSIS_MAX_ITERATIONS = 5  # Max tool-calling rounds for analysis agent
 
 
 def _correct_skill_ids(
-    ids: List[str], known_ids: set,
+    ids: List[str],
+    known_ids: set,
 ) -> List[str]:
     """Best-effort correction of LLM-hallucinated skill IDs.
 
@@ -79,10 +81,7 @@ def _correct_skill_ids(
         prefix = raw_id.split("__")[0] if "__" in raw_id else ""
 
         # Candidates: known IDs sharing the same name prefix
-        candidates = [
-            k for k in known_ids
-            if prefix and k.split("__")[0] == prefix
-        ]
+        candidates = [k for k in known_ids if prefix and k.split("__")[0] == prefix]
 
         best, best_dist = None, 4  # threshold: edit distance ≤ 3
         for cand in candidates:
@@ -91,10 +90,7 @@ def _correct_skill_ids(
                 best, best_dist = cand, d
 
         if best is not None:
-            logger.info(
-                f"Corrected LLM skill ID: {raw_id!r} → {best!r} "
-                f"(edit_distance={best_dist})"
-            )
+            logger.info(f"Corrected LLM skill ID: {raw_id!r} → {best!r} (edit_distance={best_dist})")
             corrected.append(best)
         else:
             corrected.append(raw_id)  # keep as-is; evolver will warn
@@ -172,9 +168,7 @@ class ExecutionAnalyzer:
 
         rec_path = Path(recording_dir)
         if not rec_path.is_dir():
-            logger.warning(
-                f"Recording directory not found, skipping analysis: {recording_dir}"
-            )
+            logger.warning(f"Recording directory not found, skipping analysis: {recording_dir}")
             return None
 
         # Check for duplicate — one analysis per task
@@ -194,7 +188,8 @@ class ExecutionAnalyzer:
 
             # 3. Run analysis (agent loop with optional tool use)
             raw_json = await self._run_analysis_loop(
-                prompt, available_tools=available_tools or [],
+                prompt,
+                available_tools=available_tools or [],
             )
             if raw_json is None:
                 return None
@@ -216,9 +211,7 @@ class ExecutionAnalyzer:
 
             # 6. Feed tool issues to quality manager (if available).
             #    Build tool-status map from raw traj records for dedup.
-            traj_tool_status = self._build_tool_status_map(
-                context.get("traj_records", [])
-            )
+            traj_tool_status = self._build_tool_status_map(context.get("traj_records", []))
             await self._record_tool_quality_feedback(analysis, traj_tool_status)
 
             return analysis
@@ -227,9 +220,7 @@ class ExecutionAnalyzer:
             logger.error(f"Execution analysis failed for task {task_id}: {e}")
             return None
 
-    async def get_evolution_candidates(
-        self, limit: int = 20
-    ) -> List[ExecutionAnalysis]:
+    async def get_evolution_candidates(self, limit: int = 20) -> List[ExecutionAnalysis]:
         """Return recent analyses flagged as evolution candidates."""
         return self._store.load_evolution_candidates(limit=limit)
 
@@ -289,10 +280,7 @@ class ExecutionAnalyzer:
                     key_part = issue.strip()
 
                 if key_part in traj_tool_status and not traj_tool_status[key_part]:
-                    logger.debug(
-                        f"Skipping LLM issue for {key_part}: "
-                        f"rule-based already recorded all calls as errors"
-                    )
+                    logger.debug(f"Skipping LLM issue for {key_part}: rule-based already recorded all calls as errors")
                     continue
                 filtered_issues.append(issue)
 
@@ -376,9 +364,7 @@ class ExecutionAnalyzer:
                 for msg in conv.get("messages", []):
                     content = msg.get("content", "")
                     if isinstance(content, str) and "# Active Skills" in content:
-                        skill_contents = self._extract_skill_contents(
-                            content, selected_skills
-                        )
+                        skill_contents = self._extract_skill_contents(content, selected_skills)
                         break
 
         # Execution status — prefer runtime result, fall back to persisted metadata
@@ -460,7 +446,8 @@ class ExecutionAnalyzer:
         return contents
 
     def _load_skill_contents_from_disk(
-        self, skill_ids: List[str],
+        self,
+        skill_ids: List[str],
     ) -> Dict[str, Dict[str, str]]:
         """Load skill SKILL.md from disk via SkillRegistry.
 
@@ -480,9 +467,8 @@ class ExecutionAnalyzer:
             skill_dir = str(meta.path.parent)
             if len(content) > _SKILL_CONTENT_MAX_CHARS:
                 content = (
-                    content[:_SKILL_CONTENT_MAX_CHARS]
-                    + f"\n\n... [truncated at {_SKILL_CONTENT_MAX_CHARS} chars — "
-                    f"use read_file(\"{meta.path}\") to see full content]"
+                    content[:_SKILL_CONTENT_MAX_CHARS] + f"\n\n... [truncated at {_SKILL_CONTENT_MAX_CHARS} chars — "
+                    f'use read_file("{meta.path}") to see full content]'
                 )
             result[sid] = {
                 "content": content,
@@ -523,10 +509,7 @@ class ExecutionAnalyzer:
         if skill_data:
             parts = []
             for sid, info in skill_data.items():
-                desc_line = (
-                    f"\n**Description**: {info['description']}"
-                    if info.get("description") else ""
-                )
+                desc_line = f"\n**Description**: {info['description']}" if info.get("description") else ""
                 display_name = info.get("name", sid)
                 parts.append(
                     f"### {sid}\n"
@@ -555,9 +538,7 @@ class ExecutionAnalyzer:
                     resource_lines.append(f"  Files: {', '.join(files)}")
 
         skill_dirs = {
-            sid: info["dir"]
-            for sid, info in skill_data.items()
-            if info.get("dir") and info["dir"] != "(unknown)"
+            sid: info["dir"] for sid, info in skill_data.items() if info.get("dir") and info["dir"] != "(unknown)"
         }
         if skill_dirs:
             resource_lines.append("**Skill directories**:")
@@ -641,10 +622,7 @@ class ExecutionAnalyzer:
             return "(no traj.jsonl data available)"
 
         lines = [f"Total tool invocations: {len(traj_records)}"]
-        error_count = sum(
-            1 for r in traj_records
-            if r.get("result", {}).get("status") == "error"
-        )
+        error_count = sum(1 for r in traj_records if r.get("result", {}).get("status") == "error")
         if error_count:
             lines.append(f"Errors: {error_count}/{len(traj_records)}")
 
@@ -737,14 +715,16 @@ class ExecutionAnalyzer:
 
             # On the final iteration, force JSON output (no tools).
             if is_last:
-                messages.append({
-                    "role": "system",
-                    "content": (
-                        "This is your FINAL round — no more tool calls allowed. "
-                        "You MUST output the JSON analysis object now based on "
-                        "all information gathered so far."
-                    ),
-                })
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            "This is your FINAL round — no more tool calls allowed. "
+                            "You MUST output the JSON analysis object now based on "
+                            "all information gathered so far."
+                        ),
+                    }
+                )
 
             try:
                 result = await self._llm_client.complete(
@@ -781,15 +761,10 @@ class ExecutionAnalyzer:
             # Tools were called and executed by complete() — continue with
             # the updated messages (includes assistant + tool result messages).
             messages = updated_messages
-            logger.debug(
-                f"Analysis agent used tools "
-                f"(iter {iteration + 1}/{_ANALYSIS_MAX_ITERATIONS})"
-            )
+            logger.debug(f"Analysis agent used tools (iter {iteration + 1}/{_ANALYSIS_MAX_ITERATIONS})")
 
         # Should not reach here (last iteration disables tools), but just in case
-        logger.warning(
-            f"Analysis agent reached max iterations ({_ANALYSIS_MAX_ITERATIONS})"
-        )
+        logger.warning(f"Analysis agent reached max iterations ({_ANALYSIS_MAX_ITERATIONS})")
         for m in reversed(messages):
             if m.get("role") == "assistant" and m.get("content"):
                 return self._extract_json(m["content"])
@@ -802,9 +777,7 @@ class ExecutionAnalyzer:
         Handles markdown code fences and bare JSON.
         """
         # Try code block first
-        code_match = re.search(
-            r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL
-        )
+        code_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
         if code_match:
             text = code_match.group(1).strip()
         else:
@@ -890,12 +863,14 @@ class ExecutionAnalyzer:
                 # (e.g. "61f694bc" instead of "61f694cb").
                 targets = _correct_skill_ids(targets, known_skill_ids)
 
-                suggestions.append(EvolutionSuggestion(
-                    evolution_type=evo_type,
-                    target_skill_ids=targets,
-                    category=cat,
-                    direction=raw_sug.get("direction", ""),
-                ))
+                suggestions.append(
+                    EvolutionSuggestion(
+                        evolution_type=evo_type,
+                        target_skill_ids=targets,
+                        category=cat,
+                        direction=raw_sug.get("direction", ""),
+                    )
+                )
 
             analysis = ExecutionAnalysis(
                 task_id=task_id,

@@ -42,6 +42,7 @@ def resolve_embedding_api() -> Tuple[Optional[str], str]:
 
     try:
         from openspace.host_detection import get_openai_api_key
+
         host_key = get_openai_api_key()
         if host_key:
             base = os.environ.get("OPENAI_BASE_URL", _OPENAI_BASE).rstrip("/")
@@ -106,10 +107,12 @@ def generate_embedding(text: str, api_key: Optional[str] = None) -> Optional[Lis
     if not api_key:
         return None
 
-    body = json.dumps({
-        "model": SKILL_EMBEDDING_MODEL,
-        "input": text,
-    }).encode("utf-8")
+    body = json.dumps(
+        {
+            "model": SKILL_EMBEDDING_MODEL,
+            "input": text,
+        }
+    ).encode("utf-8")
 
     req = urllib.request.Request(
         f"{base_url}/embeddings",

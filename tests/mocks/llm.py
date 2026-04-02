@@ -20,7 +20,6 @@ from itertools import cycle
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
 
-
 _RESPONSES_DIR = Path(__file__).parent / "responses"
 
 # Pre-built response templates

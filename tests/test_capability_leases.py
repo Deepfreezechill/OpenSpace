@@ -44,7 +44,6 @@ from openspace.sandbox.leases import (
     validate_lease,
 )
 
-
 # ---------------------------------------------------------------------------
 # Schema Tests (#84)
 # ---------------------------------------------------------------------------
@@ -211,8 +210,13 @@ class TestTierDefaults:
 
     def test_tiers_ordered_by_permissiveness(self) -> None:
         """Each tier should allow ≥ the resources of the previous tier."""
-        tiers = [TrustTier.T0_UNTRUSTED, TrustTier.T1_BASIC, TrustTier.T2_STANDARD,
-                 TrustTier.T3_ELEVATED, TrustTier.T4_FULL]
+        tiers = [
+            TrustTier.T0_UNTRUSTED,
+            TrustTier.T1_BASIC,
+            TrustTier.T2_STANDARD,
+            TrustTier.T3_ELEVATED,
+            TrustTier.T4_FULL,
+        ]
         for i in range(1, len(tiers)):
             prev = get_tier_default(tiers[i - 1])
             curr = get_tier_default(tiers[i])
@@ -313,6 +317,7 @@ class TestInMemoryLeaseResolver:
         active = await resolver.list_active()
         assert len(active) == 1
         assert active[0].lease_id == l2.lease_id
+
     async def test_list_active_filters_by_grantee(self) -> None:
         resolver = InMemoryLeaseResolver()
         await resolver.acquire("cap-1", ttl_seconds=60)

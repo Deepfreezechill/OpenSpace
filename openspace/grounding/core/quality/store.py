@@ -16,9 +16,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-from .types import ToolQualityRecord, ExecutionRecord, DescriptionQuality
-from openspace.utils.logging import Logger
 from openspace.config.constants import PROJECT_ROOT
+from openspace.utils.logging import Logger
+
+from .types import DescriptionQuality, ExecutionRecord, ToolQualityRecord
 
 logger = Logger.get_logger(__name__)
 
@@ -102,9 +103,7 @@ class QualityStore:
     def load_all(self) -> Tuple[Dict[str, ToolQualityRecord], int]:
         """Load all quality records and global execution count."""
         with self._mu:
-            rows = self._conn.execute(
-                "SELECT * FROM tool_quality_records"
-            ).fetchall()
+            rows = self._conn.execute("SELECT * FROM tool_quality_records").fetchall()
 
             records: Dict[str, ToolQualityRecord] = {}
             for row in rows:
@@ -153,15 +152,11 @@ class QualityStore:
 
             # Global metadata
             meta_row = self._conn.execute(
-                "SELECT value FROM tool_quality_meta "
-                "WHERE key = 'global_execution_count'"
+                "SELECT value FROM tool_quality_meta WHERE key = 'global_execution_count'"
             ).fetchone()
             global_count = int(meta_row["value"]) if meta_row else 0
 
-            logger.info(
-                f"Loaded {len(records)} quality records from SQLite "
-                f"(global_count={global_count})"
-            )
+            logger.info(f"Loaded {len(records)} quality records from SQLite (global_count={global_count})")
             return records, global_count
 
     async def save_all(
@@ -183,8 +178,7 @@ class QualityStore:
             try:
                 self._upsert_record(record)
                 self._conn.execute(
-                    "INSERT OR REPLACE INTO tool_quality_meta "
-                    "(key, value) VALUES (?, ?)",
+                    "INSERT OR REPLACE INTO tool_quality_meta (key, value) VALUES (?, ?)",
                     ("global_execution_count", str(global_execution_count)),
                 )
                 self._conn.commit()
@@ -219,8 +213,7 @@ class QualityStore:
                 for record in records.values():
                     self._upsert_record(record)
                 self._conn.execute(
-                    "INSERT OR REPLACE INTO tool_quality_meta "
-                    "(key, value) VALUES (?, ?)",
+                    "INSERT OR REPLACE INTO tool_quality_meta (key, value) VALUES (?, ?)",
                     ("global_execution_count", str(global_execution_count)),
                 )
                 self._conn.commit()

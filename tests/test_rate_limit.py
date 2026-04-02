@@ -21,17 +21,12 @@ from unittest.mock import AsyncMock
 import pytest
 
 from openspace.auth.rate_limit import (
-    DEFAULT_PER_IP,
-    DEFAULT_PER_TOKEN,
-    DEFAULT_WINDOW,
-    MAX_BUCKETS,
     RATE_LIMIT_PER_IP_ENV,
     RATE_LIMIT_PER_TOKEN_ENV,
     RATE_LIMIT_WINDOW_ENV,
     RateLimitMiddleware,
     SlidingWindowCounter,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -44,11 +39,13 @@ def dummy_app():
 
     async def app(scope, receive, send):
         app.call_count += 1
-        await send({
-            "type": "http.response.start",
-            "status": 200,
-            "headers": [[b"content-type", b"text/plain"]],
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [[b"content-type", b"text/plain"]],
+            }
+        )
         await send({"type": "http.response.body", "body": b"OK"})
 
     app.call_count = 0

@@ -68,6 +68,7 @@ sys.path.insert(0, str(_OPENSPACE_ROOT))
 # ── Load .env (same logic as openspace/llm/client.py) ──
 try:
     from dotenv import load_dotenv
+
     _pkg_env = _OPENSPACE_ROOT / "openspace" / ".env"
     if _pkg_env.is_file():
         load_dotenv(_pkg_env)
@@ -75,8 +76,8 @@ try:
 except ImportError:
     pass  # dotenv not installed; rely on shell env vars
 
-from gdpval_bench.token_tracker import TokenTracker, TokenStats
 from gdpval_bench.task_loader import load_tasks, prepare_task_workspace
+from gdpval_bench.token_tracker import TokenStats, TokenTracker
 
 # ── Default paths ──
 _DEFAULT_CONFIG = Path(__file__).parent / "config.json"
@@ -86,10 +87,23 @@ _OPENSPACE_DB_DIR = _OPENSPACE_ROOT / ".openspace"
 # ── Evaluation constants (aligned with ClawWork) ──
 # Artifact extensions that ClawWork considers for evaluation
 _ARTIFACT_EXTENSIONS = {
-    '.pdf', '.docx', '.xlsx', '.pptx',      # documents
-    '.txt', '.csv', '.json', '.md',          # text
-    '.py', '.js', '.html', '.css',           # code
-    '.png', '.jpg', '.jpeg', '.gif', '.webp', # images
+    ".pdf",
+    ".docx",
+    ".xlsx",
+    ".pptx",  # documents
+    ".txt",
+    ".csv",
+    ".json",
+    ".md",  # text
+    ".py",
+    ".js",
+    ".html",
+    ".css",  # code
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",  # images
 }
 # Minimum evaluation score to receive payment (ClawWork cliff)
 _MIN_EVALUATION_THRESHOLD = 0.6
@@ -98,6 +112,7 @@ _MIN_EVALUATION_THRESHOLD = 0.6
 # ═══════════════════════════════════════════════════════════════════
 # Configuration
 # ═══════════════════════════════════════════════════════════════════
+
 
 def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     """Load experiment config with sensible defaults."""
@@ -128,6 +143,7 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
 # ═══════════════════════════════════════════════════════════════════
 # Result I/O
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _results_dir(cfg: Dict) -> Path:
     name = cfg.get("run_name")
@@ -167,6 +183,7 @@ def _completed_task_ids(results_file: Path) -> set:
 # Skill snapshot
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _snapshot_skills(skill_store) -> List[Dict[str, Any]]:
     """Dump all active skills from the SkillStore."""
     try:
@@ -188,6 +205,7 @@ def _count_skills_by_origin(skills: List[Dict]) -> Dict[str, int]:
 # ═══════════════════════════════════════════════════════════════════
 # Evaluation — aligned with ClawWork's LLMEvaluator
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _discover_artifacts(
     workspace_dir: str,
@@ -244,7 +262,7 @@ def _get_evaluator(cfg: Dict):
 
     if not meta_prompts_dir.exists():
         print(f"  ⚠️  Meta-prompts dir not found: {meta_prompts_dir}")
-        print(f"       Evaluation will be skipped.")
+        print("       Evaluation will be skipped.")
         _get_evaluator._instance = None
         return None
 
@@ -287,9 +305,7 @@ def _evaluate_task(
         artifact_paths, description, feedback (truncated), has_evaluation
     """
     # ── Discover artifacts ──
-    ref_filenames = [
-        Path(rf).name for rf in (task.get("reference_files", []) or [])
-    ]
+    ref_filenames = [Path(rf).name for rf in (task.get("reference_files", []) or [])]
     artifact_paths = _discover_artifacts(workspace_dir, ref_filenames)
 
     if not artifact_paths:
@@ -336,7 +352,7 @@ def _evaluate_task(
         err_msg = str(e)
         print(f"  ⚠️  Evaluation failed: {e}")
         if "langchain" in err_msg.lower():
-            print(f"     Fix: pip install langchain_core  (livebench evaluator dependency)")
+            print("     Fix: pip install langchain_core  (livebench evaluator dependency)")
         return {
             "has_evaluation": False,
             "evaluation_score": 0.0,
@@ -377,6 +393,7 @@ def _evaluate_task(
 # Helper: create OpenSpaceConfig
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _make_config(cfg: Dict, phase: str, worker_id: int = 0):
     """Create a OpenSpaceConfig for one worker."""
     from openspace.tool_layer import OpenSpaceConfig
@@ -404,6 +421,7 @@ def _make_config(cfg: Dict, phase: str, worker_id: int = 0):
 # ═══════════════════════════════════════════════════════════════════
 # Helper: execute a single task and build the result record
 # ═══════════════════════════════════════════════════════════════════
+
 
 async def _execute_one_task(
     cs,
@@ -441,11 +459,11 @@ async def _run_single_task(
     rd = _results_dir(cfg)
     tid = task["task_id"]
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"[{phase.upper()}] Task {idx}/{total}: {task['occupation']}")
     print(f"  ID: {tid}")
     print(f"  Prompt: {task['prompt'][:120]}...")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Skill count before execution
     skills_before = 0
@@ -564,6 +582,7 @@ async def _run_single_task(
 # Phase runner — serial (concurrency=1)
 # ═══════════════════════════════════════════════════════════════════
 
+
 async def _run_phase_serial(
     phase: str,
     tasks: List[Dict],
@@ -593,8 +612,15 @@ async def _run_phase_serial(
                 continue
 
             await _run_single_task(
-                cs, task, phase, cfg, idx, total,
-                tracker, results_file, results,
+                cs,
+                task,
+                phase,
+                cfg,
+                idx,
+                total,
+                tracker,
+                results_file,
+                results,
                 concurrent=False,
             )
     finally:
@@ -609,6 +635,7 @@ async def _run_phase_serial(
 # ═══════════════════════════════════════════════════════════════════
 # Phase runner — concurrent (concurrency>1)
 # ═══════════════════════════════════════════════════════════════════
+
 
 async def _run_phase_concurrent(
     phase: str,
@@ -676,8 +703,15 @@ async def _run_phase_concurrent(
         cs = await pool.get()  # blocks until a worker is available
         try:
             record = await _run_single_task(
-                cs, task, phase, cfg, idx, total_tasks,
-                tracker, results_file, results,
+                cs,
+                task,
+                phase,
+                cfg,
+                idx,
+                total_tasks,
+                tracker,
+                results_file,
+                results,
                 concurrent=True,
             )
             if record.get("status") == "error":
@@ -690,8 +724,7 @@ async def _run_phase_concurrent(
             completed += 1
             remaining = len(pending) - completed
             if remaining > 0 and completed % 5 == 0:
-                print(f"\n  📊 Progress: {completed}/{len(pending)} done, "
-                      f"{remaining} remaining, {errors} errors")
+                print(f"\n  📊 Progress: {completed}/{len(pending)} done, {remaining} remaining, {errors} errors")
 
     # ── Dispatch all tasks as asyncio Tasks ──
     # The pool.get() naturally limits concurrency to N workers
@@ -711,13 +744,14 @@ async def _run_phase_concurrent(
         except Exception as e:
             print(f"  ⚠️ Worker {i} cleanup error: {e}")
 
-    print(f"  ✅ All workers cleaned up")
+    print("  ✅ All workers cleaned up")
     return results
 
 
 # ═══════════════════════════════════════════════════════════════════
 # Phase runner — unified entry point
 # ═══════════════════════════════════════════════════════════════════
+
 
 async def run_phase(
     phase: str,
@@ -737,9 +771,7 @@ async def run_phase(
     if concurrency <= 1:
         return await _run_phase_serial(phase, tasks, cfg, tracker, completed_ids)
     else:
-        return await _run_phase_concurrent(
-            phase, tasks, cfg, tracker, completed_ids, concurrency
-        )
+        return await _run_phase_concurrent(phase, tasks, cfg, tracker, completed_ids, concurrency)
 
 
 def _print_task_summary(record: Dict) -> None:
@@ -749,37 +781,41 @@ def _print_task_summary(record: Dict) -> None:
     evaluation = record.get("evaluation", {})
     status_icon = "✅" if record["status"] == "success" else "❌"
 
-    agent_prompt = tokens.get('agent_prompt_tokens', tokens['prompt_tokens'])
-    agent_comp = tokens.get('agent_completion_tokens', tokens['completion_tokens'])
-    agent_total = tokens.get('agent_total_tokens', tokens['total_tokens'])
-    overhead = tokens['total_tokens'] - agent_total
+    agent_prompt = tokens.get("agent_prompt_tokens", tokens["prompt_tokens"])
+    agent_comp = tokens.get("agent_completion_tokens", tokens["completion_tokens"])
+    agent_total = tokens.get("agent_total_tokens", tokens["total_tokens"])
+    overhead = tokens["total_tokens"] - agent_total
 
     print(f"\n  {status_icon} Status: {record['status']}")
-    print(f"  📊 Tokens (total): {tokens['total_tokens']:,} "
-          f"(prompt: {tokens['prompt_tokens']:,}, "
-          f"completion: {tokens['completion_tokens']:,})")
-    print(f"  📊 Tokens (agent): {agent_total:,} "
-          f"(prompt: {agent_prompt:,}, "
-          f"completion: {agent_comp:,}, "
-          f"overhead: {overhead:,})")
+    print(
+        f"  📊 Tokens (total): {tokens['total_tokens']:,} "
+        f"(prompt: {tokens['prompt_tokens']:,}, "
+        f"completion: {tokens['completion_tokens']:,})"
+    )
+    print(
+        f"  📊 Tokens (agent): {agent_total:,} "
+        f"(prompt: {agent_prompt:,}, "
+        f"completion: {agent_comp:,}, "
+        f"overhead: {overhead:,})"
+    )
     print(f"  💰 Cost: ${tokens['cost_usd']:.4f}")
-    print(f"  🔧 Iterations: {exe['iterations']}, "
-          f"Tool calls: {exe['tool_calls']}, "
-          f"Time: {exe['time_sec']:.1f}s")
-    print(f"  🧬 Skills: {skills['before']} → {skills['after']} "
-          f"(+{skills['new_this_task']} new)")
+    print(f"  🔧 Iterations: {exe['iterations']}, Tool calls: {exe['tool_calls']}, Time: {exe['time_sec']:.1f}s")
+    print(f"  🧬 Skills: {skills['before']} → {skills['after']} (+{skills['new_this_task']} new)")
     if skills["used"]:
         print(f"  📎 Skills used: {skills['used']}")
     if evaluation.get("has_evaluation"):
         cliff_mark = " ⚠️cliff" if evaluation.get("cliff_applied") else ""
-        print(f"  📝 Quality: {evaluation['score_10']}/10 → "
-              f"${evaluation['actual_payment']:.2f}"
-              f"/{evaluation.get('max_payment', '?')}{cliff_mark}")
+        print(
+            f"  📝 Quality: {evaluation['score_10']}/10 → "
+            f"${evaluation['actual_payment']:.2f}"
+            f"/{evaluation.get('max_payment', '?')}{cliff_mark}"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════
 # Comparison & Summary
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _pct(a: int, b: int) -> float:
     """Percentage savings: (a - b) / a * 100.  Positive = saved."""
@@ -799,13 +835,27 @@ def build_comparison(cfg: Dict) -> None:
 
     comparisons = []
     # Accumulators — separate prompt / completion / total
-    agg = {k: 0 for k in (
-        "p1_prompt", "p1_completion", "p1_total",
-        "p2_prompt", "p2_completion", "p2_total",
-        "p1_cost", "p2_cost", "p1_calls", "p2_calls",
-        "p1_agent_prompt", "p1_agent_completion", "p1_agent_total",
-        "p2_agent_prompt", "p2_agent_completion", "p2_agent_total",
-    )}
+    agg = {
+        k: 0
+        for k in (
+            "p1_prompt",
+            "p1_completion",
+            "p1_total",
+            "p2_prompt",
+            "p2_completion",
+            "p2_total",
+            "p1_cost",
+            "p2_cost",
+            "p1_calls",
+            "p2_calls",
+            "p1_agent_prompt",
+            "p1_agent_completion",
+            "p1_agent_total",
+            "p2_agent_prompt",
+            "p2_agent_completion",
+            "p2_agent_total",
+        )
+    }
     savings_total = []
     savings_prompt = []
     savings_completion = []
@@ -1066,50 +1116,68 @@ def build_comparison(cfg: Dict) -> None:
 
     ats = summary.get("agent_token_savings", {})
 
-    print(f"\n  🔑 Token Savings — All Calls (Total = Prompt + Completion):")
+    print("\n  🔑 Token Savings — All Calls (Total = Prompt + Completion):")
     print(f"     {'':20s} {'Overall':>10s} {'Mean':>10s} {'Median':>10s}")
-    for label, key in [("Total tokens", "total"),
-                       ("↳ Prompt tokens", "prompt"),
-                       ("↳ Completion tokens", "completion")]:
+    for label, key in [("Total tokens", "total"), ("↳ Prompt tokens", "prompt"), ("↳ Completion tokens", "completion")]:
         s = ts[key]
-        print(f"     {label:<20s} {s['overall_pct']:>+9.1f}% "
-              f"{s['per_task']['mean']:>+9.1f}% "
-              f"{s['per_task']['median']:>+9.1f}%")
+        print(
+            f"     {label:<20s} {s['overall_pct']:>+9.1f}% "
+            f"{s['per_task']['mean']:>+9.1f}% "
+            f"{s['per_task']['median']:>+9.1f}%"
+        )
 
     if ats:
-        print(f"\n  🎯 Token Savings — Agent Only (excludes skill engine overhead):")
+        print("\n  🎯 Token Savings — Agent Only (excludes skill engine overhead):")
         print(f"     {'':20s} {'Overall':>10s} {'Mean':>10s} {'Median':>10s}")
-        for label, key in [("Total tokens", "total"),
-                           ("↳ Prompt tokens", "prompt"),
-                           ("↳ Completion tokens", "completion")]:
+        for label, key in [
+            ("Total tokens", "total"),
+            ("↳ Prompt tokens", "prompt"),
+            ("↳ Completion tokens", "completion"),
+        ]:
             s = ats[key]
-            print(f"     {label:<20s} {s['overall_pct']:>+9.1f}% "
-                  f"{s['per_task']['mean']:>+9.1f}% "
-                  f"{s['per_task']['median']:>+9.1f}%")
+            print(
+                f"     {label:<20s} {s['overall_pct']:>+9.1f}% "
+                f"{s['per_task']['mean']:>+9.1f}% "
+                f"{s['per_task']['median']:>+9.1f}%"
+            )
 
-    print(f"\n     Phase 1: {agg['p1_total']:>10,} total "
-          f"({agg['p1_prompt']:,} prompt + {agg['p1_completion']:,} completion)")
-    print(f"     Phase 2: {agg['p2_total']:>10,} total "
-          f"({agg['p2_prompt']:,} prompt + {agg['p2_completion']:,} completion)")
+    print(
+        f"\n     Phase 1: {agg['p1_total']:>10,} total "
+        f"({agg['p1_prompt']:,} prompt + {agg['p1_completion']:,} completion)"
+    )
+    print(
+        f"     Phase 2: {agg['p2_total']:>10,} total "
+        f"({agg['p2_prompt']:,} prompt + {agg['p2_completion']:,} completion)"
+    )
     if ats:
-        print(f"     Phase 1 (agent): {agg['p1_agent_total']:>10,} total "
-              f"({agg['p1_agent_prompt']:,} prompt + {agg['p1_agent_completion']:,} completion)")
-        print(f"     Phase 2 (agent): {agg['p2_agent_total']:>10,} total "
-              f"({agg['p2_agent_prompt']:,} prompt + {agg['p2_agent_completion']:,} completion)")
+        print(
+            f"     Phase 1 (agent): {agg['p1_agent_total']:>10,} total "
+            f"({agg['p1_agent_prompt']:,} prompt + {agg['p1_agent_completion']:,} completion)"
+        )
+        print(
+            f"     Phase 2 (agent): {agg['p2_agent_total']:>10,} total "
+            f"({agg['p2_agent_prompt']:,} prompt + {agg['p2_agent_completion']:,} completion)"
+        )
     print(f"     LLM calls: {agg['p1_calls']} → {agg['p2_calls']}")
 
     # ── Print evaluation summary ──
     if eval_summary:
         print(f"\n  📝 Quality Evaluation (ClawWork-aligned, cliff={_MIN_EVALUATION_THRESHOLD}):")
         print(f"     Evaluated: {eval_summary['tasks_evaluated']} tasks")
-        print(f"     Phase 1: mean {eval_summary['phase1']['mean_score']}/10"
-              f" | ${eval_summary['phase1']['total_actual_payment']:.2f} earned"
-              f" | {eval_summary['phase1']['cliffed_count']} cliffed")
-        print(f"     Phase 2: mean {eval_summary['phase2']['mean_score']}/10"
-              f" | ${eval_summary['phase2']['total_actual_payment']:.2f} earned"
-              f" | {eval_summary['phase2']['cliffed_count']} cliffed")
-        print(f"     Change:  {eval_summary['score_change']:+.1f} pts"
-              f" | ↑{eval_summary['improved']} ={eval_summary['same']} ↓{eval_summary['regressed']}")
+        print(
+            f"     Phase 1: mean {eval_summary['phase1']['mean_score']}/10"
+            f" | ${eval_summary['phase1']['total_actual_payment']:.2f} earned"
+            f" | {eval_summary['phase1']['cliffed_count']} cliffed"
+        )
+        print(
+            f"     Phase 2: mean {eval_summary['phase2']['mean_score']}/10"
+            f" | ${eval_summary['phase2']['total_actual_payment']:.2f} earned"
+            f" | {eval_summary['phase2']['cliffed_count']} cliffed"
+        )
+        print(
+            f"     Change:  {eval_summary['score_change']:+.1f} pts"
+            f" | ↑{eval_summary['improved']} ={eval_summary['same']} ↓{eval_summary['regressed']}"
+        )
 
     print(f"\n  🧬 Skills accumulated: {len(skills_data)}")
     print(f"     By origin: {_count_skills_by_origin(skills_data)}")
@@ -1120,6 +1188,7 @@ def build_comparison(cfg: Dict) -> None:
 # ═══════════════════════════════════════════════════════════════════
 # DB management
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _wipe_skill_db() -> None:
     """Delete the shared .openspace/openspace.db for a fresh start."""
@@ -1146,6 +1215,7 @@ def _backup_skill_db(dest: Path) -> None:
 # ═══════════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════════
+
 
 async def main(args: argparse.Namespace) -> None:
     cfg = load_config(args.config)
@@ -1245,17 +1315,16 @@ async def main(args: argparse.Namespace) -> None:
         result = prefetch_reference_files(tasks)
         n_tasks_with_files = sum(1 for v in result.values() if v)
         total_files = sum(len(v) for v in result.values())
-        print(f"\n✅ Prefetch complete: {total_files} files cached for "
-              f"{n_tasks_with_files} tasks.")
+        print(f"\n✅ Prefetch complete: {total_files} files cached for {n_tasks_with_files} tasks.")
         return
 
     if args.dry_run:
         print(f"\n🏁 Dry run complete. {len(tasks)} tasks ready.")
         mode = f"concurrent ({concurrency} workers)" if concurrency > 1 else "serial"
         print(f"   Mode: {mode}")
-        print(f"   To execute: remove --dry-run flag")
+        print("   To execute: remove --dry-run flag")
         if tasks:
-            print(f"\n   Sample task:")
+            print("\n   Sample task:")
             t = tasks[0]
             print(f"     ID: {t['task_id']}")
             print(f"     Occupation: {t['occupation']}")
@@ -1270,7 +1339,7 @@ async def main(args: argparse.Namespace) -> None:
         has_refs = sum(1 for t in tasks if t.get("reference_files"))
         if has_refs:
             print(f"\n📦 Auto-prefetching reference files for {has_refs} tasks …")
-            print(f"   (use --no-prefetch to skip, --prefetch-only to run separately)")
+            print("   (use --no-prefetch to skip, --prefetch-only to run separately)")
             prefetch_reference_files(tasks)
 
     rd = _results_dir(cfg)
@@ -1311,6 +1380,7 @@ async def main(args: argparse.Namespace) -> None:
         # Snapshot skills after Phase 1
         try:
             from openspace.skill_engine import SkillStore
+
             store = SkillStore()
             skills = _snapshot_skills(store)
             with open(rd / "skills_snapshot.json", "w") as f:
@@ -1369,20 +1439,21 @@ def _check_environment(cfg: Dict) -> bool:
             print("  ❌ OPENAI_API_KEY not set")
             ok = False
         else:
-            print(f"  ✅ OPENAI_API_KEY set")
+            print("  ✅ OPENAI_API_KEY set")
     elif "anthropic" in model or "claude" in model:
         key = os.environ.get("ANTHROPIC_API_KEY", "") or os.environ.get("OPENROUTER_API_KEY", "")
         if not key:
             print("  ❌ ANTHROPIC_API_KEY or OPENROUTER_API_KEY not set")
             ok = False
         else:
-            print(f"  ✅ API key set for Anthropic model")
+            print("  ✅ API key set for Anthropic model")
     else:
         print(f"  ⚠️  Model: {model} — make sure the corresponding API key is set")
 
     # 2. Check litellm
     try:
         import litellm
+
         ver = getattr(litellm, "__version__", getattr(litellm, "version", "unknown"))
         print(f"  ✅ litellm ({ver})")
     except ImportError:
@@ -1392,10 +1463,11 @@ def _check_environment(cfg: Dict) -> bool:
     # 3. Check openspace
     try:
         from openspace.tool_layer import OpenSpace
-        print(f"  ✅ openspace importable")
+
+        print("  ✅ openspace importable")
     except ImportError as e:
         print(f"  ❌ openspace not importable: {e}")
-        print(f"     Run from OpenSpace directory or: pip install -e .")
+        print("     Run from OpenSpace directory or: pip install -e .")
         ok = False
 
     # 4. Check data availability (quick peek)
@@ -1418,79 +1490,99 @@ def _check_environment(cfg: Dict) -> bool:
     if not has_data:
         try:
             import datasets
-            print(f"  ✅ HuggingFace datasets library installed — will auto-download")
+
+            print("  ✅ HuggingFace datasets library installed — will auto-download")
             has_data = True
         except ImportError:
-            print(f"  ⚠️  No local task data found & no HuggingFace datasets library")
-            print(f"     Fix: pip install datasets  OR  set --clawwork-root")
+            print("  ⚠️  No local task data found & no HuggingFace datasets library")
+            print("     Fix: pip install datasets  OR  set --clawwork-root")
 
     # 5. Check evaluation readiness
     if cfg.get("enable_evaluation", True):
         eval_key = os.environ.get("EVALUATION_API_KEY") or os.environ.get("OPENAI_API_KEY")
         meta_dir = root / "eval" / "meta_prompts" if root.exists() else None
         if eval_key:
-            print(f"  ✅ Evaluation API key set")
+            print("  ✅ Evaluation API key set")
         else:
-            print(f"  ⚠️  No EVALUATION_API_KEY or OPENAI_API_KEY for evaluation")
-            print(f"     Evaluation will fail. Use --no-eval to skip.")
+            print("  ⚠️  No EVALUATION_API_KEY or OPENAI_API_KEY for evaluation")
+            print("     Evaluation will fail. Use --no-eval to skip.")
         if meta_dir and meta_dir.exists():
             n_meta = len(list(meta_dir.glob("*.json")))
             print(f"  ✅ Evaluation meta-prompts: {n_meta} rubrics in {meta_dir}")
-            print(f"     (If evaluation fails with 'No module named langchain_core', run: pip install -r gdpval_bench/requirements-eval.txt)")
+            print(
+                "     (If evaluation fails with 'No module named langchain_core', run: pip install -r gdpval_bench/requirements-eval.txt)"
+            )
         elif meta_dir:
             print(f"  ⚠️  Meta-prompts dir not found: {meta_dir}")
-            print(f"     Evaluation needs ClawWork/eval/meta_prompts/")
+            print("     Evaluation needs ClawWork/eval/meta_prompts/")
     else:
-        print(f"  ℹ️  Evaluation disabled")
+        print("  ℹ️  Evaluation disabled")
 
     print()
     return ok
 
 
 def cli():
-    parser = argparse.ArgumentParser(
-        description="GDPVal Benchmark for OpenSpace skill-driven token savings"
+    parser = argparse.ArgumentParser(description="GDPVal Benchmark for OpenSpace skill-driven token savings")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=str(_DEFAULT_CONFIG),
+        help="Path to config JSON file (default: gdpval_bench/config.json)",
     )
-    parser.add_argument("--config", type=str, default=str(_DEFAULT_CONFIG),
-                        help="Path to config JSON file (default: gdpval_bench/config.json)")
-    parser.add_argument("--max-tasks", type=int, default=None,
-                        help="Max tasks to run (for testing)")
-    parser.add_argument("--per-occupation", type=int, default=None,
-                        help="Stratified sampling: pick N tasks per occupation "
-                             "(e.g., --per-occupation 1 → 44 tasks covering all occupations)")
-    parser.add_argument("--task-list", type=str, default=None,
-                        help="Path to a task-list JSON file (e.g. tasks_50.json). "
-                             "The file must have a 'task_ids' array. Overrides max-tasks / "
-                             "per-occupation / sectors / occupations filters.")
-    parser.add_argument("--model", type=str, default=None,
-                        help="LLM model override")
-    parser.add_argument("--run-name", type=str, default=None,
-                        help="Run name (determines output directory)")
-    parser.add_argument("--clawwork-root", type=str, default=None,
-                        help="Path to ClawWork project (for loading tasks)")
-    parser.add_argument("--concurrency", type=int, default=1,
-                        help="Number of parallel OpenSpace workers per phase "
-                             "(default: 1 = serial). Higher values reduce "
-                             "cross-task skill accumulation within a phase.")
-    parser.add_argument("--resume", action="store_true",
-                        help="Resume from last checkpoint")
-    parser.add_argument("--phase2-only", action="store_true",
-                        help="Skip Phase 1, run Phase 2 only (requires Phase 1 DB)")
-    parser.add_argument("--phase1-only", action="store_true",
-                        help="Run Phase 1 only, skip Phase 2")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Only load tasks and check environment, don't execute")
-    parser.add_argument("--no-eval", action="store_true",
-                        help="Disable ClawWork-aligned evaluation after each task "
-                             "(saves API calls to the evaluation model)")
-    parser.add_argument("--prefetch-only", action="store_true",
-                        help="Only pre-download all reference files to local cache, "
-                             "then exit. Run this first to avoid SSL flakiness "
-                             "during benchmark execution.")
-    parser.add_argument("--no-prefetch", action="store_true",
-                        help="Skip the automatic prefetch step (download on-the-fly instead)")
-    parser.add_argument("--use-clawwork-productivity", action="store_true",
-                        help="Enable ClawWork productivity tools (search_web, create_file, read_file, etc.) for fair comparison with ClawWork; requires livebench installed.")
+    parser.add_argument("--max-tasks", type=int, default=None, help="Max tasks to run (for testing)")
+    parser.add_argument(
+        "--per-occupation",
+        type=int,
+        default=None,
+        help="Stratified sampling: pick N tasks per occupation "
+        "(e.g., --per-occupation 1 → 44 tasks covering all occupations)",
+    )
+    parser.add_argument(
+        "--task-list",
+        type=str,
+        default=None,
+        help="Path to a task-list JSON file (e.g. tasks_50.json). "
+        "The file must have a 'task_ids' array. Overrides max-tasks / "
+        "per-occupation / sectors / occupations filters.",
+    )
+    parser.add_argument("--model", type=str, default=None, help="LLM model override")
+    parser.add_argument("--run-name", type=str, default=None, help="Run name (determines output directory)")
+    parser.add_argument("--clawwork-root", type=str, default=None, help="Path to ClawWork project (for loading tasks)")
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=1,
+        help="Number of parallel OpenSpace workers per phase "
+        "(default: 1 = serial). Higher values reduce "
+        "cross-task skill accumulation within a phase.",
+    )
+    parser.add_argument("--resume", action="store_true", help="Resume from last checkpoint")
+    parser.add_argument(
+        "--phase2-only", action="store_true", help="Skip Phase 1, run Phase 2 only (requires Phase 1 DB)"
+    )
+    parser.add_argument("--phase1-only", action="store_true", help="Run Phase 1 only, skip Phase 2")
+    parser.add_argument("--dry-run", action="store_true", help="Only load tasks and check environment, don't execute")
+    parser.add_argument(
+        "--no-eval",
+        action="store_true",
+        help="Disable ClawWork-aligned evaluation after each task (saves API calls to the evaluation model)",
+    )
+    parser.add_argument(
+        "--prefetch-only",
+        action="store_true",
+        help="Only pre-download all reference files to local cache, "
+        "then exit. Run this first to avoid SSL flakiness "
+        "during benchmark execution.",
+    )
+    parser.add_argument(
+        "--no-prefetch", action="store_true", help="Skip the automatic prefetch step (download on-the-fly instead)"
+    )
+    parser.add_argument(
+        "--use-clawwork-productivity",
+        action="store_true",
+        help="Enable ClawWork productivity tools (search_web, create_file, read_file, etc.) for fair comparison with ClawWork; requires livebench installed.",
+    )
     args = parser.parse_args()
     asyncio.run(main(args))
 

@@ -21,17 +21,21 @@ Supported host agents:
 import logging
 from typing import Dict, Optional
 
-from openspace.host_detection.resolver import build_llm_kwargs, build_grounding_config_path
 from openspace.host_detection.nanobot import (
     get_openai_api_key as _nanobot_get_openai_api_key,
+)
+from openspace.host_detection.nanobot import (
     read_nanobot_mcp_env,
     try_read_nanobot_config,
 )
 from openspace.host_detection.openclaw import (
     get_openclaw_openai_api_key as _openclaw_get_openai_api_key,
+)
+from openspace.host_detection.openclaw import (
     is_openclaw_host,
     read_openclaw_skill_env,
 )
+from openspace.host_detection.resolver import build_grounding_config_path, build_llm_kwargs
 
 logger = logging.getLogger("openspace.host_detection")
 

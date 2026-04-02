@@ -7,15 +7,14 @@ from functools import wraps
 from pathlib import Path
 from typing import Any
 
-from posthog import Posthog
-from scarf import ScarfEventLogger
-
 from mcp_use.logging import MCP_USE_DEBUG
 from mcp_use.telemetry.events import (
     BaseTelemetryEvent,
     MCPAgentExecutionEvent,
 )
 from mcp_use.telemetry.utils import get_package_version
+from posthog import Posthog
+from scarf import ScarfEventLogger
 
 logger = logging.getLogger(__name__)
 
@@ -23,13 +22,14 @@ logger = logging.getLogger(__name__)
 def singleton(cls):
     """A decorator that implements the singleton pattern for a class."""
     instance = [None]
-    
+
     def wrapper(*args, **kwargs):
         if instance[0] is None:
             instance[0] = cls(*args, **kwargs)
         return instance[0]
-    
+
     return wrapper
+
 
 def requires_telemetry(func: Callable) -> Callable:
     """Decorator that skips function execution if telemetry is disabled"""

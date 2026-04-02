@@ -26,11 +26,12 @@ import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from openspace.utils.logging import Logger
-from .skill_utils import parse_frontmatter, strip_frontmatter, check_skill_safety, is_skill_safe
-from .skill_ranker import SkillRanker, SkillCandidate, PREFILTER_THRESHOLD
+
+from .skill_ranker import PREFILTER_THRESHOLD, SkillCandidate, SkillRanker
+from .skill_utils import check_skill_safety, is_skill_safe, parse_frontmatter, strip_frontmatter
 
 if TYPE_CHECKING:
     from openspace.llm import LLMClient
@@ -93,10 +94,10 @@ class SkillMeta:
     reference this field.
     """
 
-    skill_id: str          # Unique — persisted in .skill_id sidecar
-    name: str              # Human-readable name (from frontmatter or dirname)
+    skill_id: str  # Unique — persisted in .skill_id sidecar
+    name: str  # Human-readable name (from frontmatter or dirname)
     description: str
-    path: Path             # Absolute path to SKILL.md
+    path: Path  # Absolute path to SKILL.md
 
 
 class SkillRegistry:
@@ -112,10 +113,10 @@ class SkillRegistry:
 
     def __init__(self, skill_dirs: Optional[List[Path]] = None) -> None:
         self._skill_dirs: List[Path] = skill_dirs or []
-        self._skills: Dict[str, SkillMeta] = {}     # skill_id -> SkillMeta
-        self._content_cache: Dict[str, str] = {}     # skill_id -> raw SKILL.md content
+        self._skills: Dict[str, SkillMeta] = {}  # skill_id -> SkillMeta
+        self._content_cache: Dict[str, str] = {}  # skill_id -> raw SKILL.md content
         self._discovered = False
-        self._ranker: Optional[SkillRanker] = None   # lazy-init on first use
+        self._ranker: Optional[SkillRanker] = None  # lazy-init on first use
 
     def discover(self) -> List[SkillMeta]:
         """Scan all skill_dirs and populate the registry.
@@ -147,10 +148,7 @@ class SkillRegistry:
                     # Safety check on skill content
                     safety_flags = check_skill_safety(content)
                     if not is_skill_safe(safety_flags):
-                        logger.warning(
-                            f"BLOCKED skill {entry.name}: "
-                            f"safety flags {safety_flags}"
-                        )
+                        logger.warning(f"BLOCKED skill {entry.name}: safety flags {safety_flags}")
                         continue
 
                     meta = self._parse_skill(entry.name, entry, skill_file, content)
@@ -170,10 +168,7 @@ class SkillRegistry:
                     logger.warning(f"Failed to parse skill {skill_file}: {e}")
 
         self._discovered = True
-        logger.info(
-            f"Skill discovery complete: {len(self._skills)} skill(s) "
-            f"from {len(self._skill_dirs)} dir(s)"
-        )
+        logger.info(f"Skill discovery complete: {len(self._skills)} skill(s) from {len(self._skill_dirs)} dir(s)")
         return list(self._skills.values())
 
     def list_skills(self) -> List[SkillMeta]:
@@ -207,14 +202,10 @@ class SkillRegistry:
         self._skills[new_meta.skill_id] = new_meta
         if new_meta.path.exists():
             try:
-                self._content_cache[new_meta.skill_id] = (
-                    new_meta.path.read_text(encoding="utf-8")
-                )
+                self._content_cache[new_meta.skill_id] = new_meta.path.read_text(encoding="utf-8")
             except Exception:
                 pass
-        logger.debug(
-            f"Registry.update_skill: {old_skill_id} → {new_meta.skill_id}"
-        )
+        logger.debug(f"Registry.update_skill: {old_skill_id} → {new_meta.skill_id}")
 
     def add_skill(self, meta: SkillMeta) -> None:
         """Register a newly-created skill (DERIVED / CAPTURED).
@@ -222,16 +213,12 @@ class SkillRegistry:
         Does NOT overwrite an existing entry with the same ``skill_id``.
         """
         if meta.skill_id in self._skills:
-            logger.debug(
-                f"Registry.add_skill: {meta.skill_id} already exists, skipping"
-            )
+            logger.debug(f"Registry.add_skill: {meta.skill_id} already exists, skipping")
             return
         self._skills[meta.skill_id] = meta
         if meta.path.exists():
             try:
-                self._content_cache[meta.skill_id] = (
-                    meta.path.read_text(encoding="utf-8")
-                )
+                self._content_cache[meta.skill_id] = meta.path.read_text(encoding="utf-8")
             except Exception:
                 pass
         logger.debug(f"Registry.add_skill: {meta.skill_id}")
@@ -267,10 +254,7 @@ class SkillRegistry:
                     # Safety check (same as discover())
                     safety_flags = check_skill_safety(content)
                     if not is_skill_safe(safety_flags):
-                        logger.warning(
-                            f"BLOCKED external skill {entry.name}: "
-                            f"safety flags {safety_flags}"
-                        )
+                        logger.warning(f"BLOCKED external skill {entry.name}: safety flags {safety_flags}")
                         continue
 
                     meta = self._parse_skill(entry.name, entry, skill_file, content)
@@ -284,10 +268,7 @@ class SkillRegistry:
                     logger.warning(f"Failed to parse skill {skill_file}: {e}")
 
         if added:
-            logger.info(
-                f"discover_from_dirs: {len(added)} new skill(s) from "
-                f"{len(extra_dirs)} dir(s)"
-            )
+            logger.info(f"discover_from_dirs: {len(added)} new skill(s) from {len(extra_dirs)} dir(s)")
         return added
 
     def register_skill_dir(self, skill_dir: Path) -> Optional[SkillMeta]:
@@ -312,10 +293,7 @@ class SkillRegistry:
             # Safety check (same as discover())
             safety_flags = check_skill_safety(content)
             if not is_skill_safe(safety_flags):
-                logger.warning(
-                    f"BLOCKED skill {skill_dir.name}: "
-                    f"safety flags {safety_flags}"
-                )
+                logger.warning(f"BLOCKED skill {skill_dir.name}: safety flags {safety_flags}")
                 return None
 
             meta = self._parse_skill(skill_dir.name, skill_dir, skill_file, content)
@@ -400,10 +378,7 @@ class SkillRegistry:
                         continue
                 kept.append(s)
             if filtered_out:
-                logger.info(
-                    f"Skill quality filter: removed {len(filtered_out)} "
-                    f"high-fallback skill(s): {filtered_out}"
-                )
+                logger.info(f"Skill quality filter: removed {len(filtered_out)} high-fallback skill(s): {filtered_out}")
             available = kept
 
         if not available:
@@ -426,13 +401,11 @@ class SkillRegistry:
                 if applied > 0:
                     rate = completions / applied
                     catalog_lines.append(
-                        f"- **{s.skill_id}**: {s.description}  "
-                        f"(success {completions}/{applied} = {rate:.0%})"
+                        f"- **{s.skill_id}**: {s.description}  (success {completions}/{applied} = {rate:.0%})"
                     )
                 elif selections > 0:
                     catalog_lines.append(
-                        f"- **{s.skill_id}**: {s.description}  "
-                        f"(selected {selections}x, never succeeded)"
+                        f"- **{s.skill_id}**: {s.description}  (selected {selections}x, never succeeded)"
                     )
                 else:
                     catalog_lines.append(f"- **{s.skill_id}**: {s.description}  (new)")
@@ -440,9 +413,7 @@ class SkillRegistry:
                 catalog_lines.append(f"- **{s.skill_id}**: {s.description}")
         skills_catalog = "\n".join(catalog_lines)
 
-        prompt = self._build_skill_selection_prompt(
-            task_description, skills_catalog, max_skills
-        )
+        prompt = self._build_skill_selection_prompt(task_description, skills_catalog, max_skills)
 
         selection_record: Dict[str, Any] = {
             "method": "llm",
@@ -514,12 +485,14 @@ class SkillRegistry:
             if raw:
                 body = strip_frontmatter(raw)
 
-            candidates.append(SkillCandidate(
-                skill_id=s.skill_id,
-                name=s.name,
-                description=s.description,
-                body=body,
-            ))
+            candidates.append(
+                SkillCandidate(
+                    skill_id=s.skill_id,
+                    name=s.name,
+                    description=s.description,
+                    body=body,
+                )
+            )
 
         ranked = self.ranker.hybrid_rank(task, candidates, top_k=prefilter_top_k)
 
@@ -572,11 +545,7 @@ class SkillRegistry:
                 skill_dir = str(skill.path.parent)
                 content = content.replace("{baseDir}", skill_dir)
 
-                part = (
-                    f"### Skill: {skill.skill_id}\n"
-                    f"**Skill directory**: `{skill_dir}`\n\n"
-                    f"{content}"
-                )
+                part = f"### Skill: {skill.skill_id}\n**Skill directory**: `{skill_dir}`\n\n{content}"
                 parts.append(part)
 
         if not parts:
@@ -615,8 +584,7 @@ class SkillRegistry:
             f"({tool_hint}) alongside skill guidance. "
             "Choose the best tool for each sub-step.\n\n"
             "**Resource access**: Each skill may include bundled resources "
-            "(scripts, references, assets) in its skill directory. "
-            + resource_tip
+            "(scripts, references, assets) in its skill directory. " + resource_tip
         )
         return header + "\n\n---\n\n".join(parts)
 

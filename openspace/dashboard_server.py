@@ -84,13 +84,15 @@ def create_app() -> Flask:
         workflows = [_build_workflow_summary(path) for path in _discover_workflow_dirs()]
         top_skills = _sort_skills(skills, sort_key="score")[:5]
         recent_skills = _sort_skills(skills, sort_key="updated")[:5]
-        average_score = round(
-            sum(_skill_score(record) for record in skills) / len(skills), 1
-        ) if skills else 0.0
-        average_workflow_success = round(
-            (sum((item.get("success_rate") or 0.0) for item in workflows) / len(workflows)) * 100,
-            1,
-        ) if workflows else 0.0
+        average_score = round(sum(_skill_score(record) for record in skills) / len(skills), 1) if skills else 0.0
+        average_workflow_success = (
+            round(
+                (sum((item.get("success_rate") or 0.0) for item in workflows) / len(workflows)) * 100,
+                1,
+            )
+            if workflows
+            else 0.0
+        )
 
         return jsonify(
             {
@@ -150,7 +152,9 @@ def create_app() -> Flask:
 
         detail = _serialize_skill(record, include_recent_analyses=True)
         detail["lineage_graph"] = _build_lineage_payload(skill_id, store)
-        detail["recent_analyses"] = [analysis.to_dict() for analysis in store.load_analyses(skill_id=skill_id, limit=10)]
+        detail["recent_analyses"] = [
+            analysis.to_dict() for analysis in store.load_analyses(skill_id=skill_id, limit=10)
+        ]
         detail["source"] = _load_skill_source(record)
         return jsonify(detail)
 
@@ -612,6 +616,7 @@ def main() -> None:
     app = create_app()
 
     from werkzeug.serving import run_simple
+
     run_simple(
         args.host,
         args.port,

@@ -15,7 +15,7 @@ import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Dict, FrozenSet, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -37,13 +37,15 @@ class TrustTier(str, Enum):
 
 
 REQUIRED_DENIED_PATHS = frozenset({"/etc/shadow", "/etc/passwd", "~/.ssh/*", "**/.env"})
-REQUIRED_BLOCKED_DOMAINS = frozenset({
-    "169.254.169.254",
-    "metadata.google.internal",
-    "metadata.internal",
-    "100.100.100.200",
-    "fd00:ec2::254",
-})
+REQUIRED_BLOCKED_DOMAINS = frozenset(
+    {
+        "169.254.169.254",
+        "metadata.google.internal",
+        "metadata.internal",
+        "100.100.100.200",
+        "fd00:ec2::254",
+    }
+)
 REQUIRED_BLOCKED_COMMANDS = frozenset({"rm", "rmdir", "mkfs", "dd", "shutdown", "reboot", "kill", "pkill"})
 
 
@@ -143,7 +145,9 @@ class SecretCapability(BaseModel):
         default_factory=lambda: ["task"],
         description="Scopes this lease can access (task, session, global)",
     )
-    allowed_keys: list[str] = Field(default_factory=list, description="Specific secret keys allowed (empty = unrestricted)")
+    allowed_keys: list[str] = Field(
+        default_factory=list, description="Specific secret keys allowed (empty = unrestricted)"
+    )
     max_secrets: int = Field(default=0, ge=0, le=50, description="Max secrets accessible (0 = none)")
 
 
@@ -173,9 +177,7 @@ class LeaseSchema(BaseModel):
             if self.network.outbound_enabled:
                 raise ValueError("T0 (untrusted) cannot have outbound network enabled")
             if self.network.allowed_domains:
-                raise ValueError(
-                    "T0 (untrusted) cannot have allowed_domains when outbound is disabled"
-                )
+                raise ValueError("T0 (untrusted) cannot have allowed_domains when outbound is disabled")
             if self.process.allow_shell:
                 raise ValueError("T0 (untrusted) cannot allow shell execution")
             if self.process.max_processes > 1:
@@ -194,9 +196,7 @@ class LeaseSchema(BaseModel):
             if self.network.outbound_enabled:
                 raise ValueError("T1 (basic) cannot have outbound network enabled")
             if self.network.allowed_domains:
-                raise ValueError(
-                    "T1 (basic) cannot have allowed_domains when outbound is disabled"
-                )
+                raise ValueError("T1 (basic) cannot have allowed_domains when outbound is disabled")
             if self.process.allow_shell:
                 raise ValueError("T1 (basic) cannot allow shell execution")
             if self.secrets.max_secrets > 0:
@@ -289,7 +289,20 @@ TIER_DEFAULTS: Dict[TrustTier, LeaseSchema] = {
             allowed_domains=["*.githubusercontent.com", "pypi.org", "registry.npmjs.org"],
         ),
         process=ProcessCapability(
-            allowed_commands=["echo", "cat", "head", "tail", "grep", "find", "ls", "wc", "python", "pip", "node", "npm"],
+            allowed_commands=[
+                "echo",
+                "cat",
+                "head",
+                "tail",
+                "grep",
+                "find",
+                "ls",
+                "wc",
+                "python",
+                "pip",
+                "node",
+                "npm",
+            ],
             max_processes=5,
             max_execution_time_s=300,
             allow_shell=False,
@@ -334,7 +347,9 @@ TIER_DEFAULTS: Dict[TrustTier, LeaseSchema] = {
             max_execution_time_s=3600,
             allow_shell=True,
         ),
-        resources=ResourceCapability(max_memory_mb=8192, max_cpu_percent=100, max_disk_mb=10240, max_output_size_mb=100),
+        resources=ResourceCapability(
+            max_memory_mb=8192, max_cpu_percent=100, max_disk_mb=10240, max_output_size_mb=100
+        ),
         secrets=SecretCapability(max_secrets=50, allowed_scopes=["task", "session", "global"]),
     ),
 }

@@ -43,10 +43,8 @@ import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 from openspace.sandbox.leases import TrustTier
-
 
 # ---------------------------------------------------------------------------
 # #104 — Token Claims Model
@@ -69,18 +67,32 @@ class TokenScope(str, Enum):
 TIER_DEFAULT_SCOPES: dict[TrustTier, frozenset[TokenScope]] = {
     TrustTier.T0_UNTRUSTED: frozenset(),
     TrustTier.T1_BASIC: frozenset({TokenScope.TOOL_SEARCH}),
-    TrustTier.T2_STANDARD: frozenset({
-        TokenScope.TOOL_SEARCH, TokenScope.TOOL_EXECUTE, TokenScope.LEASE_ACQUIRE,
-    }),
-    TrustTier.T3_ELEVATED: frozenset({
-        TokenScope.TOOL_SEARCH, TokenScope.TOOL_EXECUTE,
-        TokenScope.LEASE_ACQUIRE, TokenScope.SECRET_READ,
-    }),
-    TrustTier.T4_FULL: frozenset({
-        TokenScope.TOOL_SEARCH, TokenScope.TOOL_EXECUTE, TokenScope.TOOL_ADMIN,
-        TokenScope.LEASE_ACQUIRE, TokenScope.LEASE_ADMIN,
-        TokenScope.SECRET_READ, TokenScope.SECRET_WRITE,
-    }),
+    TrustTier.T2_STANDARD: frozenset(
+        {
+            TokenScope.TOOL_SEARCH,
+            TokenScope.TOOL_EXECUTE,
+            TokenScope.LEASE_ACQUIRE,
+        }
+    ),
+    TrustTier.T3_ELEVATED: frozenset(
+        {
+            TokenScope.TOOL_SEARCH,
+            TokenScope.TOOL_EXECUTE,
+            TokenScope.LEASE_ACQUIRE,
+            TokenScope.SECRET_READ,
+        }
+    ),
+    TrustTier.T4_FULL: frozenset(
+        {
+            TokenScope.TOOL_SEARCH,
+            TokenScope.TOOL_EXECUTE,
+            TokenScope.TOOL_ADMIN,
+            TokenScope.LEASE_ACQUIRE,
+            TokenScope.LEASE_ADMIN,
+            TokenScope.SECRET_READ,
+            TokenScope.SECRET_WRITE,
+        }
+    ),
 }
 
 
@@ -193,16 +205,11 @@ def create_token(
         ValueError: If secret is too short or ttl_seconds is invalid.
     """
     if len(secret) < _MIN_SECRET_LENGTH:
-        raise ValueError(
-            f"Signing secret must be at least {_MIN_SECRET_LENGTH} characters"
-        )
+        raise ValueError(f"Signing secret must be at least {_MIN_SECRET_LENGTH} characters")
     if ttl_seconds < 1:
         raise ValueError("ttl_seconds must be positive")
     if ttl_seconds > _MAX_TTL_SECONDS:
-        raise ValueError(
-            f"ttl_seconds must not exceed {_MAX_TTL_SECONDS} "
-            f"({_MAX_TTL_SECONDS // 3600}h)"
-        )
+        raise ValueError(f"ttl_seconds must not exceed {_MAX_TTL_SECONDS} ({_MAX_TTL_SECONDS // 3600}h)")
 
     now = time.time()
     # Validate scopes against tier ceiling — prevent privilege inversion
@@ -210,13 +217,8 @@ def create_token(
     if scopes is not None:
         excess = scopes - tier_allowed
         if excess:
-            excess_names = ", ".join(
-                s.value for s in sorted(excess, key=lambda s: s.value)
-            )
-            raise ValueError(
-                f"Scopes [{excess_names}] exceed tier "
-                f"{trust_tier.value} ceiling"
-            )
+            excess_names = ", ".join(s.value for s in sorted(excess, key=lambda s: s.value))
+            raise ValueError(f"Scopes [{excess_names}] exceed tier {trust_tier.value} ceiling")
         effective_scopes = scopes
     else:
         effective_scopes = tier_allowed
@@ -232,17 +234,13 @@ def create_token(
     }
 
     payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
-    payload_b64 = base64.urlsafe_b64encode(payload_json.encode("utf-8")).rstrip(
-        b"="
-    ).decode("ascii")
+    payload_b64 = base64.urlsafe_b64encode(payload_json.encode("utf-8")).rstrip(b"=").decode("ascii")
 
     signature = _compute_signature(payload_b64, secret.encode("utf-8"))
     return f"{payload_b64}{_TOKEN_SEPARATOR}{signature}"
 
 
-def validate_token(
-    token: str, *, secret: str, expected_audience: str = ""
-) -> AuthClaims:
+def validate_token(token: str, *, secret: str, expected_audience: str = "") -> AuthClaims:
     """Validate an HMAC-signed token and extract claims.
 
     Args:
@@ -391,9 +389,7 @@ def authorize_tool(claims: AuthClaims, policy: ToolPolicy) -> None:
     """
     # 1. Deny-before-allow: blocked subjects
     if policy.blocked_subjects and claims.subject in policy.blocked_subjects:
-        raise ToolNotAuthorizedError(
-            f"Subject '{claims.subject}' is blocked from tool '{policy.tool_name}'"
-        )
+        raise ToolNotAuthorizedError(f"Subject '{claims.subject}' is blocked from tool '{policy.tool_name}'")
 
     # 2. Trust tier check
     caller_level = _TIER_ORDER.index(claims.trust_tier)
@@ -410,15 +406,13 @@ def authorize_tool(claims: AuthClaims, policy: ToolPolicy) -> None:
     if missing_scopes:
         missing_names = ", ".join(s.value for s in sorted(missing_scopes, key=lambda s: s.value))
         raise InsufficientScopeError(
-            f"Tool '{policy.tool_name}' requires scopes [{missing_names}], "
-            f"caller is missing them"
+            f"Tool '{policy.tool_name}' requires scopes [{missing_names}], caller is missing them"
         )
 
     # 4. Allowed subjects (if set, only listed subjects may proceed)
     if policy.allowed_subjects and claims.subject not in policy.allowed_subjects:
         raise ToolNotAuthorizedError(
-            f"Subject '{claims.subject}' is not in the allowed list "
-            f"for tool '{policy.tool_name}'"
+            f"Subject '{claims.subject}' is not in the allowed list for tool '{policy.tool_name}'"
         )
 
 
@@ -445,8 +439,7 @@ def check_tier_ceiling(
 
     if requested_level > caller_level:
         raise InsufficientTierError(
-            f"Cannot request tier {requested_tier.value}: "
-            f"caller's ceiling is {claims.trust_tier.value}"
+            f"Cannot request tier {requested_tier.value}: caller's ceiling is {claims.trust_tier.value}"
         )
 
 
@@ -476,8 +469,7 @@ def authorize_lease(
     required_scope = TokenScope.LEASE_ADMIN if admin else TokenScope.LEASE_ACQUIRE
     if required_scope not in claims.scopes:
         raise InsufficientScopeError(
-            f"Lease {'admin' if admin else 'acquisition'} requires "
-            f"scope {required_scope.value}"
+            f"Lease {'admin' if admin else 'acquisition'} requires scope {required_scope.value}"
         )
 
 
@@ -546,15 +538,12 @@ class TokenRegistry:
                     "New revocation rejected — investigate token lifecycle.",
                     self.HARD_MAX,
                 )
-                raise RegistryFullError(
-                    f"Revocation registry full ({self.HARD_MAX} entries)"
-                )
+                raise RegistryFullError(f"Revocation registry full ({self.HARD_MAX} entries)")
 
             # Warn at 2× soft limit
             if len(self._revoked_order) > 2 * self.MAX_REVOKED:
                 _registry_logger.warning(
-                    "Revocation registry at %d entries (soft limit: %d). "
-                    "Consider reviewing token TTLs.",
+                    "Revocation registry at %d entries (soft limit: %d). Consider reviewing token TTLs.",
                     len(self._revoked_order),
                     self.MAX_REVOKED,
                 )
@@ -616,17 +605,13 @@ class AuthProvider:
 
     signing_secret: str = field(repr=False)
     audience: str = ""  # service identifier for token binding
-    tool_policies: dict[str, ToolPolicy] = field(
-        default_factory=lambda: dict(DEFAULT_TOOL_POLICIES)
-    )
+    tool_policies: dict[str, ToolPolicy] = field(default_factory=lambda: dict(DEFAULT_TOOL_POLICIES))
     registry: TokenRegistry = field(default_factory=TokenRegistry)
     _initialized: bool = field(default=False, repr=False, init=False)
 
     def __post_init__(self) -> None:
         if len(self.signing_secret) < _MIN_SECRET_LENGTH:
-            raise ValueError(
-                f"signing_secret must be at least {_MIN_SECRET_LENGTH} characters"
-            )
+            raise ValueError(f"signing_secret must be at least {_MIN_SECRET_LENGTH} characters")
         object.__setattr__(self, "_initialized", True)
 
     def __setattr__(self, name: str, value: object) -> None:
@@ -676,14 +661,13 @@ class AuthProvider:
         Returns validated AuthClaims or raises AuthError subclass.
         """
         claims = validate_token(
-            token, secret=self.signing_secret,
+            token,
+            secret=self.signing_secret,
             expected_audience=self.audience,
         )
 
         if self.registry.is_revoked(claims.token_id):
-            raise TokenRevokedError(
-                f"Token '{claims.token_id}' has been revoked"
-            )
+            raise TokenRevokedError(f"Token '{claims.token_id}' has been revoked")
 
         return claims
 
@@ -739,13 +723,12 @@ class AuthProvider:
             AuthError: If the token cannot be validated (signature/format/audience).
         """
         claims = validate_token(
-            token, secret=self.signing_secret,
+            token,
+            secret=self.signing_secret,
             expected_audience=self.audience,
         )
         self.registry.revoke(claims.token_id, expires_at=claims.expires_at)
 
-    def check_tier_ceiling(
-        self, claims: AuthClaims, requested_tier: TrustTier
-    ) -> None:
+    def check_tier_ceiling(self, claims: AuthClaims, requested_tier: TrustTier) -> None:
         """Enforce tier ceiling for capability lease requests."""
         check_tier_ceiling(claims, requested_tier)

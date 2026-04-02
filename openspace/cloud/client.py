@@ -17,10 +17,10 @@ import io
 import json
 import logging
 import os
-import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -30,9 +30,18 @@ logger = logging.getLogger("openspace.cloud")
 SKILL_FILENAME = "SKILL.md"
 SKILL_ID_FILENAME = ".skill_id"
 
-_TEXT_EXTENSIONS = frozenset({
-    ".md", ".txt", ".yaml", ".yml", ".json", ".py", ".sh", ".toml",
-})
+_TEXT_EXTENSIONS = frozenset(
+    {
+        ".md",
+        ".txt",
+        ".yaml",
+        ".yml",
+        ".json",
+        ".py",
+        ".sh",
+        ".toml",
+    }
+)
 
 
 class CloudError(Exception):
@@ -56,10 +65,7 @@ class OpenSpaceClient:
 
     def __init__(self, auth_headers: Dict[str, str], api_base: str):
         if not auth_headers:
-            raise CloudError(
-                "No OPENSPACE_API_KEY configured. "
-                "Register at https://open-space.cloud to obtain a key."
-            )
+            raise CloudError("No OPENSPACE_API_KEY configured. Register at https://open-space.cloud to obtain a key.")
         self._headers = {
             "User-Agent": self._DEFAULT_UA,
             **auth_headers,
@@ -156,10 +162,7 @@ class OpenSpaceClient:
         for fp in file_paths:
             rel_path = str(fp.relative_to(skill_dir))
             body_parts.append(f"--{boundary}\r\n".encode())
-            body_parts.append(
-                f'Content-Disposition: form-data; name="files"; '
-                f'filename="{rel_path}"\r\n'.encode()
-            )
+            body_parts.append(f'Content-Disposition: form-data; name="files"; filename="{rel_path}"\r\n'.encode())
             ctype = "text/plain" if fp.suffix in _TEXT_EXTENSIONS else "application/octet-stream"
             body_parts.append(f"Content-Type: {ctype}\r\n\r\n".encode())
             body_parts.append(fp.read_bytes())
@@ -200,7 +203,9 @@ class OpenSpaceClient:
             raise
 
     def _handle_409(
-        self, body_text: str, payload: Dict[str, Any],
+        self,
+        body_text: str,
+        payload: Dict[str, Any],
     ) -> tuple[Dict[str, Any], int]:
         """Handle 409 conflict responses."""
         try:
@@ -301,8 +306,7 @@ class OpenSpaceClient:
         final_record_id = record_data.get("record_id", record_id)
 
         logger.info(
-            f"upload_skill: {name} [{final_record_id}] — {action} "
-            f"(visibility={api_visibility}, origin={origin})"
+            f"upload_skill: {name} [{final_record_id}] — {action} (visibility={api_visibility}, origin={origin})"
         )
 
         # Check for duplicate status from 409 handling
@@ -362,10 +366,7 @@ class OpenSpaceClient:
         # 4. Write .skill_id sidecar
         (skill_dir / SKILL_ID_FILENAME).write_text(skill_id + "\n", encoding="utf-8")
 
-        logger.info(
-            f"import_skill: {skill_name} [{skill_id}] → {skill_dir} "
-            f"({len(extracted)} files)"
-        )
+        logger.info(f"import_skill: {skill_name} [{skill_id}] → {skill_dir} ({len(extracted)} files)")
 
         return {
             "status": "success",
@@ -379,10 +380,7 @@ class OpenSpaceClient:
     @staticmethod
     def _collect_files(skill_dir: Path) -> List[Path]:
         """Collect all files in skill directory (skip .skill_id sidecar)."""
-        return [
-            p for p in sorted(skill_dir.rglob("*"))
-            if p.is_file() and p.name != SKILL_ID_FILENAME
-        ]
+        return [p for p in sorted(skill_dir.rglob("*")) if p.is_file() and p.name != SKILL_ID_FILENAME]
 
     @staticmethod
     def _collect_text_files(skill_dir: Path) -> Dict[str, str]:
@@ -485,13 +483,15 @@ class OpenSpaceClient:
         for fname in all_names:
             old = old_files.get(fname, "")
             new = new_files.get(fname, "")
-            d = "".join(difflib.unified_diff(
-                old.splitlines(keepends=True),
-                new.splitlines(keepends=True),
-                fromfile=f"a/{fname}",
-                tofile=f"b/{fname}",
-                n=3,
-            ))
+            d = "".join(
+                difflib.unified_diff(
+                    old.splitlines(keepends=True),
+                    new.splitlines(keepends=True),
+                    fromfile=f"a/{fname}",
+                    tofile=f"b/{fname}",
+                    n=3,
+                )
+            )
             if d:
                 parts.append(d)
         return "\n".join(parts) if parts else None

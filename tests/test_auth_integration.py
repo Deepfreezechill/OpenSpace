@@ -29,7 +29,6 @@ from openspace.auth.rate_limit import (
     RateLimitMiddleware,
 )
 
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -110,14 +109,16 @@ def dummy_app():
     async def app(scope, receive, send):
         app.call_count += 1
         body = json.dumps({"status": "ok"}).encode()
-        await send({
-            "type": "http.response.start",
-            "status": 200,
-            "headers": [
-                [b"content-type", b"application/json"],
-                [b"content-length", str(len(body)).encode()],
-            ],
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [
+                    [b"content-type", b"application/json"],
+                    [b"content-length", str(len(body)).encode()],
+                ],
+            }
+        )
         await send({"type": "http.response.body", "body": body})
 
     app.call_count = 0
@@ -215,7 +216,9 @@ class TestMiddlewareOrder:
 
     @pytest.mark.asyncio
     async def test_invalid_token_does_not_consume_rate_limit(
-        self, chain, dummy_app,
+        self,
+        chain,
+        dummy_app,
     ):
         """Flood with bad tokens → valid requests still have full quota."""
         for _ in range(20):
@@ -225,15 +228,14 @@ class TestMiddlewareOrder:
         # All 3 valid requests should pass (quota untouched)
         for i in range(3):
             resp = await _send(chain, token=VALID_TOKEN)
-            assert resp.status == 200, (
-                f"Request {i + 1} should pass: "
-                "auth rejections must not consume rate limit"
-            )
+            assert resp.status == 200, f"Request {i + 1} should pass: auth rejections must not consume rate limit"
         assert dummy_app.call_count == 3
 
     @pytest.mark.asyncio
     async def test_missing_token_does_not_consume_rate_limit(
-        self, chain, dummy_app,
+        self,
+        chain,
+        dummy_app,
     ):
         """Flood with no auth → valid requests still have full quota."""
         for _ in range(20):
@@ -302,13 +304,17 @@ class TestPerIPRateLimiting:
 
     @pytest.mark.asyncio
     async def test_different_ips_have_independent_limits(
-        self, chain, dummy_app,
+        self,
+        chain,
+        dummy_app,
     ):
         """Two IPs each get their own rate limit quota."""
         # Exhaust 10.0.0.1
         for _ in range(3):
             resp = await _send(
-                chain, client_ip="10.0.0.1", token=VALID_TOKEN,
+                chain,
+                client_ip="10.0.0.1",
+                token=VALID_TOKEN,
             )
             assert resp.status == 200
 

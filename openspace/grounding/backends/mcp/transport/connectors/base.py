@@ -12,8 +12,8 @@ from mcp import ClientSession
 from mcp.shared.exceptions import McpError
 from mcp.types import CallToolResult, GetPromptResult, Prompt, ReadResourceResult, Resource, Tool
 
-from openspace.grounding.core.transport.task_managers import BaseConnectionManager
 from openspace.grounding.core.transport.connectors import BaseConnector
+from openspace.grounding.core.transport.task_managers import BaseConnectionManager
 from openspace.utils.logging import Logger
 
 logger = Logger.get_logger(__name__)
@@ -30,13 +30,13 @@ class MCPBaseConnector(BaseConnector[ClientSession]):
     """
 
     def __init__(
-        self, 
+        self,
         connection_manager: BaseConnectionManager[ClientSession],
         tool_call_max_retries: int = DEFAULT_TOOL_CALL_MAX_RETRIES,
         tool_call_retry_delay: float = DEFAULT_TOOL_CALL_RETRY_DELAY,
     ):
         """Initialize base connector with common attributes.
-        
+
         Args:
             connection_manager: The connection manager to use for the connection.
             tool_call_max_retries: Maximum number of retries for tool calls (default: 3)
@@ -56,27 +56,27 @@ class MCPBaseConnector(BaseConnector[ClientSession]):
     def public_identifier(self) -> str:
         """Get the identifier for the connector."""
         pass
-    
+
     async def _get_streams_from_connection(self):
         """Get read and write streams from the connection. Override in subclasses if needed."""
         # Default implementation for most MCP connectors (stdio, HTTP)
         # Returns the connection directly as it should be a tuple of (read_stream, write_stream)
         return self._connection
-    
+
     async def _after_connect(self) -> None:
         """Create ClientSession after connection is established.
-        
+
         Some connectors (like WebSocket) don't use ClientSession and may override this method.
         """
         # Get streams from the connection
         streams = await self._get_streams_from_connection()
-        
+
         if streams is None:
             # Some connectors (like WebSocket) don't use ClientSession
             # They should override this method to set up their own resources
             logger.debug("No streams returned, ClientSession creation skipped")
             return
-        
+
         if isinstance(streams, tuple) and len(streams) == 2:
             read_stream, write_stream = streams
             # Create the client session
@@ -109,7 +109,7 @@ class MCPBaseConnector(BaseConnector[ClientSession]):
 
         if errors:
             logger.warning(f"Encountered {len(errors)} errors during MCP resource cleanup")
-    
+
     async def _cleanup_on_connect_failure(self) -> None:
         """Override to add MCP-specific cleanup on connection failure."""
         # Clean up client session if it was created
@@ -120,7 +120,7 @@ class MCPBaseConnector(BaseConnector[ClientSession]):
                 pass
             finally:
                 self.client_session = None
-        
+
         # Call parent cleanup
         await super()._cleanup_on_connect_failure()
 
@@ -252,12 +252,14 @@ class MCPBaseConnector(BaseConnector[ClientSession]):
             Exception: If the tool call fails after all retries.
         """
         last_error: Exception | None = None
-        
+
         for attempt in range(self.tool_call_max_retries):
             # Ensure we're connected
             await self._ensure_connected()
 
-            logger.debug(f"Calling tool '{name}' with arguments: {arguments} (attempt {attempt + 1}/{self.tool_call_max_retries})")
+            logger.debug(
+                f"Calling tool '{name}' with arguments: {arguments} (attempt {attempt + 1}/{self.tool_call_max_retries})"
+            )
             try:
                 result = await self.client_session.call_tool(name, arguments)
                 logger.debug(f"Tool '{name}' called successfully")
@@ -265,28 +267,41 @@ class MCPBaseConnector(BaseConnector[ClientSession]):
             except Exception as e:
                 last_error = e
                 error_str = str(e).lower()
-                
+
                 # Check if the error might be due to connection loss
                 if not self.is_connected:
                     logger.warning(f"Tool call '{name}' failed due to connection loss: {e}")
                     # Try to reconnect on next iteration
                     continue
-                
+
                 # Check for retryable HTTP errors (400, 500, 502, 503, 504)
-                is_retryable = any(code in error_str for code in ['400', '500', '502', '503', '504', 'bad request', 'internal server error', 'service unavailable', 'gateway timeout'])
-                
+                is_retryable = any(
+                    code in error_str
+                    for code in [
+                        "400",
+                        "500",
+                        "502",
+                        "503",
+                        "504",
+                        "bad request",
+                        "internal server error",
+                        "service unavailable",
+                        "gateway timeout",
+                    ]
+                )
+
                 if is_retryable and attempt < self.tool_call_max_retries - 1:
-                    delay = self.tool_call_retry_delay * (2 ** attempt)  # Exponential backoff
+                    delay = self.tool_call_retry_delay * (2**attempt)  # Exponential backoff
                     logger.warning(
                         f"Tool call '{name}' failed with retryable error: {e}, "
                         f"retrying in {delay:.1f}s (attempt {attempt + 1}/{self.tool_call_max_retries})"
                     )
                     await asyncio.sleep(delay)
                     continue
-                
+
                 # Non-retryable error or max retries reached, re-raise
                 raise
-        
+
         # All retries exhausted
         error_msg = f"Tool call '{name}' failed after {self.tool_call_max_retries} retries"
         logger.error(error_msg)

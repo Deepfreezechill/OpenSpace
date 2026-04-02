@@ -20,7 +20,6 @@ from typing import Optional
 
 from openspace.sandbox.leases import NetworkCapability
 
-
 # ---------------------------------------------------------------------------
 # Known DNS rebinding services that resolve to arbitrary IPs.
 # These must be blocked to prevent metadata endpoint access via aliases
@@ -54,13 +53,13 @@ _IPV6_METADATA_ALIASES: tuple[str, ...] = (
 # Loopback, link-local, and unspecified addresses allow reaching localhost,
 # cloud-internal endpoints, and adjacent machines on the same network segment.
 _BLOCKED_IP_NETWORKS: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = (
-    ipaddress.IPv4Network("127.0.0.0/8"),       # IPv4 loopback
-    ipaddress.IPv6Network("::1/128"),            # IPv6 loopback
-    ipaddress.IPv4Network("0.0.0.0/8"),          # "this host" — often aliases localhost
-    ipaddress.IPv6Network("::/128"),             # IPv6 unspecified
-    ipaddress.IPv4Network("169.254.0.0/16"),     # IPv4 link-local (already caught by metadata)
-    ipaddress.IPv6Network("fe80::/10"),          # IPv6 link-local
-    ipaddress.IPv6Network("fc00::/7"),           # IPv6 unique-local (ULA, private)
+    ipaddress.IPv4Network("127.0.0.0/8"),  # IPv4 loopback
+    ipaddress.IPv6Network("::1/128"),  # IPv6 loopback
+    ipaddress.IPv4Network("0.0.0.0/8"),  # "this host" — often aliases localhost
+    ipaddress.IPv6Network("::/128"),  # IPv6 unspecified
+    ipaddress.IPv4Network("169.254.0.0/16"),  # IPv4 link-local (already caught by metadata)
+    ipaddress.IPv6Network("fe80::/10"),  # IPv6 link-local
+    ipaddress.IPv6Network("fc00::/7"),  # IPv6 unique-local (ULA, private)
 )
 
 
@@ -174,18 +173,14 @@ def check_domain_blocked(domain: str, blocked_domains: list[str]) -> None:
     """
     # Block loopback, link-local, ULA IPs before pattern matching
     if _is_blocked_ip(domain):
-        raise DomainDeniedError(
-            f"Domain '{domain}' is a blocked IP address (loopback/link-local/ULA)"
-        )
+        raise DomainDeniedError(f"Domain '{domain}' is a blocked IP address (loopback/link-local/ULA)")
 
     # Build extended block list: explicit + rebinding + IPv6 aliases
     extended = list(blocked_domains) + list(_DNS_REBINDING_PATTERNS) + list(_IPV6_METADATA_ALIASES)
 
     for pattern in extended:
         if _matches_domain(domain, pattern):
-            raise DomainDeniedError(
-                f"Domain '{domain}' is blocked by pattern '{pattern}'"
-            )
+            raise DomainDeniedError(f"Domain '{domain}' is blocked by pattern '{pattern}'")
 
 
 def check_domain_allowed(domain: str, allowed_domains: list[str]) -> None:
@@ -195,17 +190,13 @@ def check_domain_allowed(domain: str, allowed_domains: list[str]) -> None:
     A list containing ``"*"`` permits all domains.
     """
     if not allowed_domains:
-        raise DomainNotAllowedError(
-            f"Domain '{domain}' not allowed: allow list is empty"
-        )
+        raise DomainNotAllowedError(f"Domain '{domain}' not allowed: allow list is empty")
 
     for pattern in allowed_domains:
         if _matches_domain(domain, pattern):
             return  # Allowed
 
-    raise DomainNotAllowedError(
-        f"Domain '{domain}' does not match any allowed pattern"
-    )
+    raise DomainNotAllowedError(f"Domain '{domain}' does not match any allowed pattern")
 
 
 # ---------------------------------------------------------------------------
@@ -222,13 +213,9 @@ def check_port_allowed(port: int, allowed_ports: list[int]) -> None:
     if port <= 0 or port > 65535:
         raise PortNotAllowedError(f"Invalid port number: {port}")
     if not allowed_ports:
-        raise PortNotAllowedError(
-            f"Port {port} not allowed: allowed ports list is empty"
-        )
+        raise PortNotAllowedError(f"Port {port} not allowed: allowed ports list is empty")
     if port not in allowed_ports:
-        raise PortNotAllowedError(
-            f"Port {port} not in allowed ports: {allowed_ports}"
-        )
+        raise PortNotAllowedError(f"Port {port} not in allowed ports: {allowed_ports}")
 
 
 # ---------------------------------------------------------------------------
@@ -275,10 +262,7 @@ class ConnectionTracker:
         """
         async with self._lock:
             if len(self._active) >= self._max:
-                raise ConnectionLimitError(
-                    f"Connection limit reached ({self._max}). "
-                    f"Active: {len(self._active)}"
-                )
+                raise ConnectionLimitError(f"Connection limit reached ({self._max}). Active: {len(self._active)}")
             self._counter += 1
             conn_id = f"conn-{self._counter}"
             self._active[conn_id] = ConnectionRecord(
@@ -295,9 +279,7 @@ class ConnectionTracker:
         """
         async with self._lock:
             if connection_id not in self._active:
-                raise ConnectionNotFoundError(
-                    f"Connection '{connection_id}' not found in active set"
-                )
+                raise ConnectionNotFoundError(f"Connection '{connection_id}' not found in active set")
             del self._active[connection_id]
 
     async def list_active(self) -> list[ConnectionRecord]:
@@ -395,9 +377,7 @@ class NetworkProxy:
             raise NetworkPolicyError("Proxy has been shut down")
 
         if not self._config.outbound_enabled:
-            raise OutboundDisabledError(
-                "Outbound networking is disabled for this sandbox"
-            )
+            raise OutboundDisabledError("Outbound networking is disabled for this sandbox")
 
         check_domain_blocked(domain, list(self._config.blocked_domains))
         check_domain_allowed(domain, list(self._config.allowed_domains))

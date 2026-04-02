@@ -11,15 +11,13 @@ Provides:
 from __future__ import annotations
 
 import os
-import sqlite3
 import textwrap
 from pathlib import Path
-from typing import Any, Dict, Generator, Iterator
+from typing import Dict, Generator
 
 import pytest
 
 from tests.mocks.llm import MockLLMClient
-
 
 # ---------------------------------------------------------------------------
 # mock_llm_client — deterministic LLM responses

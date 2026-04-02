@@ -6,11 +6,13 @@ that ensures proper task isolation and resource cleanup.
 """
 
 from typing import Any, Tuple
+
 from mcp.client.sse import sse_client
-from openspace.utils.logging import Logger
+
 from openspace.grounding.core.transport.task_managers import (
     AsyncContextConnectionManager,
 )
+from openspace.utils.logging import Logger
 
 logger = Logger.get_logger(__name__)
 

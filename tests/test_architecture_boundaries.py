@@ -16,10 +16,8 @@ Phase 1 approach:
 from __future__ import annotations
 
 import ast
-import os
 import warnings
 from pathlib import Path
-from typing import Set
 
 import pytest
 
@@ -93,9 +91,7 @@ _DOMAIN_ALLOWED_THIRD_PARTY: frozenset[str] = frozenset(
 )
 
 # All allowed import roots for domain layer
-_DOMAIN_ALLOWED_ROOTS: frozenset[str] = (
-    _STDLIB_PREFIXES | _DOMAIN_ALLOWED_THIRD_PARTY | frozenset({"openspace.domain"})
-)
+_DOMAIN_ALLOWED_ROOTS: frozenset[str] = _STDLIB_PREFIXES | _DOMAIN_ALLOWED_THIRD_PARTY | frozenset({"openspace.domain"})
 
 
 def _collect_py_files(directory: Path) -> list[Path]:
@@ -111,9 +107,7 @@ def _extract_imports(filepath: Path) -> list[str]:
     except SyntaxError as exc:
         # Fail loudly — a syntax error in domain/ means the file can't be
         # validated and should not silently pass boundary checks.
-        raise AssertionError(
-            f"SyntaxError in {filepath} — cannot validate imports: {exc}"
-        ) from exc
+        raise AssertionError(f"SyntaxError in {filepath} — cannot validate imports: {exc}") from exc
 
     modules: list[str] = []
     for node in ast.walk(tree):
@@ -203,9 +197,7 @@ class TestDomainImportPurity:
 
         if violations:
             detail = "\n".join(violations)
-            pytest.fail(
-                f"Domain layer has {len(violations)} NEW forbidden import(s):\n{detail}"
-            )
+            pytest.fail(f"Domain layer has {len(violations)} NEW forbidden import(s):\n{detail}")
 
     def test_domain_does_not_import_openspace_infra(self) -> None:
         """Domain must not import from openspace.* outside openspace.domain."""
@@ -215,17 +207,13 @@ class TestDomainImportPurity:
             rel = filepath.relative_to(_REPO_ROOT)
             rel_posix = rel.as_posix()
             for module in _extract_imports(filepath):
-                if module.startswith("openspace.") and not module.startswith(
-                    "openspace.domain"
-                ):
+                if module.startswith("openspace.") and not module.startswith("openspace.domain"):
                     if (rel_posix, module) not in self._KNOWN_CROSS_LAYER:
                         violations.append(f"  {rel}: imports '{module}'")
 
         if violations:
             detail = "\n".join(violations)
-            pytest.fail(
-                f"Domain layer has {len(violations)} cross-layer import(s):\n{detail}"
-            )
+            pytest.fail(f"Domain layer has {len(violations)} cross-layer import(s):\n{detail}")
 
 
 # ---------------------------------------------------------------------------
@@ -280,15 +268,15 @@ class TestMCPHandlerBoundary:
     # public property accessors as delegation is fully wired in Phase 4).
     _KNOWN_PRIVATE_ACCESS: frozenset[tuple[str, int, str]] = frozenset(
         {
-            ("openspace/mcp_server.py", 191, "_skill_store"),
-            ("openspace/mcp_server.py", 208, "_grounding_config"),
-            ("openspace/mcp_server.py", 300, "_skill_registry"),
-            ("openspace/mcp_server.py", 435, "_skill_registry"),
-            ("openspace/mcp_server.py", 732, "_skill_registry"),
-            ("openspace/mcp_server.py", 636, "_skill_registry"),
-            ("openspace/mcp_server.py", 751, "_skill_evolver"),
-            ("openspace/mcp_server.py", 735, "_skill_evolver"),
-            ("openspace/mcp_server.py", 424, "_grounding_config"),
+            ("openspace/mcp_server.py", 185, "_skill_store"),
+            ("openspace/mcp_server.py", 203, "_grounding_config"),
+            ("openspace/mcp_server.py", 296, "_skill_registry"),
+            ("openspace/mcp_server.py", 430, "_skill_registry"),
+            ("openspace/mcp_server.py", 734, "_skill_registry"),
+            ("openspace/mcp_server.py", 635, "_skill_registry"),
+            ("openspace/mcp_server.py", 753, "_skill_evolver"),
+            ("openspace/mcp_server.py", 737, "_skill_evolver"),
+            ("openspace/mcp_server.py", 419, "_grounding_config"),
         }
     )
 
@@ -303,15 +291,11 @@ class TestMCPHandlerBoundary:
             try:
                 tree = ast.parse(source, filename=str(filepath))
             except SyntaxError as exc:
-                raise AssertionError(
-                    f"SyntaxError in {filepath} — cannot validate boundary: {exc}"
-                ) from exc
+                raise AssertionError(f"SyntaxError in {filepath} — cannot validate boundary: {exc}") from exc
 
             for node in ast.walk(tree):
                 # Detect obj._field attribute access
-                if isinstance(node, ast.Attribute) and isinstance(
-                    node.attr, str
-                ):
+                if isinstance(node, ast.Attribute) and isinstance(node.attr, str):
                     attr = node.attr
                     if attr in _PRIVATE_FIELD_PATTERNS:
                         # Exclude self-references (class defining its own privates)
@@ -319,9 +303,7 @@ class TestMCPHandlerBoundary:
                             continue
                         if (rel_posix, node.lineno, attr) in self._KNOWN_PRIVATE_ACCESS:
                             continue
-                        violations.append(
-                            f"  {rel}:{node.lineno}: accesses '.{attr}'"
-                        )
+                        violations.append(f"  {rel}:{node.lineno}: accesses '.{attr}'")
 
                 # Detect getattr(obj, "_field") calls
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
@@ -331,15 +313,11 @@ class TestMCPHandlerBoundary:
                             if arg.value in _PRIVATE_FIELD_PATTERNS:
                                 if (rel_posix, node.lineno, arg.value) in self._KNOWN_PRIVATE_ACCESS:
                                     continue
-                                violations.append(
-                                    f"  {rel}:{node.lineno}: getattr(..., '{arg.value}')"
-                                )
+                                violations.append(f"  {rel}:{node.lineno}: getattr(..., '{arg.value}')")
 
         if violations:
             detail = "\n".join(violations)
-            pytest.fail(
-                f"MCP handlers access {len(violations)} private field(s):\n{detail}"
-            )
+            pytest.fail(f"MCP handlers access {len(violations)} private field(s):\n{detail}")
 
 
 # ---------------------------------------------------------------------------
@@ -406,9 +384,7 @@ class TestCIIntegration:
         """This file must live under tests/ to be CI-discoverable."""
         this_file = Path(__file__).resolve()
         tests_dir = _REPO_ROOT / "tests"
-        assert str(this_file).startswith(
-            str(tests_dir)
-        ), f"Boundary tests must be under {tests_dir}"
+        assert str(this_file).startswith(str(tests_dir)), f"Boundary tests must be under {tests_dir}"
 
     def test_architecture_test_count(self) -> None:
         """We should have a meaningful number of architecture checks."""

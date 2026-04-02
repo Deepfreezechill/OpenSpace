@@ -21,12 +21,12 @@ logger = Logger.get_logger(__name__)
 SKILL_FILENAME = "SKILL.md"
 
 _SAFETY_RULES = [
-    ("blocked.malware",         re.compile(r"(ClawdAuthenticatorTool)", re.IGNORECASE)),
-    ("suspicious.keyword",      re.compile(r"(malware|stealer|phish|phishing|keylogger)", re.IGNORECASE)),
-    ("suspicious.secrets",      re.compile(r"(api[-_ ]?key|token|password|private key|secret)", re.IGNORECASE)),
-    ("suspicious.crypto",       re.compile(r"(wallet|seed phrase|mnemonic|crypto)", re.IGNORECASE)),
-    ("suspicious.webhook",      re.compile(r"(discord\.gg|webhook|hooks\.slack)", re.IGNORECASE)),
-    ("suspicious.script",       re.compile(r"(curl[^\n]+\|\s*(sh|bash))", re.IGNORECASE)),
+    ("blocked.malware", re.compile(r"(ClawdAuthenticatorTool)", re.IGNORECASE)),
+    ("suspicious.keyword", re.compile(r"(malware|stealer|phish|phishing|keylogger)", re.IGNORECASE)),
+    ("suspicious.secrets", re.compile(r"(api[-_ ]?key|token|password|private key|secret)", re.IGNORECASE)),
+    ("suspicious.crypto", re.compile(r"(wallet|seed phrase|mnemonic|crypto)", re.IGNORECASE)),
+    ("suspicious.webhook", re.compile(r"(discord\.gg|webhook|hooks\.slack)", re.IGNORECASE)),
+    ("suspicious.script", re.compile(r"(curl[^\n]+\|\s*(sh|bash))", re.IGNORECASE)),
     ("suspicious.url_shortener", re.compile(r"(bit\.ly|tinyurl\.com|t\.co|goo\.gl|is\.gd)", re.IGNORECASE)),
 ]
 
@@ -49,6 +49,7 @@ def is_skill_safe(flags: List[str]) -> bool:
     """
     return not any(f in _BLOCKING_FLAGS for f in flags)
 
+
 _FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---", re.DOTALL)
 
 # Characters that require YAML value quoting (colon-space, hash-space,
@@ -67,8 +68,7 @@ def _yaml_quote(value: str) -> str:
 def _yaml_unquote(value: str) -> str:
     """Strip surrounding quotes and unescape a YAML scalar value."""
     if len(value) >= 2:
-        if (value[0] == '"' and value[-1] == '"') or \
-           (value[0] == "'" and value[-1] == "'"):
+        if (value[0] == '"' and value[-1] == '"') or (value[0] == "'" and value[-1] == "'"):
             inner = value[1:-1]
             if value[0] == '"':
                 inner = inner.replace('\\"', '"').replace("\\\\", "\\")
@@ -146,7 +146,7 @@ def set_frontmatter_field(content: str, field_name: str, value: str) -> str:
         new_lines.append(new_line)
 
     new_fm = "\n".join(new_lines)
-    return f"---\n{new_fm}\n---{content[match.end():]}"
+    return f"---\n{new_fm}\n---{content[match.end() :]}"
 
 
 def normalize_frontmatter(content: str) -> str:
@@ -171,7 +171,7 @@ def normalize_frontmatter(content: str) -> str:
 
     safe_lines = [f"{k}: {_yaml_quote(v)}" for k, v in fm.items()]
     new_fm = "\n".join(safe_lines)
-    return f"---\n{new_fm}\n---{content[match.end():]}"
+    return f"---\n{new_fm}\n---{content[match.end() :]}"
 
 
 def strip_frontmatter(content: str) -> str:
@@ -179,8 +179,9 @@ def strip_frontmatter(content: str) -> str:
     if content.startswith("---"):
         match = re.match(r"^---\n.*?\n---\n?", content, re.DOTALL)
         if match:
-            return content[match.end():].strip()
+            return content[match.end() :].strip()
     return content
+
 
 def strip_markdown_fences(text: str) -> str:
     """Remove surrounding markdown code fences if present.
@@ -251,6 +252,7 @@ def extract_change_summary(content: str) -> tuple[str, str]:
     rest = "\n".join(lines[content_start:])
     return rest.strip(), summary
 
+
 def validate_skill_dir(skill_dir: Path) -> Optional[str]:
     """Validate a skill directory after edit application.
 
@@ -306,4 +308,3 @@ def truncate(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
     return text[:max_chars] + f"\n\n... [truncated at {max_chars} chars]"
-

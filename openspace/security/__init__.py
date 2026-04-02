@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import List, Tuple
 
 from openspace.utils.logging import Logger
+
 from .ast_scanner import Finding, Severity, scan_code, scan_file  # noqa: F401
 
 logger = Logger.get_logger(__name__)
@@ -42,17 +43,23 @@ def check_code_safety(source: str) -> Tuple[bool, List[Finding]]:
         if f.severity == Severity.CRITICAL:
             logger.warning(
                 "CRITICAL security finding — code REJECTED: [%s] %s (line %d)",
-                f.pattern_name, f.description, f.line,
+                f.pattern_name,
+                f.description,
+                f.line,
             )
         elif f.severity == Severity.HIGH:
             logger.warning(
                 "HIGH security finding: [%s] %s (line %d)",
-                f.pattern_name, f.description, f.line,
+                f.pattern_name,
+                f.description,
+                f.line,
             )
         else:
             logger.info(
                 "MEDIUM security finding: [%s] %s (line %d)",
-                f.pattern_name, f.description, f.line,
+                f.pattern_name,
+                f.description,
+                f.line,
             )
 
     has_critical = any(f.severity == Severity.CRITICAL for f in findings)

@@ -43,8 +43,8 @@ Source tagging (call from any component):
 from __future__ import annotations
 
 import contextvars
-import time
 import threading
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -53,16 +53,12 @@ import litellm
 from litellm.integrations.custom_logger import CustomLogger
 
 # ── ContextVar for concurrent per-task routing ──
-_current_task_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
-    "gdpval_current_task_id", default=None
-)
+_current_task_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("gdpval_current_task_id", default=None)
 
 # ── ContextVar for call source tagging ──
 # Valid sources: "agent", "skill_select", "analyzer", "evolver", "summarizer"
 # Default "agent" so the main grounding loop needs no annotation.
-CALL_SOURCE: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "gdpval_call_source", default="agent"
-)
+CALL_SOURCE: contextvars.ContextVar[str] = contextvars.ContextVar("gdpval_call_source", default="agent")
 
 AGENT_SOURCE = "agent"
 
@@ -142,9 +138,15 @@ class TokenStats:
         self.call_details.clear()
 
 
-def _accumulate(stats: TokenStats, prompt_tok: int, completion_tok: int,
-                total_tok: int, cost: float, detail: Optional[Dict],
-                source: str = "agent") -> None:
+def _accumulate(
+    stats: TokenStats,
+    prompt_tok: int,
+    completion_tok: int,
+    total_tok: int,
+    cost: float,
+    detail: Optional[Dict],
+    source: str = "agent",
+) -> None:
     """Add one LLM call's usage to a TokenStats object (caller holds lock)."""
     stats.prompt_tokens += prompt_tok
     stats.completion_tokens += completion_tok
@@ -167,12 +169,10 @@ class _TokenLoggerCallback(CustomLogger):
         super().__init__()
         self._tracker = tracker
 
-    def log_success_event(self, kwargs: dict, response_obj: Any,
-                          start_time: Any, end_time: Any) -> None:
+    def log_success_event(self, kwargs: dict, response_obj: Any, start_time: Any, end_time: Any) -> None:
         self._tracker._on_success(kwargs, response_obj, start_time, end_time)
 
-    async def async_log_success_event(self, kwargs: dict, response_obj: Any,
-                                      start_time: Any, end_time: Any) -> None:
+    async def async_log_success_event(self, kwargs: dict, response_obj: Any, start_time: Any, end_time: Any) -> None:
         self._tracker._on_success(kwargs, response_obj, start_time, end_time)
 
 
@@ -190,7 +190,7 @@ class TokenTracker:
     """
 
     def __init__(self, record_details: bool = True):
-        self._serial_stats = TokenStats()       # serial mode accumulator
+        self._serial_stats = TokenStats()  # serial mode accumulator
         self._per_task: Dict[str, TokenStats] = {}  # concurrent mode buckets
         self._per_task_start: Dict[str, float] = {}
         self._lock = threading.Lock()
@@ -205,7 +205,7 @@ class TokenTracker:
     def _install_callback(self) -> None:
         if not self._installed:
             # Use litellm.callbacks (CustomLogger instances)
-            if not hasattr(litellm, 'callbacks') or litellm.callbacks is None:
+            if not hasattr(litellm, "callbacks") or litellm.callbacks is None:
                 litellm.callbacks = []
             litellm.callbacks.append(self._callback)
             self._installed = True
@@ -296,8 +296,7 @@ class TokenTracker:
             call_details=list(src.call_details),
         )
 
-    def _on_success(self, kwargs: dict, completion_response: Any,
-                    start_time: Any, end_time: Any) -> None:
+    def _on_success(self, kwargs: dict, completion_response: Any, start_time: Any, end_time: Any) -> None:
         """Called by _TokenLoggerCallback after every successful LLM call."""
         if not self._active:
             return
@@ -325,7 +324,7 @@ class TokenTracker:
         ts: Optional[float] = None
         if end_time is not None:
             try:
-                if hasattr(end_time, 'timestamp'):
+                if hasattr(end_time, "timestamp"):
                     ts = end_time.timestamp()
                 else:
                     ts = float(end_time)
@@ -349,10 +348,6 @@ class TokenTracker:
         with self._lock:
             task_id = _current_task_id.get(None)
             if task_id is not None and task_id in self._per_task:
-                _accumulate(self._per_task[task_id],
-                            prompt_tok, completion_tok, total_tok, cost, detail,
-                            source)
+                _accumulate(self._per_task[task_id], prompt_tok, completion_tok, total_tok, cost, detail, source)
             else:
-                _accumulate(self._serial_stats,
-                            prompt_tok, completion_tok, total_tok, cost, detail,
-                            source)
+                _accumulate(self._serial_stats, prompt_tok, completion_tok, total_tok, cost, detail, source)

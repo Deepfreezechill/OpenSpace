@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import json
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Dict, List, Optional, Type, Any
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type
 
 from openspace.utils.logging import Logger
 
 if TYPE_CHECKING:
-    from openspace.llm import LLMClient
     from openspace.grounding.core.grounding_client import GroundingClient
+    from openspace.llm import LLMClient
     from openspace.recording import RecordingManager
 
 logger = Logger.get_logger(__name__)
@@ -25,7 +25,7 @@ class BaseAgent(ABC):
     ) -> None:
         """
         Initialize the BaseAgent.
-        
+
         Args:
             name: Unique name for the agent
             backend_scope: List of backend types this agent can access (e.g., ["gui", "shell", "mcp", "web", "system"])
@@ -40,14 +40,14 @@ class BaseAgent(ABC):
         self._recording_manager: Optional[RecordingManager] = recording_manager
         self._step = 0
         self._status = AgentStatus.ACTIVE
-        
+
         self._register_self()
         logger.info(f"Initialized {self.__class__.__name__}: {name}")
 
     @property
     def name(self) -> str:
         return self._name
-    
+
     @property
     def grounding_client(self) -> Optional[GroundingClient]:
         """Get the grounding client."""
@@ -91,20 +91,13 @@ class BaseAgent(ABC):
         pass
 
     async def get_llm_response(
-        self,
-        messages: List[Dict[str, Any]],
-        tools: Optional[List] = None,
-        **kwargs
+        self, messages: List[Dict[str, Any]], tools: Optional[List] = None, **kwargs
     ) -> Dict[str, Any]:
         if not self._llm_client:
             raise ValueError(f"LLM client not initialized for agent {self.name}")
-        
+
         try:
-            response = await self._llm_client.complete(
-                messages=messages,
-                tools=tools,
-                **kwargs
-            )
+            response = await self._llm_client.complete(messages=messages, tools=tools, **kwargs)
             return response
         except Exception as e:
             logger.error(f"{self.name}: LLM call failed: {e}", exc_info=True)
@@ -113,16 +106,16 @@ class BaseAgent(ABC):
     def response_to_dict(self, response: str) -> Dict[str, Any]:
         try:
             if response.strip().startswith("```json") or response.strip().startswith("```"):
-                lines = response.strip().split('\n')
-                if lines and lines[0].startswith('```'):
+                lines = response.strip().split("\n")
+                if lines and lines[0].startswith("```"):
                     lines = lines[1:]
                 end_idx = len(lines)
                 for i, line in enumerate(lines):
-                    if line.strip() == '```':
+                    if line.strip() == "```":
                         end_idx = i
                         break
-                response = '\n'.join(lines[:end_idx])
-            
+                response = "\n".join(lines[:end_idx])
+
             return json.loads(response)
         except json.JSONDecodeError as e:
             # If parsing fails, try to find and extract just the JSON object/array
@@ -132,12 +125,12 @@ class BaseAgent(ABC):
                     obj, idx = decoder.raw_decode(response)
                     logger.warning(
                         f"{self.name}: Successfully extracted JSON but found extra text after position {idx}. "
-                        f"Extra text: {response[idx:idx+100]}..."
+                        f"Extra text: {response[idx : idx + 100]}..."
                     )
                     return obj
                 except Exception as e2:
                     logger.error(f"{self.name}: Failed to extract JSON even with raw_decode: {e2}")
-            
+
             logger.error(f"{self.name}: Failed to parse response: {e}")
             logger.error(f"{self.name}: Response content: {response[:500]}")
             return {"error": "Failed to parse response", "raw": response}
@@ -158,6 +151,7 @@ class BaseAgent(ABC):
 
 class AgentStatus:
     """Constants for agent status."""
+
     ACTIVE = "active"
     IDLE = "idle"
     WAITING = "waiting"

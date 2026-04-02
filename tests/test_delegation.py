@@ -15,16 +15,17 @@ Validates:
 
 from __future__ import annotations
 
-import pytest
-from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock
 
+import pytest
+
 from openspace.app.container import AppContainer
-from openspace.app.factory import _StubLLM, _StubTelemetry, _StubSkillStore
+from openspace.app.factory import _StubLLM, _StubTelemetry
 
 # tool_layer imports litellm which may not be available in all test envs
 try:
     from openspace.tool_layer import OpenSpace, OpenSpaceConfig
+
     _HAS_TOOL_LAYER = True
 except (ImportError, ModuleNotFoundError):
     _HAS_TOOL_LAYER = False
@@ -199,9 +200,14 @@ class TestRegression:
         """Public API surface unchanged."""
         cs = OpenSpace()
         for method in [
-            "initialize", "execute", "cleanup",
-            "is_initialized", "is_running", "get_config",
-            "list_backends", "list_sessions",
+            "initialize",
+            "execute",
+            "cleanup",
+            "is_initialized",
+            "is_running",
+            "get_config",
+            "list_backends",
+            "list_sessions",
         ]:
             assert hasattr(cs, method), f"Missing public method: {method}"
 
@@ -209,8 +215,12 @@ class TestRegression:
         """New public property accessors are available."""
         cs = OpenSpace()
         for prop in [
-            "container", "llm_client", "grounding_client",
-            "grounding_config", "skill_registry", "skill_store",
+            "container",
+            "llm_client",
+            "grounding_client",
+            "grounding_config",
+            "skill_registry",
+            "skill_store",
             "skill_evolver",
         ]:
             assert hasattr(cs, prop), f"Missing property: {prop}"

@@ -6,26 +6,32 @@ through HTTP APIs with SSE, Streamable HTTP, or simple JSON-RPC for transport.
 """
 
 import asyncio
-import anyio
-import httpx
 from typing import Any, Dict, List
+
+import httpx
 from mcp import ClientSession
 from mcp.types import (
     CallToolResult,
-    TextContent,
-    ImageContent,
     EmbeddedResource,
-    Tool,
-    Resource,
-    Prompt,
     GetPromptResult,
+    ImageContent,
+    Prompt,
     ReadResourceResult,
+    Resource,
+    TextContent,
+    Tool,
 )
 
+from openspace.grounding.backends.mcp.transport.connectors.base import (
+    DEFAULT_TOOL_CALL_MAX_RETRIES,
+    DEFAULT_TOOL_CALL_RETRY_DELAY,
+    MCPBaseConnector,
+)
+from openspace.grounding.backends.mcp.transport.task_managers import (
+    SseConnectionManager,
+    StreamableHttpConnectionManager,
+)
 from openspace.utils.logging import Logger
-from openspace.grounding.core.transport.task_managers.base import BaseConnectionManager
-from openspace.grounding.backends.mcp.transport.task_managers import SseConnectionManager, StreamableHttpConnectionManager
-from openspace.grounding.backends.mcp.transport.connectors.base import MCPBaseConnector, DEFAULT_TOOL_CALL_MAX_RETRIES, DEFAULT_TOOL_CALL_RETRY_DELAY
 
 logger = Logger.get_logger(__name__)
 
@@ -65,35 +71,36 @@ class HttpConnector(MCPBaseConnector):
             self.headers["Authorization"] = f"Bearer {auth_token}"
         self.timeout = timeout
         self.sse_read_timeout = sse_read_timeout
-        
+
         # JSON-RPC HTTP mode fields
         self._use_jsonrpc = False
         self._jsonrpc_client: httpx.AsyncClient | None = None
         self._jsonrpc_request_id = 0
-        
+
         # Create a placeholder connection manager (will be set up later in connect())
         # We use a placeholder here because the actual transport type (SSE vs Streamable HTTP)
         # can only be determined at runtime through server negotiation as per MCP specification
         from openspace.grounding.core.transport.task_managers import PlaceholderConnectionManager
+
         connection_manager = PlaceholderConnectionManager()
         super().__init__(
-            connection_manager, 
+            connection_manager,
             tool_call_max_retries=tool_call_max_retries,
             tool_call_retry_delay=tool_call_retry_delay,
         )
 
     async def connect(self) -> None:
         """Create the underlying session/connection.
-        
+
         For JSON-RPC mode, we don't use a connection manager.
         """
         if self._connected:
             return
-        
+
         try:
             # Hook: before connection - this sets up transport type
             await self._before_connect()
-            
+
             if self._use_jsonrpc:
                 # JSON-RPC mode doesn't use connection manager
                 # Just call _after_connect to set up the HTTP client
@@ -114,29 +121,29 @@ class HttpConnector(MCPBaseConnector):
         """Close the session/connection and reset state."""
         if not self._connected:
             return
-        
+
         # Hook: before disconnection
         await self._before_disconnect()
-        
+
         if not self._use_jsonrpc:
             # Stop the connection manager only for non-JSON-RPC modes
             if self._connection_manager:
                 await self._connection_manager.stop()
                 self._connection = None
-        
+
         # Hook: after disconnection
         await self._after_disconnect()
-        
+
         self._connected = False
 
     async def _before_connect(self) -> None:
         """Negotiate transport type and set up the appropriate connection manager.
-        
+
         Tries transports in order:
         1. Streamable HTTP (new MCP transport)
         2. SSE (legacy MCP transport)
         3. Simple JSON-RPC HTTP (for custom servers)
-        
+
         This implements backwards compatibility per MCP specification.
         """
         self.transport_type = None
@@ -157,7 +164,7 @@ class HttpConnector(MCPBaseConnector):
 
             # Create and verify ClientSession
             test_client = ClientSession(read_stream, write_stream, sampling_callback=None)
-            
+
             # Add timeout to __aenter__ - use asyncio.wait_for instead of anyio.fail_after
             # to avoid cancel scope conflicts with background tasks
             try:
@@ -171,12 +178,12 @@ class HttpConnector(MCPBaseConnector):
                     await asyncio.wait_for(test_client.initialize(), timeout=self.timeout)
                 except asyncio.TimeoutError:
                     raise TimeoutError(f"initialize() timed out after {self.timeout}s")
-                    
+
                 try:
                     await asyncio.wait_for(test_client.list_tools(), timeout=self.timeout)
                 except asyncio.TimeoutError:
                     raise TimeoutError(f"list_tools() timed out after {self.timeout}s")
-                
+
                 # SUCCESS! Keep the client session (don't close it, closing destroys the streams)
                 # Store it directly as the client_session for later use
                 self.transport_type = "streamable HTTP"
@@ -213,16 +220,14 @@ class HttpConnector(MCPBaseConnector):
         # Try SSE fallback
         try:
             logger.debug(f"Attempting SSE fallback connection to: {self.base_url}")
-            connection_manager = SseConnectionManager(
-                self.base_url, self.headers, self.timeout, self.sse_read_timeout
-            )
+            connection_manager = SseConnectionManager(self.base_url, self.headers, self.timeout, self.sse_read_timeout)
 
             # Test the connection by starting it with built-in timeout
             read_stream, write_stream = await connection_manager.start(timeout=self.timeout)
 
             # Create and verify ClientSession
             test_client = ClientSession(read_stream, write_stream, sampling_callback=None)
-            
+
             # Add timeout to __aenter__ - use asyncio.wait_for instead of anyio.fail_after
             # to avoid cancel scope conflicts with background tasks
             try:
@@ -235,12 +240,12 @@ class HttpConnector(MCPBaseConnector):
                     await asyncio.wait_for(test_client.initialize(), timeout=self.timeout)
                 except asyncio.TimeoutError:
                     raise TimeoutError(f"initialize() timed out after {self.timeout}s")
-                
+
                 try:
                     await asyncio.wait_for(test_client.list_tools(), timeout=self.timeout)
                 except asyncio.TimeoutError:
                     raise TimeoutError(f"list_tools() timed out after {self.timeout}s")
-                
+
                 # SUCCESS! Keep the client session (don't close it, closing destroys the streams)
                 # Store it directly as the client_session for later use
                 self.transport_type = "SSE"
@@ -280,12 +285,12 @@ class HttpConnector(MCPBaseConnector):
         try:
             # Test JSON-RPC connection
             await self._try_jsonrpc_connection()
-            
+
             self.transport_type = "JSON-RPC HTTP"
             self._use_jsonrpc = True
             logger.info(f"JSON-RPC HTTP transport selected for: {self.base_url}")
             return
-            
+
         except Exception as jsonrpc_error:
             # All transports failed
             logger.error(
@@ -298,7 +303,7 @@ class HttpConnector(MCPBaseConnector):
     async def _try_jsonrpc_connection(self) -> None:
         """Test JSON-RPC HTTP connection by sending an initialize request."""
         headers = {**self.headers, "Content-Type": "application/json"}
-        
+
         async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout), headers=headers) as client:
             payload = {
                 "jsonrpc": "2.0",
@@ -308,19 +313,19 @@ class HttpConnector(MCPBaseConnector):
                     "protocolVersion": "2024-11-05",
                     "capabilities": {},
                     "clientInfo": {"name": "OpenSpace", "version": "1.0.0"},
-                }
+                },
             }
-            
+
             response = await client.post(self.base_url, json=payload)
             response.raise_for_status()
-            
+
             data = response.json()
-            
+
             # Check for JSON-RPC error
             if "error" in data:
                 error = data["error"]
                 raise RuntimeError(f"JSON-RPC error: {error.get('message', str(error))}")
-            
+
             # Success - server supports JSON-RPC
             logger.debug(f"JSON-RPC test succeeded: {data.get('result', {})}")
 
@@ -340,7 +345,7 @@ class HttpConnector(MCPBaseConnector):
                 await super()._after_connect()
             else:
                 logger.debug("Reusing ClientSession from _before_connect()")
-        
+
         logger.debug(f"Successfully connected to MCP implementation via {self.transport_type}: {self.base_url}")
 
     async def _before_disconnect(self) -> None:
@@ -353,7 +358,7 @@ class HttpConnector(MCPBaseConnector):
                 logger.warning(f"Error closing JSON-RPC client: {e}")
             finally:
                 self._jsonrpc_client = None
-        
+
         # Call parent cleanup for MCP resources
         await super()._before_disconnect()
 
@@ -372,20 +377,20 @@ class HttpConnector(MCPBaseConnector):
         return self._jsonrpc_request_id
 
     async def _send_jsonrpc_request(
-        self, 
-        method: str, 
+        self,
+        method: str,
         params: Dict[str, Any] = None,
         max_retries: int = 3,
         retry_delay: float = 1.0,
     ) -> Any:
         """Send a JSON-RPC request and return the result.
-        
+
         Args:
             method: The JSON-RPC method name (e.g., "tools/list", "tools/call")
             params: The method parameters
             max_retries: Maximum number of retries for transient errors (400, 503, etc.)
             retry_delay: Initial delay between retries (doubles each retry)
-            
+
         Returns:
             The result field from the JSON-RPC response
         """
@@ -393,7 +398,7 @@ class HttpConnector(MCPBaseConnector):
             raise RuntimeError("JSON-RPC client not initialized")
 
         last_error = None
-        
+
         for attempt in range(max_retries):
             request_id = self._next_jsonrpc_id()
             payload = {
@@ -404,51 +409,51 @@ class HttpConnector(MCPBaseConnector):
             }
 
             logger.debug(f"Sending JSON-RPC request: {method} (id={request_id}, attempt {attempt + 1}/{max_retries})")
-            
+
             try:
                 response = await self._jsonrpc_client.post(self.base_url, json=payload)
                 response.raise_for_status()
-                
+
                 data = response.json()
-                
+
                 if "error" in data:
                     error = data["error"]
                     error_msg = error.get("message", str(error))
                     raise RuntimeError(f"JSON-RPC error: {error_msg}")
-                
+
                 return data.get("result", {})
-                
+
             except httpx.HTTPStatusError as e:
                 last_error = e
                 status_code = e.response.status_code
-                
+
                 # Retry on 400 (Bad Request) and 5xx errors
                 # 400 can happen when MCP server is temporarily not ready
                 if status_code in (400, 500, 502, 503, 504) and attempt < max_retries - 1:
-                    delay = retry_delay * (2 ** attempt)
+                    delay = retry_delay * (2**attempt)
                     logger.warning(
                         f"HTTP {status_code} error on {method}, retrying in {delay:.1f}s "
                         f"(attempt {attempt + 1}/{max_retries})"
                     )
                     await asyncio.sleep(delay)
                     continue
-                    
+
                 raise RuntimeError(f"HTTP error: {status_code}") from e
-                
+
             except httpx.RequestError as e:
                 last_error = e
                 # Retry on connection errors
                 if attempt < max_retries - 1:
-                    delay = retry_delay * (2 ** attempt)
+                    delay = retry_delay * (2**attempt)
                     logger.warning(
                         f"Request error on {method}: {e}, retrying in {delay:.1f}s "
                         f"(attempt {attempt + 1}/{max_retries})"
                     )
                     await asyncio.sleep(delay)
                     continue
-                    
+
                 raise RuntimeError(f"Request error: {e}") from e
-        
+
         # Should not reach here, but just in case
         raise RuntimeError(f"Max retries exceeded for {method}") from last_error
 
@@ -506,18 +511,21 @@ class HttpConnector(MCPBaseConnector):
         """Initialize the MCP session."""
         if not self._use_jsonrpc:
             return await super().initialize()
-        
+
         # JSON-RPC mode
         logger.debug("Initializing JSON-RPC HTTP MCP session")
-        
-        result = await self._send_jsonrpc_request("initialize", {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": {"name": "OpenSpace", "version": "1.0.0"},
-        })
-        
+
+        result = await self._send_jsonrpc_request(
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "OpenSpace", "version": "1.0.0"},
+            },
+        )
+
         capabilities = result.get("capabilities", {})
-        
+
         # List tools
         if capabilities.get("tools"):
             try:
@@ -532,7 +540,7 @@ class HttpConnector(MCPBaseConnector):
                 self._tools = self._parse_tools_from_json(tools_result.get("tools", []))
             except Exception:
                 self._tools = []
-        
+
         # List resources
         if capabilities.get("resources"):
             try:
@@ -542,7 +550,7 @@ class HttpConnector(MCPBaseConnector):
                 self._resources = []
         else:
             self._resources = []
-        
+
         # List prompts
         if capabilities.get("prompts"):
             try:
@@ -552,12 +560,12 @@ class HttpConnector(MCPBaseConnector):
                 self._prompts = []
         else:
             self._prompts = []
-        
+
         logger.info(
             f"JSON-RPC HTTP MCP session initialized with {len(self._tools)} tools, "
             f"{len(self._resources)} resources, {len(self._prompts)} prompts"
         )
-        
+
         return result
 
     @property
@@ -579,7 +587,7 @@ class HttpConnector(MCPBaseConnector):
         """List all available tools."""
         if not self._use_jsonrpc:
             return await super().list_tools()
-        
+
         await self._ensure_connected()
         try:
             tools_result = await self._send_jsonrpc_request("tools/list", {})
@@ -593,15 +601,18 @@ class HttpConnector(MCPBaseConnector):
         """Call an MCP tool."""
         if not self._use_jsonrpc:
             return await super().call_tool(name, arguments)
-        
+
         await self._ensure_connected()
         logger.debug(f"Calling tool '{name}' with arguments: {arguments}")
-        
-        result = await self._send_jsonrpc_request("tools/call", {
-            "name": name,
-            "arguments": arguments,
-        })
-        
+
+        result = await self._send_jsonrpc_request(
+            "tools/call",
+            {
+                "name": name,
+                "arguments": arguments,
+            },
+        )
+
         # Parse the result into CallToolResult
         content = []
         for item in result.get("content", []):
@@ -609,20 +620,24 @@ class HttpConnector(MCPBaseConnector):
             if item_type == "text":
                 content.append(TextContent(type="text", text=item.get("text", "")))
             elif item_type == "image":
-                content.append(ImageContent(
-                    type="image",
-                    data=item.get("data", ""),
-                    mimeType=item.get("mimeType", "image/png"),
-                ))
+                content.append(
+                    ImageContent(
+                        type="image",
+                        data=item.get("data", ""),
+                        mimeType=item.get("mimeType", "image/png"),
+                    )
+                )
             elif item_type == "resource":
-                content.append(EmbeddedResource(
-                    type="resource",
-                    resource=item.get("resource", {}),
-                ))
-        
+                content.append(
+                    EmbeddedResource(
+                        type="resource",
+                        resource=item.get("resource", {}),
+                    )
+                )
+
         if not content and result:
             content.append(TextContent(type="text", text=str(result)))
-        
+
         return CallToolResult(
             content=content,
             isError=result.get("isError", False),
@@ -632,7 +647,7 @@ class HttpConnector(MCPBaseConnector):
         """List all available resources."""
         if not self._use_jsonrpc:
             return await super().list_resources()
-        
+
         await self._ensure_connected()
         try:
             resources_result = await self._send_jsonrpc_request("resources/list", {})
@@ -646,7 +661,7 @@ class HttpConnector(MCPBaseConnector):
         """Read a resource by URI."""
         if not self._use_jsonrpc:
             return await super().read_resource(uri)
-        
+
         await self._ensure_connected()
         result = await self._send_jsonrpc_request("resources/read", {"uri": uri})
         return ReadResourceResult(**result)
@@ -655,7 +670,7 @@ class HttpConnector(MCPBaseConnector):
         """List all available prompts."""
         if not self._use_jsonrpc:
             return await super().list_prompts()
-        
+
         await self._ensure_connected()
         try:
             prompts_result = await self._send_jsonrpc_request("prompts/list", {})
@@ -669,19 +684,22 @@ class HttpConnector(MCPBaseConnector):
         """Get a prompt by name."""
         if not self._use_jsonrpc:
             return await super().get_prompt(name, arguments)
-        
+
         await self._ensure_connected()
-        result = await self._send_jsonrpc_request("prompts/get", {
-            "name": name,
-            "arguments": arguments or {},
-        })
+        result = await self._send_jsonrpc_request(
+            "prompts/get",
+            {
+                "name": name,
+                "arguments": arguments or {},
+            },
+        )
         return GetPromptResult(**result)
 
     async def request(self, method: str, params: Dict[str, Any] | None = None) -> Any:
         """Send a raw request to the MCP implementation."""
         if not self._use_jsonrpc:
             return await super().request(method, params)
-        
+
         await self._ensure_connected()
         return await self._send_jsonrpc_request(method, params or {})
 
@@ -689,7 +707,7 @@ class HttpConnector(MCPBaseConnector):
         """Invoke a tool or special method."""
         if not self._use_jsonrpc:
             return await super().invoke(name, params)
-        
+
         await self._ensure_connected()
 
         if not name.startswith("__"):

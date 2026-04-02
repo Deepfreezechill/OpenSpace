@@ -104,8 +104,7 @@ class SlidingWindowCounter:
             # and let attackers bypass rate limiting via key churn.
             if key not in self._buckets and len(self._buckets) >= self._max_buckets:
                 logger.warning(
-                    "Rate limiter at max capacity (%d buckets), "
-                    "rejecting new key",
+                    "Rate limiter at max capacity (%d buckets), rejecting new key",
                     self._max_buckets,
                 )
                 return False, 0, float(self.window)
@@ -152,11 +151,16 @@ class RateLimitMiddleware:
 
         logger.info(
             "Rate limiter: %d req/identity, %d req/IP, %ds window",
-            self._per_identity, per_ip, window,
+            self._per_identity,
+            per_ip,
+            window,
         )
 
     async def __call__(
-        self, scope: dict, receive: Callable, send: Callable,
+        self,
+        scope: dict,
+        receive: Callable,
+        send: Callable,
     ) -> None:
         if scope["type"] not in ("http",):
             await self.app(scope, receive, send)
@@ -178,9 +182,7 @@ class RateLimitMiddleware:
         id_remaining = self._per_identity
         if token:
             identity_key = f"{client_ip}:{token[:8]}"
-            id_ok, id_remaining, id_retry = await self._identity_limiter.is_allowed(
-                identity_key
-            )
+            id_ok, id_remaining, id_retry = await self._identity_limiter.is_allowed(identity_key)
             if not id_ok:
                 logger.warning("Rate limit exceeded for identity (IP=%s)", client_ip)
                 await self._send_429(send, id_retry, "Rate limit exceeded")
@@ -197,11 +199,13 @@ class RateLimitMiddleware:
         async def rate_limit_send(message: dict) -> None:
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
-                headers.extend([
-                    [b"x-ratelimit-remaining", str(governing_remaining).encode()],
-                    [b"x-ratelimit-limit", str(governing_limit).encode()],
-                    [b"x-ratelimit-window", str(self._window).encode()],
-                ])
+                headers.extend(
+                    [
+                        [b"x-ratelimit-remaining", str(governing_remaining).encode()],
+                        [b"x-ratelimit-limit", str(governing_limit).encode()],
+                        [b"x-ratelimit-window", str(self._window).encode()],
+                    ]
+                )
                 message = {**message, "headers": headers}
             await send(message)
 
@@ -240,13 +244,15 @@ class RateLimitMiddleware:
             ensure_ascii=False,
         ).encode("utf-8")
 
-        await send({
-            "type": "http.response.start",
-            "status": 429,
-            "headers": [
-                [b"content-type", b"application/json"],
-                [b"retry-after", str(retry_int).encode()],
-                [b"content-length", str(len(body)).encode()],
-            ],
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 429,
+                "headers": [
+                    [b"content-type", b"application/json"],
+                    [b"retry-after", str(retry_int).encode()],
+                    [b"content-length", str(len(body)).encode()],
+                ],
+            }
+        )
         await send({"type": "http.response.body", "body": body})

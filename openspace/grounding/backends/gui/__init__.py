@@ -4,8 +4,9 @@ from .transport.connector import GUIConnector
 from .transport.local_connector import LocalGUIConnector
 
 try:
-    from .anthropic_client import AnthropicGUIClient
     from . import anthropic_utils
+    from .anthropic_client import AnthropicGUIClient
+
     _anthropic_available = True
 except ImportError:
     _anthropic_available = False
@@ -14,7 +15,6 @@ __all__ = [
     # Core Provider and Session
     "GUIProvider",
     "GUISession",
-    
     # Transport layer
     "GUIConnector",
     "LocalGUIConnector",

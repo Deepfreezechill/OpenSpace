@@ -1,6 +1,6 @@
+from ..grounding_client import GroundingClient
 from ..tool.local_tool import LocalTool
 from ..types import BackendType, ToolResult, ToolStatus
-from ..grounding_client import GroundingClient
 
 
 class _BaseSystemTool(LocalTool):
@@ -64,10 +64,7 @@ class ListAllBackendToolsTool(_BaseSystemTool):
 
     async def _arun(self, use_cache: bool = False) -> ToolResult:
         all_tools = await self.client.list_all_backend_tools(use_cache=use_cache)
-        lines = [
-            f"{backend.value}: {', '.join(t.schema.name for t in tools)}"
-            for backend, tools in all_tools.items()
-        ]
+        lines = [f"{backend.value}: {', '.join(t.schema.name for t in tools)}" for backend, tools in all_tools.items()]
         return ToolResult(
             status=ToolStatus.SUCCESS,
             content="\n".join(lines),

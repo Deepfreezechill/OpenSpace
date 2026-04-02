@@ -3,6 +3,7 @@
 Verifies that all cloud auto-import paths are gated behind the
 ``auto_import_enabled`` config flag, which defaults to ``False``.
 """
+
 from __future__ import annotations
 
 import json
@@ -10,31 +11,35 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Config flag defaults
 # ---------------------------------------------------------------------------
+
 
 class TestAutoImportConfigDefaults:
     """SkillConfig.auto_import_enabled must default to False."""
 
     def test_default_is_false(self):
         from openspace.config.grounding import SkillConfig
+
         cfg = SkillConfig()
         assert cfg.auto_import_enabled is False
 
     def test_explicit_true(self):
         from openspace.config.grounding import SkillConfig
+
         cfg = SkillConfig(auto_import_enabled=True)
         assert cfg.auto_import_enabled is True
 
     def test_explicit_false(self):
         from openspace.config.grounding import SkillConfig
+
         cfg = SkillConfig(auto_import_enabled=False)
         assert cfg.auto_import_enabled is False
 
     def test_serialization_roundtrip(self):
         from openspace.config.grounding import SkillConfig
+
         cfg = SkillConfig(auto_import_enabled=True)
         data = cfg.model_dump()
         assert data["auto_import_enabled"] is True
@@ -46,11 +51,13 @@ class TestAutoImportConfigDefaults:
 # _is_auto_import_enabled() helper
 # ---------------------------------------------------------------------------
 
+
 class TestIsAutoImportEnabled:
     """_is_auto_import_enabled() must reflect SkillConfig state."""
 
     def test_returns_false_when_no_instance(self):
         import openspace.mcp_server as srv
+
         original = srv._openspace_instance
         try:
             srv._openspace_instance = None
@@ -60,6 +67,7 @@ class TestIsAutoImportEnabled:
 
     def test_returns_false_when_not_initialized(self):
         import openspace.mcp_server as srv
+
         original = srv._openspace_instance
         try:
             mock_os = MagicMock()
@@ -71,6 +79,7 @@ class TestIsAutoImportEnabled:
 
     def test_returns_false_when_config_missing(self):
         import openspace.mcp_server as srv
+
         original = srv._openspace_instance
         try:
             mock_os = MagicMock()
@@ -83,6 +92,7 @@ class TestIsAutoImportEnabled:
 
     def test_returns_false_when_skills_config_missing(self):
         import openspace.mcp_server as srv
+
         original = srv._openspace_instance
         try:
             mock_os = MagicMock()
@@ -98,6 +108,7 @@ class TestIsAutoImportEnabled:
     def test_returns_false_when_flag_is_false(self):
         import openspace.mcp_server as srv
         from openspace.config.grounding import SkillConfig
+
         original = srv._openspace_instance
         try:
             mock_os = MagicMock()
@@ -113,6 +124,7 @@ class TestIsAutoImportEnabled:
     def test_returns_true_when_flag_is_true(self):
         import openspace.mcp_server as srv
         from openspace.config.grounding import SkillConfig
+
         original = srv._openspace_instance
         try:
             mock_os = MagicMock()
@@ -130,6 +142,7 @@ class TestIsAutoImportEnabled:
 # _cloud_search_and_import() gating
 # ---------------------------------------------------------------------------
 
+
 class TestCloudSearchAndImportGating:
     """_cloud_search_and_import must return [] when auto-import is disabled."""
 
@@ -140,6 +153,7 @@ class TestCloudSearchAndImportGating:
 
     async def test_returns_empty_when_disabled(self):
         from openspace.mcp_server import _cloud_search_and_import
+
         result = await _cloud_search_and_import("build a web scraper")
         assert result == []
 
@@ -147,6 +161,7 @@ class TestCloudSearchAndImportGating:
         """Cloud search module should never be imported when disabled."""
         with patch("openspace.mcp_server._is_auto_import_enabled", return_value=False):
             from openspace.mcp_server import _cloud_search_and_import
+
             # If cloud modules were imported, this would fail on missing deps
             result = await _cloud_search_and_import("anything")
             assert result == []
@@ -160,6 +175,7 @@ class TestCloudSearchAndImportEnabled:
         missing cloud module, proving the guard was passed)."""
         with patch("openspace.mcp_server._is_auto_import_enabled", return_value=True):
             from openspace.mcp_server import _cloud_search_and_import
+
             # Cloud modules won't be available in test env, so this should
             # return [] via the except branch, but it should NOT return
             # before trying (i.e., the guard didn't block it)
@@ -172,12 +188,14 @@ class TestCloudSearchAndImportEnabled:
 # _do_import_cloud_skill() gating
 # ---------------------------------------------------------------------------
 
+
 class TestDoImportCloudSkillGating:
     """_do_import_cloud_skill must refuse when auto-import is disabled."""
 
     async def test_blocked_when_disabled(self):
         with patch("openspace.mcp_server._is_auto_import_enabled", return_value=False):
             from openspace.mcp_server import _do_import_cloud_skill
+
             result = await _do_import_cloud_skill("some-skill-id")
             assert result["status"] == "blocked"
             assert "auto_import_enabled" in result["reason"]
@@ -187,6 +205,7 @@ class TestDoImportCloudSkillGating:
         missing cloud client — proving the guard was passed)."""
         with patch("openspace.mcp_server._is_auto_import_enabled", return_value=True):
             from openspace.mcp_server import _do_import_cloud_skill
+
             with pytest.raises(Exception):
                 # Will fail because cloud client isn't configured
                 await _do_import_cloud_skill("fake-skill-id")
@@ -195,6 +214,7 @@ class TestDoImportCloudSkillGating:
 # ---------------------------------------------------------------------------
 # search_skills() auto_import parameter gating
 # ---------------------------------------------------------------------------
+
 
 class TestSearchSkillsAutoImportGating:
     """search_skills() must not auto-import when config flag is False,
@@ -210,15 +230,19 @@ class TestSearchSkillsAutoImportGating:
         mock_os._grounding_config = MagicMock()
         mock_os._grounding_config.skills = MagicMock(auto_import_enabled=False)
 
-        mock_hybrid = AsyncMock(return_value=[
-            {"name": "cloud_skill", "source": "cloud", "visibility": "public", "skill_id": "s1"},
-        ])
+        mock_hybrid = AsyncMock(
+            return_value=[
+                {"name": "cloud_skill", "source": "cloud", "visibility": "public", "skill_id": "s1"},
+            ]
+        )
 
-        with patch("openspace.mcp_server._get_openspace", new_callable=AsyncMock, return_value=mock_os), \
-             patch("openspace.mcp_server._get_store") as mock_store, \
-             patch("openspace.cloud.search.hybrid_search_skills", mock_hybrid, create=True), \
-             patch("openspace.mcp_server._is_auto_import_enabled", return_value=False), \
-             patch("openspace.mcp_server._do_import_cloud_skill", new_callable=AsyncMock) as mock_import:
+        with (
+            patch("openspace.mcp_server._get_openspace", new_callable=AsyncMock, return_value=mock_os),
+            patch("openspace.mcp_server._get_store") as mock_store,
+            patch("openspace.cloud.search.hybrid_search_skills", mock_hybrid, create=True),
+            patch("openspace.mcp_server._is_auto_import_enabled", return_value=False),
+            patch("openspace.mcp_server._do_import_cloud_skill", new_callable=AsyncMock) as mock_import,
+        ):
             mock_store.return_value = MagicMock()
             self.mock_import = mock_import
             self.mock_hybrid = mock_hybrid
@@ -227,6 +251,7 @@ class TestSearchSkillsAutoImportGating:
     async def test_auto_import_param_true_but_config_false(self):
         """Even with auto_import=True in the call, config flag blocks import."""
         from openspace.mcp_server import search_skills
+
         result_json = await search_skills(query="web scraper", auto_import=True)
         result = json.loads(result_json)
         # Import should never have been called
@@ -237,6 +262,7 @@ class TestSearchSkillsAutoImportGating:
 
     async def test_no_import_summary_when_disabled(self):
         from openspace.mcp_server import search_skills
+
         result_json = await search_skills(query="web scraper", auto_import=True)
         result = json.loads(result_json)
         # No import summary should be present
@@ -247,18 +273,22 @@ class TestSearchSkillsAutoImportGating:
 # execute_task() cloud import gating
 # ---------------------------------------------------------------------------
 
+
 class TestExecuteTaskCloudImportGating:
     """execute_task(search_scope='all') must not import when disabled."""
 
     async def test_cloud_import_blocked_in_execute_task(self):
         """Cloud import in execute_task goes through _cloud_search_and_import,
         which is gated. Verify the chain works."""
-        with patch("openspace.mcp_server._is_auto_import_enabled", return_value=False), \
-             patch("openspace.mcp_server._cloud_search_and_import", new_callable=AsyncMock) as mock_cloud:
+        with (
+            patch("openspace.mcp_server._is_auto_import_enabled", return_value=False),
+            patch("openspace.mcp_server._cloud_search_and_import", new_callable=AsyncMock) as mock_cloud,
+        ):
             # Even though _cloud_search_and_import has its own guard,
             # verify that when called, it returns [] without side effects
             mock_cloud.return_value = []
             from openspace.mcp_server import _cloud_search_and_import
+
             result = await _cloud_search_and_import("any task")
             assert result == []
 
@@ -266,6 +296,7 @@ class TestExecuteTaskCloudImportGating:
 # ---------------------------------------------------------------------------
 # Integration: full config → gating chain
 # ---------------------------------------------------------------------------
+
 
 class TestConfigToGatingIntegration:
     """End-to-end: setting SkillConfig.auto_import_enabled flows through

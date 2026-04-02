@@ -20,13 +20,12 @@ from __future__ import annotations
 
 import json
 import math
-import os
 import pickle
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from openspace.utils.logging import Logger
 
@@ -50,14 +49,15 @@ _CACHE_VERSION = 1
 @dataclass
 class SkillCandidate:
     """Lightweight skill representation for ranking."""
+
     skill_id: str
     name: str
     description: str
-    body: str = ""             # SKILL.md body (frontmatter stripped)
-    source: str = "local"      # "local" | "cloud"
+    body: str = ""  # SKILL.md body (frontmatter stripped)
+    source: str = "local"  # "local" | "cloud"
     # Internal ranking fields
     embedding: Optional[List[float]] = None
-    embedding_text: str = ""   # text used to compute embedding
+    embedding_text: str = ""  # text used to compute embedding
     score: float = 0.0
     bm25_score: float = 0.0
     vector_score: float = 0.0
@@ -88,6 +88,7 @@ class SkillRanker:
         if cache_dir is None:
             try:
                 from openspace.config.constants import PROJECT_ROOT
+
                 cache_dir = PROJECT_ROOT / ".openspace" / "skill_embedding_cache"
             except Exception:
                 cache_dir = Path(".openspace") / "skill_embedding_cache"
@@ -147,7 +148,8 @@ class SkillRanker:
         return self._embedding_rank(query, candidates, top_k)
 
     def get_or_compute_embedding(
-        self, candidate: SkillCandidate,
+        self,
+        candidate: SkillCandidate,
     ) -> Optional[List[float]]:
         """Get embedding from cache or compute it.
 
@@ -242,6 +244,7 @@ class SkillRanker:
     def _get_openai_api_key() -> Optional[str]:
         """Resolve OpenAI-compatible API key for embedding requests."""
         from openspace.cloud.embedding import resolve_embedding_api
+
         api_key, _ = resolve_embedding_api()
         return api_key
 
@@ -320,10 +323,12 @@ class SkillRanker:
 
         import urllib.request
 
-        body = json.dumps({
-            "model": SKILL_EMBEDDING_MODEL,
-            "input": text,
-        }).encode("utf-8")
+        body = json.dumps(
+            {
+                "model": SKILL_EMBEDDING_MODEL,
+                "input": text,
+            }
+        ).encode("utf-8")
 
         req = urllib.request.Request(
             f"{base_url}/embeddings",
@@ -335,6 +340,7 @@ class SkillRanker:
             method="POST",
         )
         import time
+
         last_err = None
         for attempt in range(3):
             try:
@@ -385,6 +391,7 @@ class SkillRanker:
         except Exception as e:
             logger.warning(f"Failed to save skill embedding cache: {e}")
 
+
 def _cosine_similarity(a: List[float], b: List[float]) -> float:
     """Compute cosine similarity between two vectors."""
     if len(a) != len(b) or not a:
@@ -412,4 +419,3 @@ def build_skill_embedding_text(
     if len(raw) <= max_chars:
         return raw
     return raw[:max_chars]
-

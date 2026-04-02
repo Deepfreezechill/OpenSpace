@@ -1,22 +1,23 @@
 from importlib import import_module as _imp
-from typing import Dict as _Dict, Any as _Any, TYPE_CHECKING as _TYPE_CHECKING
+from typing import TYPE_CHECKING as _TYPE_CHECKING
+from typing import Any as _Any
+from typing import Dict as _Dict
 
 if _TYPE_CHECKING:
-    from openspace.tool_layer import OpenSpace as OpenSpace, OpenSpaceConfig as OpenSpaceConfig
     from openspace.agents import GroundingAgent as GroundingAgent
     from openspace.llm import LLMClient as LLMClient
     from openspace.recording import RecordingManager as RecordingManager
+    from openspace.tool_layer import OpenSpace as OpenSpace
+    from openspace.tool_layer import OpenSpaceConfig as OpenSpaceConfig
 
 __version__ = "0.1.0"
 
 __all__ = [
     # Version
     "__version__",
-    
     # Main API
     "OpenSpace",
     "OpenSpaceConfig",
-
     # Core Components
     "GroundingAgent",
     "GroundingClient",
@@ -24,7 +25,6 @@ __all__ = [
     "BaseTool",
     "ToolResult",
     "BackendType",
-
     # Recording System
     "RecordingManager",
     "RecordingViewer",
@@ -35,7 +35,6 @@ _attr_to_module: _Dict[str, str] = {
     # Main API
     "OpenSpace": "openspace.tool_layer",
     "OpenSpaceConfig": "openspace.tool_layer",
-
     # Core Components
     "GroundingAgent": "openspace.agents",
     "GroundingClient": "openspace.grounding.core.grounding_client",
@@ -43,7 +42,6 @@ _attr_to_module: _Dict[str, str] = {
     "BaseTool": "openspace.grounding.core.tool.base",
     "ToolResult": "openspace.grounding.core.types",
     "BackendType": "openspace.grounding.core.types",
-
     # Recording System
     "RecordingManager": "openspace.recording",
     "RecordingViewer": "openspace.recording.viewer",
@@ -63,7 +61,7 @@ def __getattr__(name: str) -> _Any:
     module_name = _attr_to_module[name]
     module = _imp(module_name)
     value = getattr(module, name)
-    globals()[name] = value 
+    globals()[name] = value
     return value
 
 

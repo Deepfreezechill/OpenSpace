@@ -1,5 +1,6 @@
 """Prompts for the skill engine subsystem."""
 
+
 class SkillEnginePrompts:
     """Central registry of prompts used by the skill engine."""
 
@@ -153,6 +154,7 @@ class SkillEnginePrompts:
             selected_skill_ids_json=selected_skill_ids_json,
             resource_info=resource_info,
         )
+
 
 _EXECUTION_ANALYSIS_TEMPLATE = """\
 You are an expert analyst evaluating an autonomous agent's task execution.

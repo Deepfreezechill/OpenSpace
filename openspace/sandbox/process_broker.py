@@ -13,57 +13,108 @@ Issues:
 from __future__ import annotations
 
 import fnmatch
-import os
-import time
 import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath, PureWindowsPath
-from typing import Optional
 
-from openspace.sandbox.leases import ProcessCapability, REQUIRED_BLOCKED_COMMANDS
-
+from openspace.sandbox.leases import REQUIRED_BLOCKED_COMMANDS, ProcessCapability
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
 # Shells that must be blocked when allow_shell=False
-_SHELL_BINARIES: frozenset[str] = frozenset({
-    "sh", "bash", "dash", "zsh", "fish", "csh", "tcsh", "ksh",
-    "ash", "rbash", "rksh",
-    "cmd", "cmd.exe", "powershell", "powershell.exe", "pwsh", "pwsh.exe",
-})
+_SHELL_BINARIES: frozenset[str] = frozenset(
+    {
+        "sh",
+        "bash",
+        "dash",
+        "zsh",
+        "fish",
+        "csh",
+        "tcsh",
+        "ksh",
+        "ash",
+        "rbash",
+        "rksh",
+        "cmd",
+        "cmd.exe",
+        "powershell",
+        "powershell.exe",
+        "pwsh",
+        "pwsh.exe",
+    }
+)
 
 # Commands that can invoke shells indirectly (shell wrappers).
 # When allow_shell=False, these must be checked for shell args.
-_SHELL_WRAPPERS: frozenset[str] = frozenset({
-    "env", "busybox", "xargs", "script", "nohup", "strace", "ltrace",
-    "nice", "ionice", "taskset", "timeout", "chrt", "setsid",
-    "sudo", "su", "doas", "runuser",
-    "time", "stdbuf", "chpst", "softlimit", "watch", "exec",
-    "find", "parallel",  # -exec / ::: can invoke arbitrary commands
-    "flock",  # flock /tmp/lock <command>
-})
+_SHELL_WRAPPERS: frozenset[str] = frozenset(
+    {
+        "env",
+        "busybox",
+        "xargs",
+        "script",
+        "nohup",
+        "strace",
+        "ltrace",
+        "nice",
+        "ionice",
+        "taskset",
+        "timeout",
+        "chrt",
+        "setsid",
+        "sudo",
+        "su",
+        "doas",
+        "runuser",
+        "time",
+        "stdbuf",
+        "chpst",
+        "softlimit",
+        "watch",
+        "exec",
+        "find",
+        "parallel",  # -exec / ::: can invoke arbitrary commands
+        "flock",  # flock /tmp/lock <command>
+    }
+)
 
 # Syscalls that can create hard-link / symlink escapes from filesystem jails.
 # EPIC 2.2 deferred this to 2.4: "same-device hard links created by a
 # compromised process [...] can bypass path-based checks. This is mitigated
 # by the sandbox process broker (EPIC 2.4) restricting link/symlink syscalls."
-_DANGEROUS_SYSCALLS: frozenset[str] = frozenset({
-    "link", "linkat",
-    "symlink", "symlinkat",
-    "rename", "renameat", "renameat2",
-    "mount", "umount", "umount2",
-    "pivot_root", "chroot",
-    "mknod", "mknodat",
-})
+_DANGEROUS_SYSCALLS: frozenset[str] = frozenset(
+    {
+        "link",
+        "linkat",
+        "symlink",
+        "symlinkat",
+        "rename",
+        "renameat",
+        "renameat2",
+        "mount",
+        "umount",
+        "umount2",
+        "pivot_root",
+        "chroot",
+        "mknod",
+        "mknodat",
+    }
+)
 
 # Commands that create links (user-space equivalents of dangerous syscalls)
-_LINK_COMMANDS: frozenset[str] = frozenset({
-    "ln", "link", "mklink",
-    "mount", "umount", "fusermount",
-    "mknod",
-})
+_LINK_COMMANDS: frozenset[str] = frozenset(
+    {
+        "ln",
+        "link",
+        "mklink",
+        "mount",
+        "umount",
+        "fusermount",
+        "mknod",
+    }
+)
 
 # Wrapper flags that implicitly spawn a shell (must be checked when allow_shell=False)
 _SHELL_INVOKING_FLAGS: dict[str, frozenset[str]] = {
@@ -194,9 +245,7 @@ def check_command_blocked(command: str, blocked_commands: list[str]) -> None:
     basename_no_exe = _strip_exe(basename)
 
     # Merge explicit + required blocks
-    all_blocked = set(b.lower() for b in blocked_commands) | {
-        r.lower() for r in REQUIRED_BLOCKED_COMMANDS
-    }
+    all_blocked = set(b.lower() for b in blocked_commands) | {r.lower() for r in REQUIRED_BLOCKED_COMMANDS}
 
     for pattern in all_blocked:
         pattern_no_exe = _strip_exe(pattern)
@@ -207,15 +256,10 @@ def check_command_blocked(command: str, blocked_commands: list[str]) -> None:
             or fnmatch.fnmatch(basename, pattern_no_exe)
             or fnmatch.fnmatch(basename_no_exe, pattern_no_exe)
         ):
-            raise CommandBlockedError(
-                f"Command '{command}' (basename '{basename}') is blocked "
-                f"by pattern '{pattern}'"
-            )
+            raise CommandBlockedError(f"Command '{command}' (basename '{basename}') is blocked by pattern '{pattern}'")
 
 
-def check_command_allowed(
-    command: str, allowed_commands: list[str]
-) -> None:
+def check_command_allowed(command: str, allowed_commands: list[str]) -> None:
     """Raise ``CommandNotAllowedError`` if *command* is not in the allow list.
 
     An empty allow list means **all non-blocked commands** are permitted
@@ -233,9 +277,7 @@ def check_command_allowed(
         if fnmatch.fnmatch(basename, pat) or fnmatch.fnmatch(basename_no_exe, pat):
             return  # Allowed
 
-    raise CommandNotAllowedError(
-        f"Command '{command}' (basename '{basename}') not in allowed list"
-    )
+    raise CommandNotAllowedError(f"Command '{command}' (basename '{basename}') not in allowed list")
 
 
 # ---------------------------------------------------------------------------
@@ -243,9 +285,7 @@ def check_command_allowed(
 # ---------------------------------------------------------------------------
 
 
-def check_shell_allowed(
-    command: str, allow_shell: bool, args: list[str] | None = None
-) -> None:
+def check_shell_allowed(command: str, allow_shell: bool, args: list[str] | None = None) -> None:
     """Raise ``ShellNotAllowedError`` if shell invocation is disabled.
 
     Detects shell binaries by basename matching against ``_SHELL_BINARIES``.
@@ -259,10 +299,7 @@ def check_shell_allowed(
     basename_no_exe = _strip_exe(basename)
 
     if basename in _SHELL_BINARIES or basename_no_exe in _SHELL_BINARIES:
-        raise ShellNotAllowedError(
-            f"Shell invocation via '{command}' is not allowed "
-            f"(allow_shell=False)"
-        )
+        raise ShellNotAllowedError(f"Shell invocation via '{command}' is not allowed (allow_shell=False)")
 
     # Check shell wrappers: env bash, busybox sh, sudo bash, etc.
     if basename in _SHELL_WRAPPERS or basename_no_exe in _SHELL_WRAPPERS:
@@ -277,9 +314,7 @@ def check_shell_allowed(
                     )
 
 
-def check_shell_command(
-    shell_command: str, allow_shell: bool
-) -> None:
+def check_shell_command(shell_command: str, allow_shell: bool) -> None:
     """Raise ``ShellNotAllowedError`` if shell command execution is disabled.
 
     This checks the content of a shell command string (e.g., passed to
@@ -289,10 +324,7 @@ def check_shell_command(
     if allow_shell:
         return
 
-    raise ShellNotAllowedError(
-        f"Shell command execution is not allowed (allow_shell=False): "
-        f"'{shell_command[:100]}'"
-    )
+    raise ShellNotAllowedError(f"Shell command execution is not allowed (allow_shell=False): '{shell_command[:100]}'")
 
 
 # ---------------------------------------------------------------------------
@@ -307,10 +339,7 @@ def check_syscall_allowed(syscall: str, *args: str) -> None:
     create jail escapes (deferred from EPIC 2.2 filesystem broker).
     """
     if syscall.lower() in _DANGEROUS_SYSCALLS:
-        raise SyscallBlockedError(
-            f"Syscall '{syscall}' is blocked (jail escape risk). "
-            f"Args: {args[:5]}"
-        )
+        raise SyscallBlockedError(f"Syscall '{syscall}' is blocked (jail escape risk). Args: {args[:5]}")
 
 
 def check_link_command(command: str) -> None:
@@ -325,8 +354,7 @@ def check_link_command(command: str) -> None:
 
     if basename in _LINK_COMMANDS or basename_no_exe in _LINK_COMMANDS:
         raise SyscallBlockedError(
-            f"Command '{command}' (basename '{basename}') creates links "
-            f"and is blocked to prevent jail escapes"
+            f"Command '{command}' (basename '{basename}') creates links and is blocked to prevent jail escapes"
         )
 
 
@@ -368,14 +396,11 @@ class ProcessTracker:
             active = sum(1 for p in self._processes.values() if not p.terminated)
             if active >= self.max_processes:
                 raise ProcessLimitError(
-                    f"Process limit reached ({active}/{self.max_processes}). "
-                    f"Cannot track pid={pid} command='{command}'"
+                    f"Process limit reached ({active}/{self.max_processes}). Cannot track pid={pid} command='{command}'"
                 )
 
             if pid in self._processes and not self._processes[pid].terminated:
-                raise ProcessLimitError(
-                    f"Process pid={pid} is already tracked and active"
-                )
+                raise ProcessLimitError(f"Process pid={pid} is already tracked and active")
 
             self._processes[pid] = ProcessRecord(pid=pid, command=command)
 
@@ -437,11 +462,7 @@ class ProcessTracker:
     def _cleanup_locked(self) -> None:
         """Remove terminated processes older than 60 seconds (must hold lock)."""
         now = time.monotonic()
-        stale = [
-            pid
-            for pid, rec in self._processes.items()
-            if rec.terminated and (now - rec.start_time) > 60.0
-        ]
+        stale = [pid for pid, rec in self._processes.items() if rec.terminated and (now - rec.start_time) > 60.0]
         for pid in stale:
             del self._processes[pid]
 
@@ -542,15 +563,10 @@ class ProcessBroker:
                     stripped = arg.strip().strip("'\"")
                     if stripped in shell_flags:
                         raise ShellNotAllowedError(
-                            f"Wrapper '{basename}' with flag '{stripped}' "
-                            f"invokes a shell but allow_shell=False"
+                            f"Wrapper '{basename}' with flag '{stripped}' invokes a shell but allow_shell=False"
                         )
                     # Combined short flags: -si means -s + -i
-                    if (
-                        stripped.startswith("-")
-                        and not stripped.startswith("--")
-                        and len(stripped) > 2
-                    ):
+                    if stripped.startswith("-") and not stripped.startswith("--") and len(stripped) > 2:
                         for flag in shell_flags:
                             if len(flag) == 2 and flag[1] in stripped[1:]:
                                 raise ShellNotAllowedError(
@@ -639,9 +655,7 @@ class ProcessBroker:
         """Register a process for tracking. Raises if at concurrency limit."""
         self._tracker.track(pid, command)
 
-    def check_and_track(
-        self, pid: int, command: str, args: list[str] | None = None
-    ) -> None:
+    def check_and_track(self, pid: int, command: str, args: list[str] | None = None) -> None:
         """Atomic command validation + process reservation.
 
         Combines ``check_command()`` and ``track_process()`` to prevent

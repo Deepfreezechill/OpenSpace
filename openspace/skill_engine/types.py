@@ -11,21 +11,21 @@ from typing import Any, ClassVar, Dict, List, Optional
 class SkillCategory(str, Enum):
     """Skill primary category."""
 
-    TOOL_GUIDE = "tool_guide"    # Tool guide
-    WORKFLOW   = "workflow"      # End-to-end workflow
-    REFERENCE  = "reference"     # Reference knowledge
+    TOOL_GUIDE = "tool_guide"  # Tool guide
+    WORKFLOW = "workflow"  # End-to-end workflow
+    REFERENCE = "reference"  # Reference knowledge
 
 
 class SkillVisibility(str, Enum):
     """Cloud visibility of a skill. (`Group` is managed by the cloud platform)"""
 
     PRIVATE = "private"  # Only visible to the creator
-    PUBLIC  = "public"   # Visible to all users on the cloud
+    PUBLIC = "public"  # Visible to all users on the cloud
 
 
 class EvolutionType(str, Enum):
-    FIX      = "fix"       # Repair broken / outdated skill instructions
-    DERIVED  = "derived"   # Enhance / specialize an existing skill
+    FIX = "fix"  # Repair broken / outdated skill instructions
+    DERIVED = "derived"  # Enhance / specialize an existing skill
     CAPTURED = "captured"  # Capture a novel reusable pattern
 
     def to_origin(self) -> "SkillOrigin":
@@ -51,19 +51,17 @@ class SkillOrigin(str, Enum):
 
     IMPORTED = "imported"  # Initial import, no parent
     CAPTURED = "captured"  # Captured from a successful execution with no parent skill involved
-    DERIVED  = "derived"   # Derived from existing skill(s) (upgrade, wrap, compose, etc.)
-    FIXED    = "fixed"     # Fix of existing skill — new record, parent = previous version
+    DERIVED = "derived"  # Derived from existing skill(s) (upgrade, wrap, compose, etc.)
+    FIXED = "fixed"  # Fix of existing skill — new record, parent = previous version
 
 
 _EVOLUTION_TO_ORIGIN: Dict["EvolutionType", "SkillOrigin"] = {
-    EvolutionType.FIX:      SkillOrigin.FIXED,
-    EvolutionType.DERIVED:  SkillOrigin.DERIVED,
+    EvolutionType.FIX: SkillOrigin.FIXED,
+    EvolutionType.DERIVED: SkillOrigin.DERIVED,
     EvolutionType.CAPTURED: SkillOrigin.CAPTURED,
 }
 
-_ORIGIN_TO_EVOLUTION: Dict["SkillOrigin", "EvolutionType"] = {
-    v: k for k, v in _EVOLUTION_TO_ORIGIN.items()
-}
+_ORIGIN_TO_EVOLUTION: Dict["SkillOrigin", "EvolutionType"] = {v: k for k, v in _EVOLUTION_TO_ORIGIN.items()}
 
 
 @dataclass
@@ -119,14 +117,14 @@ class SkillLineage:
     """
 
     origin: SkillOrigin
-    generation: int = 0                                    # Distance from root (see docstring)
+    generation: int = 0  # Distance from root (see docstring)
     parent_skill_ids: List[str] = field(default_factory=list)  # [] for IMPORTED / CAPTURED
-    source_task_id: Optional[str] = None                   # Task that triggered evolution / capture
-    change_summary: str = ""                               # LLM-generated description of changes
-    content_diff: str = ""                                 # Combined unified diff of all files (empty for multi-parent DERIVED)
+    source_task_id: Optional[str] = None  # Task that triggered evolution / capture
+    change_summary: str = ""  # LLM-generated description of changes
+    content_diff: str = ""  # Combined unified diff of all files (empty for multi-parent DERIVED)
     content_snapshot: Dict[str, str] = field(default_factory=dict)  # {relative_path: content} full directory snapshot
     created_at: datetime = field(default_factory=datetime.now)
-    created_by: str = ""                                   # "human" | model name (version-level actor)
+    created_by: str = ""  # "human" | model name (version-level actor)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -151,10 +149,7 @@ class SkillLineage:
             change_summary=data.get("change_summary", ""),
             content_diff=data.get("content_diff", ""),
             content_snapshot=data.get("content_snapshot", {}),
-            created_at=(
-                datetime.fromisoformat(data["created_at"])
-                if data.get("created_at") else datetime.now()
-            ),
+            created_at=(datetime.fromisoformat(data["created_at"]) if data.get("created_at") else datetime.now()),
             created_by=data.get("created_by", ""),
         )
 
@@ -175,8 +170,8 @@ class SkillJudgment:
     """
 
     skill_id: str
-    skill_applied: bool = False    # Whether the skill was actually applied
-    note: str = ""                 # Per-skill observation (deviation, usage, etc.)
+    skill_applied: bool = False  # Whether the skill was actually applied
+    note: str = ""  # Per-skill observation (deviation, usage, etc.)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -207,8 +202,8 @@ class EvolutionSuggestion:
 
     evolution_type: EvolutionType
     target_skill_ids: List[str] = field(default_factory=list)  # True skill_id(s)
-    category: Optional[SkillCategory] = None                   # Desired category of the result
-    direction: str = ""                                        # Free-text: what to evolve / capture
+    category: Optional[SkillCategory] = None  # Desired category of the result
+    direction: str = ""  # Free-text: what to evolve / capture
 
     @property
     def target_skill_id(self) -> str:
@@ -257,8 +252,8 @@ class ExecutionAnalysis:
     timestamp: datetime
 
     # Task-level LLM judgments
-    task_completed: bool = False           # Whether the task completed successfully
-    execution_note: str = ""               # Task-level observation
+    task_completed: bool = False  # Whether the task completed successfully
+    execution_note: str = ""  # Task-level observation
     tool_issues: List[str] = field(default_factory=list)  # Tool keys that had issues
 
     # Per-skill judgments (one per selected skill; empty = no skill involved)
@@ -268,7 +263,7 @@ class ExecutionAnalysis:
     evolution_suggestions: List[EvolutionSuggestion] = field(default_factory=list)
 
     # Analysis metadata
-    analyzed_by: str = ""                  # Model name used for analysis
+    analyzed_by: str = ""  # Model name used for analysis
     analyzed_at: datetime = field(default_factory=datetime.now)
 
     def get_judgment(self, skill_id: str) -> Optional[SkillJudgment]:
@@ -313,19 +308,10 @@ class ExecutionAnalysis:
             task_completed=data.get("task_completed", False),
             execution_note=data.get("execution_note", ""),
             tool_issues=data.get("tool_issues", []),
-            skill_judgments=[
-                SkillJudgment.from_dict(j)
-                for j in data.get("skill_judgments", [])
-            ],
-            evolution_suggestions=[
-                EvolutionSuggestion.from_dict(s)
-                for s in data.get("evolution_suggestions", [])
-            ],
+            skill_judgments=[SkillJudgment.from_dict(j) for j in data.get("skill_judgments", [])],
+            evolution_suggestions=[EvolutionSuggestion.from_dict(s) for s in data.get("evolution_suggestions", [])],
             analyzed_by=data.get("analyzed_by", ""),
-            analyzed_at=(
-                datetime.fromisoformat(data["analyzed_at"])
-                if data.get("analyzed_at") else datetime.now()
-            ),
+            analyzed_at=(datetime.fromisoformat(data["analyzed_at"]) if data.get("analyzed_at") else datetime.now()),
         )
 
 
@@ -339,12 +325,12 @@ class SkillRecord:
     ExecutionAnalyzer.
     """
 
-    skill_id: str                            # Unique identifier
-    name: str                                # Logical skill name (shared across versions)
+    skill_id: str  # Unique identifier
+    name: str  # Logical skill name (shared across versions)
     description: str
-    path: str = ""                           # Path to SKILL.md (shared across FIXED versions)
+    path: str = ""  # Path to SKILL.md (shared across FIXED versions)
 
-    is_active: bool = True                   # Only the latest version is active
+    is_active: bool = True  # Only the latest version is active
 
     # Category & tags
     category: SkillCategory = SkillCategory.WORKFLOW
@@ -352,22 +338,20 @@ class SkillRecord:
 
     # Ownership & visibility (for cloud sync)
     visibility: SkillVisibility = SkillVisibility.PRIVATE  # Cloud visibility
-    creator_id: str = ""                     # User ID of the skill owner / creator
+    creator_id: str = ""  # User ID of the skill owner / creator
 
     # Lineage
-    lineage: SkillLineage = field(
-        default_factory=lambda: SkillLineage(origin=SkillOrigin.IMPORTED)
-    )
+    lineage: SkillLineage = field(default_factory=lambda: SkillLineage(origin=SkillOrigin.IMPORTED))
 
     # Tool dependencies
     tool_dependencies: List[str] = field(default_factory=list)  # All involved tool keys
-    critical_tools: List[str] = field(default_factory=list)     # Required (must-have) tool keys
+    critical_tools: List[str] = field(default_factory=list)  # Required (must-have) tool keys
 
     # Execution stats (updated by add_analysis or atomically in store)
-    total_selections: int = 0    # Times this skill was selected by the LLM
-    total_applied: int = 0       # Times the skill was actually applied by the agent
-    total_completions: int = 0   # Times task completed when skill was applied
-    total_fallbacks: int = 0     # Times skill was not applied and task failed
+    total_selections: int = 0  # Times this skill was selected by the LLM
+    total_applied: int = 0  # Times the skill was actually applied by the agent
+    total_completions: int = 0  # Times task completed when skill was applied
+    total_fallbacks: int = 0  # Times skill was not applied and task failed
 
     # Recent analysis history (rolling window of analyses involving this skill)
     recent_analyses: List[ExecutionAnalysis] = field(default_factory=list)
@@ -434,10 +418,7 @@ class SkillRecord:
             is_active=data.get("is_active", True),
             category=SkillCategory(data["category"]) if data.get("category") else SkillCategory.WORKFLOW,
             tags=data.get("tags", []),
-            visibility=(
-                SkillVisibility(data["visibility"])
-                if data.get("visibility") else SkillVisibility.PRIVATE
-            ),
+            visibility=(SkillVisibility(data["visibility"]) if data.get("visibility") else SkillVisibility.PRIVATE),
             creator_id=data.get("creator_id", ""),
             lineage=(
                 SkillLineage.from_dict(data["lineage"])
@@ -450,14 +431,8 @@ class SkillRecord:
             total_applied=data.get("total_applied", 0),
             total_completions=data.get("total_completions", 0),
             total_fallbacks=data.get("total_fallbacks", 0),
-            first_seen=(
-                datetime.fromisoformat(data["first_seen"])
-                if data.get("first_seen") else datetime.now()
-            ),
-            last_updated=(
-                datetime.fromisoformat(data["last_updated"])
-                if data.get("last_updated") else datetime.now()
-            ),
+            first_seen=(datetime.fromisoformat(data["first_seen"]) if data.get("first_seen") else datetime.now()),
+            last_updated=(datetime.fromisoformat(data["last_updated"]) if data.get("last_updated") else datetime.now()),
         )
         for a in data.get("recent_analyses", []):
             record.recent_analyses.append(ExecutionAnalysis.from_dict(a))

@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import pytest
 
-
 # ═══════════════════════════════════════════════════════════════════════
 #  Hierarchy & Inheritance Tests
 # ═══════════════════════════════════════════════════════════════════════
@@ -86,9 +85,7 @@ class TestExceptionHierarchy:
             SandboxError,
             ValidationError,
         ]:
-            assert issubclass(exc_cls, OpenSpaceError), (
-                f"{exc_cls.__name__} does not inherit OpenSpaceError"
-            )
+            assert issubclass(exc_cls, OpenSpaceError), f"{exc_cls.__name__} does not inherit OpenSpaceError"
             assert issubclass(exc_cls, Exception)
 
     def test_openspace_error_is_exception(self):
@@ -167,9 +164,7 @@ class TestSerialization:
     def test_to_dict_with_retryable(self):
         from openspace.domain.exceptions import ExternalServiceError
 
-        exc = ExternalServiceError(
-            "API down", service="cloud", status_code=503
-        )
+        exc = ExternalServiceError("API down", service="cloud", status_code=503)
         d = exc.to_dict()
         assert d["retryable"] is True
         assert d["context"]["service"] == "cloud"
@@ -202,9 +197,7 @@ class TestContextPropagation:
     def test_context_stored(self):
         from openspace.domain.exceptions import ExecutionError
 
-        exc = ExecutionError(
-            "boom", task_id="t1", tool_name="bash", iteration=3
-        )
+        exc = ExecutionError("boom", task_id="t1", tool_name="bash", iteration=3)
         assert exc.context["task_id"] == "t1"
         assert exc.context["tool_name"] == "bash"
         assert exc.context["iteration"] == 3
@@ -238,9 +231,7 @@ class TestContextPropagation:
     def test_external_service_error_stores_service(self):
         from openspace.domain.exceptions import ExternalServiceError
 
-        exc = ExternalServiceError(
-            "timeout", service="cloud-api", status_code=504
-        )
+        exc = ExternalServiceError("timeout", service="cloud-api", status_code=504)
         assert exc.service == "cloud-api"
         assert exc.status_code == 504
 
@@ -278,9 +269,34 @@ class TestRetryable:
         from openspace.domain.exceptions import ExternalServiceError
 
         # All 4xx (except 429) should be non-retryable
-        for code in [400, 402, 403, 404, 405, 406, 407, 408, 410, 411,
-                     412, 413, 414, 415, 416, 417, 418, 421, 422, 423,
-                     424, 425, 426, 428, 431, 451]:
+        for code in [
+            400,
+            402,
+            403,
+            404,
+            405,
+            406,
+            407,
+            408,
+            410,
+            411,
+            412,
+            413,
+            414,
+            415,
+            416,
+            417,
+            418,
+            421,
+            422,
+            423,
+            424,
+            425,
+            426,
+            428,
+            431,
+            451,
+        ]:
             exc = ExternalServiceError("x", status_code=code)
             assert exc.retryable is False, f"status_code={code} should NOT be retryable"
 
@@ -461,10 +477,10 @@ class TestIntegrationWithExistingErrors:
         assert "simple error message" in safe
 
     def test_handle_mcp_exception_with_domain_exception(self):
+        import json
+
         from openspace.domain.exceptions import ValidationError
         from openspace.errors import handle_mcp_exception
-
-        import json
 
         result = handle_mcp_exception(
             ValidationError("bad input", safe_message="Invalid request"),
@@ -478,10 +494,10 @@ class TestIntegrationWithExistingErrors:
         assert "correlation_id" in parsed
 
     def test_handle_mcp_exception_prefers_domain_error_code(self):
+        import json
+
         from openspace.domain.exceptions import NotFoundError
         from openspace.errors import handle_mcp_exception
-
-        import json
 
         # Even though we pass error_code=EXECUTION_ERROR, the domain
         # exception's error_code should win
@@ -494,10 +510,10 @@ class TestIntegrationWithExistingErrors:
         assert parsed["error_code"] == "SKILL_NOT_FOUND"
 
     def test_handle_mcp_exception_generic_fallback_without_safe_message(self):
+        import json
+
         from openspace.domain.exceptions import ExecutionError
         from openspace.errors import handle_mcp_exception
-
-        import json
 
         # Without safe_message, client_message returns generic fallback
         result = handle_mcp_exception(
@@ -511,9 +527,9 @@ class TestIntegrationWithExistingErrors:
         assert "secret" not in parsed["message"]
 
     def test_handle_mcp_exception_maps_builtin_timeout(self):
-        from openspace.errors import handle_mcp_exception
-
         import json
+
+        from openspace.errors import handle_mcp_exception
 
         result = handle_mcp_exception(
             TimeoutError("connection timed out"),
@@ -524,9 +540,9 @@ class TestIntegrationWithExistingErrors:
         assert parsed["error_code"] == "TIMEOUT_ERROR"  # centralized mapping wins
 
     def test_handle_mcp_exception_maps_builtin_permission(self):
-        from openspace.errors import handle_mcp_exception
-
         import json
+
+        from openspace.errors import handle_mcp_exception
 
         result = handle_mcp_exception(
             PermissionError("access denied"),
@@ -537,9 +553,9 @@ class TestIntegrationWithExistingErrors:
         assert parsed["error_code"] == "PERMISSION_DENIED"
 
     def test_handle_mcp_exception_maps_builtin_value_error(self):
-        from openspace.errors import handle_mcp_exception
-
         import json
+
+        from openspace.errors import handle_mcp_exception
 
         result = handle_mcp_exception(
             ValueError("invalid argument"),

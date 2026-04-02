@@ -81,7 +81,24 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
-ignore = ["E501"]  # line length handled separately
+ignore = [
+    "E501",   # line length handled separately
+    "E402",   # module-import-not-at-top (upstream code pattern)
+    "E701",   # multiple-statements-on-one-line (upstream)
+    "E711",   # none-comparison (upstream)
+    "E712",   # true-false-comparison (upstream)
+    "E722",   # bare-except (upstream code, fix incrementally)
+    "E741",   # ambiguous-variable-name (upstream)
+    "F401",   # unused-import (upstream, fix incrementally)
+    "F403",   # undefined-local-with-import-star (upstream)
+    "F405",   # undefined-local-with-import-star-usage (upstream)
+    "F811",   # redefined-while-unused (upstream)
+    "F821",   # undefined-name (upstream — missing imports in abstract ports)
+    "F841",   # unused-variable (upstream, fix incrementally)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"gdpval_bench/*" = ["E", "F", "W"]  # benchmark scripts — upstream code
 
 [tool.setuptools]
 packages = {find = {where = ["."], include = ["openspace*"]}}

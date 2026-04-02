@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
 from datetime import datetime
+from typing import Any, Dict, List
+
+from openspace.utils.logging import Logger
 
 from .tool import BaseTool
 from .transport.connectors import BaseConnector
-from .types import SessionInfo, SessionStatus, BackendType, ToolResult
-from openspace.utils.logging import Logger
+from .types import BackendType, SessionInfo, SessionStatus, ToolResult
 
 logger = Logger.get_logger(__name__)
 
@@ -14,6 +15,7 @@ class BaseSession(ABC):
     """
     Session manager for all backends.
     """
+
     def __init__(
         self,
         connector: BaseConnector,
@@ -74,11 +76,11 @@ class BaseSession(ABC):
         """
         Negotiate with the backend, discover tools, etc.
         Return session information (can be an empty dict).
-        
+
         `self.tools` need to be set in this method.
         """
         raise NotImplementedError("Sub-class must implement this method")
-    
+
     async def list_tools(self) -> List[BaseTool]:
         """
         Return tools discovered during `initialize()`.
@@ -86,22 +88,22 @@ class BaseSession(ABC):
         if not self.tools:
             self.session_info = await self.initialize()
         return self.tools
-    
+
     async def call_tool(self, tool_name: str, parameters=None) -> ToolResult:
         parameters = parameters or {}
-        
+
         # Ensure tools are initialized before calling
         if not self.tools:
             logger.debug(f"Tools not initialized for session {self.session_id}, initializing now...")
             self.session_info = await self.initialize()
-        
+
         tool_map = {t.schema.name: t for t in self.tools}
         if tool_name not in tool_map:
             raise ValueError(f"Unknown tool: {tool_name}")
         result = await tool_map[tool_name].arun(**parameters)
         self._touch()
         return result
- 
+
     # Update when a successful call is made
     def _touch(self):
         self._last_activity = datetime.utcnow()

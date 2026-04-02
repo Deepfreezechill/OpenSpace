@@ -10,21 +10,23 @@ Unsandboxed execution requires explicit OPENSPACE_ALLOW_UNSANDBOXED=1 env var.
 import os
 from typing import Any, Optional
 
-from openspace.grounding.core.types import SandboxOptions
 from openspace.config.utils import get_config_value
+from openspace.grounding.core.types import SandboxOptions
+
+from .installer import MCPInstallerManager
 from .transport.connectors import (
-    MCPBaseConnector,
     HttpConnector,
+    MCPBaseConnector,
     SandboxConnector,
     StdioConnector,
     WebSocketConnector,
 )
 from .transport.connectors.utils import is_stdio_server
-from .installer import MCPInstallerManager
 
 # Import E2BSandbox
 try:
     from openspace.grounding.core.security import E2BSandbox
+
     E2B_AVAILABLE = True
 except ImportError:
     E2BSandbox = None
@@ -32,10 +34,15 @@ except ImportError:
 
 
 # Trusted sandbox config keys that may be sourced from config/env
-_TRUSTED_SANDBOX_KEYS = frozenset({
-    "timeout", "sse_read_timeout", "supergateway_command", "port",
-    "sandbox_template_id",
-})
+_TRUSTED_SANDBOX_KEYS = frozenset(
+    {
+        "timeout",
+        "sse_read_timeout",
+        "supergateway_command",
+        "port",
+        "sandbox_template_id",
+    }
+)
 
 
 def _build_trusted_sandbox_options(
@@ -72,11 +79,11 @@ async def create_connector_from_config(
     tool_call_retry_delay: float = 1.0,
 ) -> MCPBaseConnector:
     """Create a connector based on server configuration.
-    
+
     For stdio-based servers, sandbox is ENFORCED. Unsandboxed stdio execution
     is denied by default. Set OPENSPACE_ALLOW_UNSANDBOXED=1 to explicitly
     opt out (development/testing only — NOT recommended for production).
-    
+
     Args:
         server_config: The server configuration section
         server_name: Name of the MCP server (for display purposes)
@@ -92,12 +99,12 @@ async def create_connector_from_config(
 
     Returns:
         A configured connector instance
-        
+
     Raises:
         RuntimeError: If sandbox is required but not available, or if
             dependencies are not installed and user declines installation
     """
-    
+
     # Get original command and args from config
     original_command = get_config_value(server_config, "command")
     original_args = get_config_value(server_config, "args", [])
@@ -115,6 +122,7 @@ async def create_connector_from_config(
                 "Set OPENSPACE_ALLOW_UNSANDBOXED=1 to override (NOT recommended)."
             )
         import logging
+
         logging.getLogger(__name__).warning(
             "SECURITY: Running server '%s' WITHOUT sandbox (OPENSPACE_ALLOW_UNSANDBOXED=1). "
             "This is NOT recommended for production use.",
@@ -123,8 +131,7 @@ async def create_connector_from_config(
 
     if is_stdio_server(server_config) and sandbox and not E2B_AVAILABLE:
         raise ImportError(
-            "E2B sandbox support not available. Please install e2b-code-interpreter: "
-            "'pip install e2b-code-interpreter'"
+            "E2B sandbox support not available. Please install e2b-code-interpreter: 'pip install e2b-code-interpreter'"
         )
 
     # --- Host-side operations (only after sandbox enforcement passes) ---
@@ -133,6 +140,7 @@ async def create_connector_from_config(
         # Use provided installer or get global instance
         if installer is None:
             from .installer import get_global_installer
+
             installer = get_global_installer()
 
         # Ensure dependencies are installed (using original command/args)
@@ -149,15 +157,13 @@ async def create_connector_from_config(
     # Sandboxed connector (E2B_AVAILABLE already verified above)
     elif is_stdio_server(server_config):
         # Build sandbox options from trusted config/env only (never user input)
-        _sandbox_options = _build_trusted_sandbox_options(
-            sandbox_options, timeout, sse_read_timeout
-        )
+        _sandbox_options = _build_trusted_sandbox_options(sandbox_options, timeout, sse_read_timeout)
         e2b_sandbox = E2BSandbox(_sandbox_options)
-        
+
         # Extract timeout values from trusted options
         connector_timeout = _sandbox_options.get("timeout", timeout)
         connector_sse_timeout = _sandbox_options.get("sse_read_timeout", sse_read_timeout)
-        
+
         # Create and return sandbox connector
         return SandboxConnector(
             sandbox=e2b_sandbox,

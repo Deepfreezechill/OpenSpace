@@ -1,11 +1,12 @@
+import json
 import logging
 import os
 import sys
 import threading
-import json
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
+
 from colorama import init
 
 init(autoreset=True)
@@ -19,18 +20,12 @@ def _load_log_level_from_config() -> int:
     try:
         config_path = Path(__file__).parent.parent / "config" / "config_grounding.json"
         if config_path.exists():
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
                 log_level = config.get("log_level", "INFO").upper()
-                
+
                 # Convert log level string to OPENSPACE_DEBUG value
-                level_map = {
-                    "DEBUG": 2,
-                    "INFO": 1,
-                    "WARNING": 0,
-                    "ERROR": 0,
-                    "CRITICAL": 0
-                }
+                level_map = {"DEBUG": 2, "INFO": 1, "WARNING": 0, "ERROR": 0, "CRITICAL": 0}
                 return level_map.get(log_level, 1)  # Default to INFO
     except Exception:
         # If any error occurs, silently return default INFO level
@@ -50,7 +45,7 @@ DEFAULT_LOG_FILE_PATTERN = "openspace_{timestamp}.log"
 
 class FlushFileHandler(logging.FileHandler):
     """File handler that flushes after each emit for real-time logging"""
-    
+
     def emit(self, record):
         super().emit(record)
         self.flush()  # Immediately flush to disk
@@ -58,20 +53,20 @@ class FlushFileHandler(logging.FileHandler):
 
 class ColoredFormatter(logging.Formatter):
     COLORS = {
-        'DEBUG': '\033[1;36m',    # Bold cyan
-        'INFO': '\033[1;32m',     # Bold green
-        'WARNING': '\033[1;33m',  # Bold yellow
-        'ERROR': '\033[1;31m',    # Bold red
-        'CRITICAL': '\033[1;35m', # Bold magenta
-        'RESET': '\033[0m',
+        "DEBUG": "\033[1;36m",  # Bold cyan
+        "INFO": "\033[1;32m",  # Bold green
+        "WARNING": "\033[1;33m",  # Bold yellow
+        "ERROR": "\033[1;31m",  # Bold red
+        "CRITICAL": "\033[1;35m",  # Bold magenta
+        "RESET": "\033[0m",
     }
 
     def format(self, record: logging.LogRecord) -> str:
         formatted = super().format(record)
-        
+
         level_color = self.COLORS.get(record.levelname, self.COLORS["RESET"])
         colored_line = f"{level_color}{formatted}{self.COLORS['RESET']}"
-        
+
         return colored_line
 
 
@@ -84,20 +79,18 @@ class Logger:
     3. Dynamically adapts log levels according to ``OPENSPACE_DEBUG``.
     """
 
-    _ROOT_NAME = "openspace"        # Package root name
+    _ROOT_NAME = "openspace"  # Package root name
     # Standard format: time with milliseconds | level | file:line number | message
-    _LOG_FORMAT = (
-        "%(asctime)s.%(msecs)03d [%(levelname)-8s] %(filename)s:%(lineno)d - %(message)s"
-    )
+    _LOG_FORMAT = "%(asctime)s.%(msecs)03d [%(levelname)-8s] %(filename)s:%(lineno)d - %(message)s"
 
     _lock = threading.Lock()
     _configured = False
     _registered: dict[str, logging.Logger] = {}
-    
+
     @staticmethod
     def _get_default_log_file() -> str:
         """Generate default log file path with timestamp (to seconds)
-        
+
         Log files are organized by the running script name:
         - logs/<script_name>/openspace_2025-10-24_15-30-00.log
         """
@@ -105,6 +98,7 @@ class Logger:
         script_name = "openspace"  # Default name
         try:
             import __main__
+
             if hasattr(__main__, "__file__") and __main__.__file__:
                 # Extract script name without extension
                 script_path = os.path.basename(__main__.__file__)
@@ -112,10 +106,10 @@ class Logger:
         except Exception:
             # If can't get script name, use default
             pass
-        
+
         # Create log directory: logs/<script_name>/
         log_dir = os.path.join(DEFAULT_LOG_DIR, script_name)
-        
+
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename = DEFAULT_LOG_FILE_PATTERN.format(timestamp=timestamp)
         return os.path.abspath(os.path.join(log_dir, filename))
@@ -192,9 +186,7 @@ class Logger:
                 actual_log_file = log_to_file
 
             # Select the logger to attach handlers to (root logger or openspace).
-            target_logger = (
-                logging.getLogger() if attach_to_root else logging.getLogger(cls._ROOT_NAME)
-            )
+            target_logger = logging.getLogger() if attach_to_root else logging.getLogger(cls._ROOT_NAME)
             target_logger.setLevel(resolved_level)
 
             # Clean up old handlers.
@@ -205,7 +197,8 @@ class Logger:
             date_fmt = "%Y-%m-%d %H:%M:%S"
             color_supported = force_color or (use_colors and cls._stdout_supports_color())
             console_formatter = (
-                ColoredFormatter(fmt_str, datefmt=date_fmt) if color_supported 
+                ColoredFormatter(fmt_str, datefmt=date_fmt)
+                if color_supported
                 else logging.Formatter(fmt_str, datefmt=date_fmt)
             )
             file_formatter = logging.Formatter(fmt_str, datefmt=date_fmt)
@@ -226,7 +219,7 @@ class Logger:
                 fh.setLevel(resolved_level)
                 fh.setFormatter(file_formatter)
                 target_logger.addHandler(fh)
-                
+
                 # Record log file location
                 if not cls._configured:
                     print(f"Log file enabled: {actual_log_file}")
@@ -241,14 +234,10 @@ class Logger:
         cls._update_level(cls._resolve_level(None))
 
     @classmethod
-    def add_file_handler(
-        cls, 
-        filepath: str, 
-        logger_name: Optional[str] = None
-    ) -> None:
+    def add_file_handler(cls, filepath: str, logger_name: Optional[str] = None) -> None:
         """
         Append a file handler to the given (default ``openspace``) logger.
-        
+
         Args:
             filepath: Log file path
             logger_name: Log logger name

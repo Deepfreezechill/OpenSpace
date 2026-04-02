@@ -12,11 +12,11 @@ import time
 import aiohttp
 from mcp import ClientSession
 
-from openspace.utils.logging import Logger
+from openspace.grounding.backends.mcp.transport.connectors.base import MCPBaseConnector
 from openspace.grounding.backends.mcp.transport.task_managers import SseConnectionManager
 from openspace.grounding.core.security import BaseSandbox
-from openspace.grounding.backends.mcp.transport.connectors.base import MCPBaseConnector
-from openspace.security.env_filter import get_safe_env, ENV_ALLOWLIST
+from openspace.security.env_filter import ENV_ALLOWLIST
+from openspace.utils.logging import Logger
 
 logger = Logger.get_logger(__name__)
 
@@ -25,7 +25,7 @@ class SandboxConnector(MCPBaseConnector):
     """Connector for MCP implementations running in a sandbox environment.
 
     This connector runs a user-defined stdio command within a sandbox environment
-    through a BaseSandbox implementation (e.g., E2BSandbox), potentially wrapped 
+    through a BaseSandbox implementation (e.g., E2BSandbox), potentially wrapped
     by a utility like 'supergateway' to expose its stdio.
     """
 
@@ -58,22 +58,21 @@ class SandboxConnector(MCPBaseConnector):
         # Filter env vars through the security allowlist so that host
         # secrets (API keys, tokens, DB URLs) never reach the sandbox.
         raw_env = env or {}
-        self.user_env = {
-            k: v for k, v in raw_env.items() if k in ENV_ALLOWLIST
-        }
+        self.user_env = {k: v for k, v in raw_env.items() if k in ENV_ALLOWLIST}
         self.port = port
-        
+
         # Create a placeholder connection manager (will be set up in connect())
         # We need the sandbox to start first to get the base_url, so we can't create
         # the real SseConnectionManager until connect() is called
         from openspace.grounding.core.transport.task_managers import PlaceholderConnectionManager
+
         connection_manager = PlaceholderConnectionManager()
         super().__init__(connection_manager)
 
         # Sandbox configuration
         self._sandbox = sandbox
         self.supergateway_cmd_parts = supergateway_command
-        
+
         # Runtime state
         self.process = None
         self.client_session: ClientSession | None = None
@@ -103,11 +102,11 @@ class SandboxConnector(MCPBaseConnector):
 
     async def wait_for_server_response(self, base_url: str, timeout: int = 30) -> bool:
         """Wait for the server to respond to HTTP requests.
-        
+
         Args:
             base_url: The base URL to check for server readiness
             timeout: Maximum time to wait in seconds
-            
+
         Returns:
             True if server is responding, raises TimeoutError otherwise
         """
@@ -228,7 +227,7 @@ class SandboxConnector(MCPBaseConnector):
         self.stdout_lines = []
         self.stderr_lines = []
         self.base_url = None
-    
+
     async def _cleanup_on_connect_failure(self) -> None:
         """Clean up sandbox resources on connection failure."""
         # Stop the sandbox if it was started
@@ -237,12 +236,12 @@ class SandboxConnector(MCPBaseConnector):
                 await self._sandbox.stop()
             except Exception as e:
                 logger.warning(f"Error stopping sandbox during cleanup: {e}")
-        
+
         self.process = None
         self.stdout_lines = []
         self.stderr_lines = []
         self.base_url = None
-        
+
         # Call parent cleanup
         await super()._cleanup_on_connect_failure()
 

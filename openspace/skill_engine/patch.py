@@ -26,9 +26,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
+from openspace.utils.logging import Logger
+
 from .fuzzy_match import fuzzy_find_match
 from .skill_utils import normalize_frontmatter
-from openspace.utils.logging import Logger
 
 logger = Logger.get_logger(__name__)
 
@@ -54,15 +55,17 @@ def _normalize_skill_frontmatter(skill_dir: Path) -> None:
 
 class PatchType(str, Enum):
     """LLM output format for skill edits."""
-    AUTO  = "auto"   # Auto-detect from content
-    FULL  = "full"   # Complete content (single or multi-file)
-    DIFF  = "diff"   # SEARCH/REPLACE blocks (single-file)
+
+    AUTO = "auto"  # Auto-detect from content
+    FULL = "full"  # Complete content (single or multi-file)
+    DIFF = "diff"  # SEARCH/REPLACE blocks (single-file)
     PATCH = "patch"  # *** Begin Patch multi-file format
 
 
 @dataclass
 class UpdateChunk:
     """A single change block inside an Update File hunk."""
+
     old_lines: List[str]
     new_lines: List[str]
     change_context: Optional[str] = None
@@ -72,16 +75,18 @@ class UpdateChunk:
 @dataclass
 class PatchHunk:
     """One file-level operation inside a patch."""
+
     type: str  # "add" | "update" | "delete"
     path: str
-    contents: str = ""                # type="add": new file body
-    move_path: Optional[str] = None   # type="update": optional rename target
+    contents: str = ""  # type="add": new file body
+    move_path: Optional[str] = None  # type="update": optional rename target
     chunks: List[UpdateChunk] = field(default_factory=list)
 
 
 @dataclass
 class PatchResult:
     """Parsed representation of a ``*** Begin Patch`` block."""
+
     hunks: List[PatchHunk]
 
 
@@ -97,6 +102,7 @@ class SkillEditResult:
             for lineage recording.
         error: Non-None means the operation failed.
     """
+
     skill_dir: Path = field(default_factory=lambda: Path("."))
     content_diff: str = ""
     content_snapshot: Dict[str, str] = field(default_factory=dict)
@@ -109,11 +115,13 @@ class SkillEditResult:
 
 class PatchError(RuntimeError):
     """Raised when a patch cannot be applied."""
+
     pass
 
 
 class PatchParseError(PatchError):
     """Raised when the patch text cannot be parsed."""
+
     pass
 
 
@@ -177,6 +185,7 @@ def fix_skill(
         content_diff=diff,
         content_snapshot=new_files,
     )
+
 
 def derive_skill(
     source_dirs: Union[Path, List[Path]],
@@ -278,6 +287,7 @@ def derive_skill(
         content_snapshot=new_files,
     )
 
+
 def create_skill(
     target_dir: Path,
     content: str,
@@ -330,6 +340,7 @@ def create_skill(
         content_diff=add_all,
         content_snapshot=new_files,
     )
+
 
 def detect_patch_type(content: str) -> PatchType:
     """Auto-detect the patch format from LLM output.
@@ -387,7 +398,7 @@ def parse_multi_file_full(content: str) -> Dict[str, str]:
     # Strip optional envelope
     stripped = content.strip()
     if stripped.startswith("*** Begin Files"):
-        stripped = stripped[len("*** Begin Files"):].strip()
+        stripped = stripped[len("*** Begin Files") :].strip()
     # Strip *** End Files and anything after it (e.g. stray <EVOLUTION_COMPLETE> tokens)
     end_files_idx = stripped.rfind("*** End Files")
     if end_files_idx != -1:
@@ -481,12 +492,22 @@ def _try_match(
 
 # Unicode normalisation (from ShinkaEvolve)
 _UNICODE_REPLACEMENTS: Dict[str, str] = {
-    "\u2018": "'", "\u2019": "'", "\u201A": "'", "\u201B": "'",
-    "\u201C": '"', "\u201D": '"', "\u201E": '"', "\u201F": '"',
-    "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2013": "-",
-    "\u2014": "-", "\u2015": "-",
+    "\u2018": "'",
+    "\u2019": "'",
+    "\u201a": "'",
+    "\u201b": "'",
+    "\u201c": '"',
+    "\u201d": '"',
+    "\u201e": '"',
+    "\u201f": '"',
+    "\u2010": "-",
+    "\u2011": "-",
+    "\u2012": "-",
+    "\u2013": "-",
+    "\u2014": "-",
+    "\u2015": "-",
     "\u2026": "...",
-    "\u00A0": " ",
+    "\u00a0": " ",
 }
 _UNICODE_RE = re.compile("|".join(re.escape(k) for k in _UNICODE_REPLACEMENTS))
 
@@ -515,30 +536,40 @@ def seek_sequence(
 
     # Pass 2: rstrip
     idx = _try_match(
-        lines, pattern, start_index,
-        lambda a, b: a.rstrip() == b.rstrip(), eof,
+        lines,
+        pattern,
+        start_index,
+        lambda a, b: a.rstrip() == b.rstrip(),
+        eof,
     )
     if idx != -1:
         return idx
 
     # Pass 3: strip
     idx = _try_match(
-        lines, pattern, start_index,
-        lambda a, b: a.strip() == b.strip(), eof,
+        lines,
+        pattern,
+        start_index,
+        lambda a, b: a.strip() == b.strip(),
+        eof,
     )
     if idx != -1:
         return idx
 
     # Pass 4: Unicode-normalised + strip
     idx = _try_match(
-        lines, pattern, start_index,
+        lines,
+        pattern,
+        start_index,
         lambda a, b: _normalize_unicode(a.strip()) == _normalize_unicode(b.strip()),
         eof,
     )
     return idx
 
+
 def _parse_patch_header(
-    lines: List[str], idx: int,
+    lines: List[str],
+    idx: int,
 ) -> Optional[Tuple[str, Optional[str], int]]:
     """Parse a ``*** Add/Delete/Update File:`` header line."""
     line = lines[idx]
@@ -564,8 +595,10 @@ def _parse_patch_header(
 
     return None
 
+
 def _parse_add_file_content(
-    lines: List[str], start_idx: int,
+    lines: List[str],
+    start_idx: int,
 ) -> Tuple[str, int]:
     """Collect ``+``-prefixed lines for an Add File hunk."""
     content_lines: List[str] = []
@@ -579,8 +612,10 @@ def _parse_add_file_content(
         content = content[:-1]
     return content, i
 
+
 def _parse_update_chunks(
-    lines: List[str], start_idx: int,
+    lines: List[str],
+    start_idx: int,
 ) -> Tuple[List[UpdateChunk], int]:
     """Parse ``@@``-delimited change chunks for an Update File hunk."""
     chunks: List[UpdateChunk] = []
@@ -612,16 +647,19 @@ def _parse_update_chunks(
                     new_lines.append(cl[1:])
                 i += 1
 
-            chunks.append(UpdateChunk(
-                old_lines=old_lines,
-                new_lines=new_lines,
-                change_context=context_line or None,
-                is_end_of_file=is_end_of_file,
-            ))
+            chunks.append(
+                UpdateChunk(
+                    old_lines=old_lines,
+                    new_lines=new_lines,
+                    change_context=context_line or None,
+                    is_end_of_file=is_end_of_file,
+                )
+            )
         else:
             i += 1
 
     return chunks, i
+
 
 def parse_patch(patch_text: str) -> PatchResult:
     """Parse a ``*** Begin Patch`` / ``*** End Patch`` block.
@@ -640,10 +678,7 @@ def parse_patch(patch_text: str) -> PatchResult:
             end_idx = i
 
     if begin_idx == -1 or end_idx == -1 or begin_idx >= end_idx:
-        raise PatchParseError(
-            "Invalid patch format: missing or mis-ordered "
-            "*** Begin Patch / *** End Patch markers"
-        )
+        raise PatchParseError("Invalid patch format: missing or mis-ordered *** Begin Patch / *** End Patch markers")
 
     hunks: List[PatchHunk] = []
     i = begin_idx + 1
@@ -667,17 +702,20 @@ def parse_patch(patch_text: str) -> PatchResult:
 
         elif lines[i].startswith("*** Update File:"):
             chunks, next_idx = _parse_update_chunks(lines, next_idx)
-            hunks.append(PatchHunk(
-                type="update",
-                path=file_path,
-                move_path=move_path,
-                chunks=chunks,
-            ))
+            hunks.append(
+                PatchHunk(
+                    type="update",
+                    path=file_path,
+                    move_path=move_path,
+                    chunks=chunks,
+                )
+            )
             i = next_idx
         else:
             i += 1
 
     return PatchResult(hunks=hunks)
+
 
 def _compute_replacements(
     original_lines: List[str],
@@ -692,13 +730,12 @@ def _compute_replacements(
         # Context-based seeking
         if chunk.change_context:
             ctx_idx = seek_sequence(
-                original_lines, [chunk.change_context], line_index,
+                original_lines,
+                [chunk.change_context],
+                line_index,
             )
             if ctx_idx == -1:
-                raise PatchError(
-                    f"Cannot locate context anchor "
-                    f"'{chunk.change_context}' in {file_path}"
-                )
+                raise PatchError(f"Cannot locate context anchor '{chunk.change_context}' in {file_path}")
             line_index = ctx_idx
 
         # Pure addition (no old lines to match)
@@ -713,7 +750,10 @@ def _compute_replacements(
         pattern = list(chunk.old_lines)
         new_slice = list(chunk.new_lines)
         found = seek_sequence(
-            original_lines, pattern, line_index, chunk.is_end_of_file,
+            original_lines,
+            pattern,
+            line_index,
+            chunk.is_end_of_file,
         )
 
         # Retry without trailing empty line
@@ -722,20 +762,21 @@ def _compute_replacements(
             if new_slice and new_slice[-1] == "":
                 new_slice = new_slice[:-1]
             found = seek_sequence(
-                original_lines, pattern, line_index, chunk.is_end_of_file,
+                original_lines,
+                pattern,
+                line_index,
+                chunk.is_end_of_file,
             )
 
         if found != -1:
             replacements.append((found, len(pattern), new_slice))
             line_index = found + len(pattern)
         else:
-            raise PatchError(
-                f"Cannot find expected lines in {file_path}:\n"
-                + "\n".join(chunk.old_lines)
-            )
+            raise PatchError(f"Cannot find expected lines in {file_path}:\n" + "\n".join(chunk.old_lines))
 
     replacements.sort(key=lambda x: x[0])
     return replacements
+
 
 def _apply_replacements(
     lines: List[str],
@@ -744,10 +785,11 @@ def _apply_replacements(
     """Apply pre-sorted replacements in reverse order to avoid index shift."""
     result = list(lines)
     for start_idx, old_len, new_segment in reversed(replacements):
-        del result[start_idx: start_idx + old_len]
+        del result[start_idx : start_idx + old_len]
         for j, line in enumerate(new_segment):
             result.insert(start_idx + j, line)
     return result
+
 
 def apply_update_chunks(
     file_path: str,
@@ -769,6 +811,7 @@ def apply_update_chunks(
         new_lines.append("")
 
     return "\n".join(new_lines)
+
 
 def _apply_multi_file_patch(patch_text: str, skill_dir: Path) -> None:
     """Parse and apply a ``*** Begin Patch`` block to a skill directory.
@@ -859,7 +902,7 @@ def apply_search_replace(
         matched_search, pos = fuzzy_find_match(new_text, search)
 
         if pos != -1:
-            new_text = new_text[:pos] + replace + new_text[pos + len(matched_search):]
+            new_text = new_text[:pos] + replace + new_text[pos + len(matched_search) :]
             num_applied += 1
             continue
 
@@ -877,17 +920,20 @@ def apply_search_replace(
                 msg_parts.append("Similar lines found:")
                 for line, line_num in similar:
                     msg_parts.append(f"  Line {line_num}: {line.strip()}")
-            msg_parts.extend([
-                "",
-                "Ensure the SEARCH block matches the file content exactly.",
-            ])
+            msg_parts.extend(
+                [
+                    "",
+                    "Ensure the SEARCH block matches the file content exactly.",
+                ]
+            )
             return new_text, num_applied, "\n".join(msg_parts)
 
     return new_text, num_applied, None
 
 
 def _apply_search_replace_to_file(
-    patch_text: str, skill_file: Path,
+    patch_text: str,
+    skill_file: Path,
 ) -> None:
     """Apply SEARCH/REPLACE blocks to a file on disk."""
     original = skill_file.read_text(encoding="utf-8")
@@ -917,6 +963,7 @@ def compute_unified_diff(
     )
     return "".join(diff_lines)
 
+
 def compute_skill_diff(old_dir: Path, new_dir: Path) -> str:
     """Compare all files in two skill directories, return combined diff."""
     old_files = _collect_files(old_dir) if old_dir.is_dir() else {}
@@ -934,12 +981,14 @@ def compute_skill_diff(old_dir: Path, new_dir: Path) -> str:
             parts.append(d)
     return "\n".join(parts)
 
+
 def collect_skill_snapshot(skill_dir: Path) -> Dict[str, str]:
     """Collect all text files in a skill directory.
 
     Returns ``{relative_path: content}``.  Binary files are silently skipped.
     """
     return _collect_files(skill_dir)
+
 
 def _compute_files_diff(
     old_files: Dict[str, str],
@@ -958,6 +1007,7 @@ def _compute_files_diff(
             parts.append(d)
     return "\n".join(parts)
 
+
 def _collect_files(directory: Path) -> Dict[str, str]:
     """Collect all text files in a directory (recursive).
 
@@ -973,8 +1023,10 @@ def _collect_files(directory: Path) -> Dict[str, str]:
                 pass
     return files
 
+
 def _strip_trailing_ws(text: str) -> str:
     return "\n".join(line.rstrip() for line in text.splitlines())
+
 
 def _find_similar_lines(
     search_line: str,

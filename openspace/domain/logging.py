@@ -37,21 +37,12 @@ from typing import Any, Dict, Optional
 
 import structlog
 
-
 # ── Context variables (async-safe) ────────────────────────────────────
 
-_task_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "task_id", default=""
-)
-_correlation_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "correlation_id", default=""
-)
-_session_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "session_id", default=""
-)
-_request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "request_id", default=""
-)
+_task_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("task_id", default="")
+_correlation_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("correlation_id", default="")
+_session_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("session_id", default="")
+_request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="")
 
 _ALL_CONTEXT_VARS: Dict[str, contextvars.ContextVar[str]] = {
     "task_id": _task_id_var,
@@ -85,30 +76,28 @@ def clear_context() -> None:
 
 def get_context() -> Dict[str, str]:
     """Return a snapshot of all non-empty context variables."""
-    return {
-        key: var.get()
-        for key, var in _ALL_CONTEXT_VARS.items()
-        if var.get()
-    }
+    return {key: var.get() for key, var in _ALL_CONTEXT_VARS.items() if var.get()}
 
 
 # ── Sensitive data redaction ──────────────────────────────────────────
 
-_SENSITIVE_KEYS = frozenset({
-    "api_key",
-    "token",
-    "bearer_token",
-    "password",
-    "secret",
-    "authorization",
-    "credentials",
-    "private_key",
-    "access_token",
-    "refresh_token",
-    "client_secret",
-    "secret_key",
-    "auth_token",
-})
+_SENSITIVE_KEYS = frozenset(
+    {
+        "api_key",
+        "token",
+        "bearer_token",
+        "password",
+        "secret",
+        "authorization",
+        "credentials",
+        "private_key",
+        "access_token",
+        "refresh_token",
+        "client_secret",
+        "secret_key",
+        "auth_token",
+    }
+)
 
 # Suffixes / prefixes that indicate a key holds sensitive data.
 # More precise than substring matching to avoid false positives like
@@ -155,18 +144,13 @@ def _redact_value(value: Any, parent_sensitive: bool = False, _depth: int = 0) -
     if _depth >= _MAX_REDACT_DEPTH:
         return value
     if isinstance(value, dict):
-        return {
-            k: _redact_value(v, _is_sensitive_key(k), _depth + 1)
-            for k, v in value.items()
-        }
+        return {k: _redact_value(v, _is_sensitive_key(k), _depth + 1) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return type(value)(_redact_value(v, _depth=_depth + 1) for v in value)
     return value
 
 
-def _redact_sensitive(
-    logger: Any, method_name: str, event_dict: Dict[str, Any]
-) -> Dict[str, Any]:
+def _redact_sensitive(logger: Any, method_name: str, event_dict: Dict[str, Any]) -> Dict[str, Any]:
     """Structlog processor: redact sensitive keys and truncate long values.
 
     Handles nested dicts/lists recursively to prevent leakage via
@@ -185,9 +169,7 @@ def _redact_sensitive(
 # ── Inject contextvars into every log event ───────────────────────────
 
 
-def _inject_context_vars(
-    logger: Any, method_name: str, event_dict: Dict[str, Any]
-) -> Dict[str, Any]:
+def _inject_context_vars(logger: Any, method_name: str, event_dict: Dict[str, Any]) -> Dict[str, Any]:
     """Structlog processor: merge contextvars into the event dict."""
     ctx = get_context()
     for key, value in ctx.items():

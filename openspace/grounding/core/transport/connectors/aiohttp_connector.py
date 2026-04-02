@@ -1,11 +1,13 @@
 from typing import Any
-from yarl import URL
+
 import aiohttp
+from pydantic import BaseModel
+from yarl import URL
+
+from openspace.utils.logging import Logger
 
 from ..task_managers import AioHttpConnectionManager
 from .base import BaseConnector
-from openspace.utils.logging import Logger
-from pydantic import BaseModel
 
 logger = Logger.get_logger(__name__)
 
@@ -17,7 +19,7 @@ class AioHttpConnector(BaseConnector[aiohttp.ClientSession]):
         connection_manager = AioHttpConnectionManager(base_url, **session_kw)
         super().__init__(connection_manager)
         self.base_url = base_url.rstrip("/")
-        
+
     async def connect(self) -> None:
         await super().connect()
         try:
@@ -33,7 +35,7 @@ class AioHttpConnector(BaseConnector[aiohttp.ClientSession]):
         method: str,
         path: str,
         *,
-        json: Any | BaseModel | None = None, 
+        json: Any | BaseModel | None = None,
         data: Any | None = None,
         params: dict[str, Any] | None = None,
         **kw,
@@ -41,13 +43,13 @@ class AioHttpConnector(BaseConnector[aiohttp.ClientSession]):
         if not self.is_connected:
             await self.connect()
 
-        assert self._connection is not None            # for mypy
+        assert self._connection is not None  # for mypy
         url = URL(self.base_url) / path.lstrip("/")
         logger.debug("%s %s", method.upper(), url)
         return await self._connection.request(
             method.upper(),
             url,
-            json=self._to_json_compatible(json), 
+            json=self._to_json_compatible(json),
             data=data,
             params=params,
             **kw,
@@ -64,7 +66,7 @@ class AioHttpConnector(BaseConnector[aiohttp.ClientSession]):
         resp = await self._request("GET", path, **kw)
         resp.raise_for_status()
         return await resp.read()
-    
+
     async def post_json(
         self,
         path: str,
@@ -74,12 +76,12 @@ class AioHttpConnector(BaseConnector[aiohttp.ClientSession]):
         **kw,
     ) -> Any | BaseModel:
         resp = await self._request("POST", path, json=payload, **kw)
-        
+
         try:
             data = await resp.json()
         except Exception:
             data = None
-        
+
         if resp.status >= 400:
             # Extract detailed error from response body
             detail = ""
@@ -94,7 +96,7 @@ class AioHttpConnector(BaseConnector[aiohttp.ClientSession]):
                 status=resp.status,
                 message=error_msg,
             )
-        
+
         return self._parse_as(data, response_model)
 
     async def request(self, method: str, path: str, **kw) -> aiohttp.ClientResponse:
@@ -110,7 +112,7 @@ class AioHttpConnector(BaseConnector[aiohttp.ClientSession]):
         - "GET_BYTES /path"    -> GET, return bytes
         - "POST /path"         -> POST, payload = params (JSON)
         - other                -> default POST /{name}, payload = params
-        
+
         If PUT/PATCH/DELETE is needed in the future, it can be reused in _handle_other_json.
         """
         verb_path = name.strip().split(maxsplit=1)

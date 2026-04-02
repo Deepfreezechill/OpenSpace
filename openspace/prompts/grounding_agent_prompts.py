@@ -2,7 +2,6 @@ from typing import List, Optional, Set
 
 
 class GroundingAgentPrompts:
-    
     TASK_COMPLETE = "<COMPLETE>"
 
     @classmethod
@@ -43,7 +42,9 @@ class GroundingAgentPrompts:
 
         if has_gui:
             if has_mcp or has_shell:
-                tips.append("- **GUI tools** offer finer-grained control and can handle tasks not covered by other tools")
+                tips.append(
+                    "- **GUI tools** offer finer-grained control and can handle tasks not covered by other tools"
+                )
             else:
                 tips.append("- **GUI tools** provide direct interaction with graphical interfaces")
             tips.append("- Choose based on the task requirements and tool availability")
@@ -103,11 +104,7 @@ class GroundingAgentPrompts:
         return "\n\n".join(sections)
 
     @staticmethod
-    def iteration_summary(
-        instruction: str,
-        iteration: int,
-        max_iterations: int
-    ) -> str:
+    def iteration_summary(instruction: str, iteration: int, max_iterations: int) -> str:
         """
         Build iteration summary prompt for LLMClient auto-summary.
         LLM extracts information directly from tool results in conversation history.
@@ -141,16 +138,12 @@ CRITICAL GUIDELINES:
 - Visual content - extract actual text/data visible, not just "saw something"
 - Search results - include specific data, not vague descriptions
 - The next iteration cannot see current tool outputs - this summary is the ONLY source of knowledge"""
-    
+
     @staticmethod
-    def visual_analysis(
-        tool_name: str,
-        num_screenshots: int,
-        task_description: str = ""
-    ) -> str:
+    def visual_analysis(tool_name: str, num_screenshots: int, task_description: str = "") -> str:
         """
         Build prompt for visual analysis of screenshots.
-        
+
         Args:
             tool_name: Tool name that generated the screenshots
             num_screenshots: Number of screenshots
@@ -158,13 +151,17 @@ CRITICAL GUIDELINES:
         """
         screenshot_text = "screenshot" if num_screenshots == 1 else f"{num_screenshots} screenshots"
         these_text = "this screenshot" if num_screenshots == 1 else "these screenshots"
-        
-        task_context = f"""
+
+        task_context = (
+            f"""
 **Original Task**: {task_description}
 
 Focus on extracting information RELEVANT to this task. Prioritize content that helps accomplish the goal.
-""" if task_description else ""
-        
+"""
+            if task_description
+            else ""
+        )
+
         return f"""Extract the KNOWLEDGE and INFORMATION from {these_text}. This will be passed to the next iteration so it can continue working with the information (search, analyze, save, etc.). Without this extraction, the visual content would only be viewable by humans and unusable for subsequent operations.
 {task_context}
 **EXTRACT all visible knowledge content** (prioritize task-relevant information):
@@ -182,15 +179,12 @@ Focus on extracting information RELEVANT to this task. Prioritize content that h
 **Goal**: Extract usable knowledge that enables the next agent to work with this information programmatically. Be SPECIFIC and COMPLETE, but FOCUS on what's relevant to the task.
 
 {screenshot_text.capitalize()} from tool '{tool_name}'"""
-    
+
     @staticmethod
-    def final_summary(
-        instruction: str,
-        iterations: int
-    ) -> str:
+    def final_summary(instruction: str, iterations: int) -> str:
         """
         Build prompt for generating final summary across all iterations.
-        """    
+        """
         return f"""Based on the complete conversation history above (including all {iterations} iteration summaries and tool executions), generate a comprehensive final summary.
 
 ## Final Task Summary
@@ -213,13 +207,14 @@ Guidelines:
 - Include concrete deliverables (file paths, data, etc.)
 - Be comprehensive but concise
 - Focus on what the user cares about"""
-    
+
     @staticmethod
     def workspace_directory(workspace_dir: str) -> str:
         """
         Build workspace directory information for cross-iteration/cross-backend data sharing.
         """
         import os
+
         # Check if this is a benchmark scenario:
         # 1. LiveMCPBench /root mapping
         # 2. Workspace already contains files (e.g. GDPVal reference files)
@@ -230,7 +225,7 @@ Guidelines:
             except OSError:
                 has_existing_files = False
             is_benchmark = has_existing_files
-        
+
         if is_benchmark:
             # Benchmark / task mode: task files are in workspace directory
             return f"""**Working Directory**: `{workspace_dir}`
@@ -241,56 +236,52 @@ Guidelines:
             return f"""**Working Directory**: `{workspace_dir}`
 - Persist intermediate results here; later iterations/backends can read what you saved earlier
 - Note: User's personal files are NOT here - search in ~/Desktop, ~/Documents, ~/Downloads, etc."""
-    
+
     @staticmethod
     def workspace_matching_files(matching_files: List[str]) -> str:
         """
         Build alert for files matching task requirements.
         """
-        files_str = ', '.join([f"`{f}`" for f in matching_files])
+        files_str = ", ".join([f"`{f}`" for f in matching_files])
         return f"""**Workspace Alert**: Files matching task requirements found: {files_str}
 - Read these files to verify if they satisfy the task
 - If satisfied, mark task as completed
 - If not satisfied, modify or recreate as needed"""
-    
+
     @staticmethod
     def workspace_recent_files(total_files: int, recent_files: List[str]) -> str:
         """
         Build info for recently modified files.
         """
-        recent_list = ', '.join([f"`{f}`" for f in recent_files[:15]])
+        recent_list = ", ".join([f"`{f}`" for f in recent_files[:15]])
         return f"""**Workspace Info**: {total_files} files exist, {len(recent_files)} recently modified
 Recent files: {recent_list}
 Consider checking recent files before creating new ones"""
-    
+
     @staticmethod
     def workspace_file_list(files: List[str]) -> str:
         """
         Build list of all existing files.
         """
-        files_list = ', '.join([f"`{f}`" for f in files[:15]])
+        files_list = ", ".join([f"`{f}`" for f in files[:15]])
         if len(files) > 15:
             files_list += f" (and {len(files) - 15} more)"
         return f"**Workspace Info**: {len(files)} existing file(s): {files_list}"
-    
+
     @staticmethod
-    def iteration_feedback(
-        iteration: int,
-        llm_summary: str,
-        add_guidance: bool = True
-    ) -> str:
+    def iteration_feedback(iteration: int, llm_summary: str, add_guidance: bool = True) -> str:
         """
         Build feedback message to pass iteration summary to next iteration.
         """
         content = f"""## Iteration {iteration} Summary
 
 {llm_summary}"""
-        
+
         if add_guidance:
             content += f"""
 ---
 Now continue with iteration {iteration + 1}. You can see the full conversation history above. Based on all progress so far, decide whether to:
 - Call more tools if the task is not yet complete
 - Output {GroundingAgentPrompts.TASK_COMPLETE} if the task is fully accomplished"""
-        
+
         return content

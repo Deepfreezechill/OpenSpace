@@ -16,11 +16,11 @@ import fnmatch
 import os
 import platform
 import stat
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import IO, List, Optional, Union
+from typing import Optional, Union
 
-from openspace.sandbox.leases import REQUIRED_DENIED_PATHS, FilesystemCapability
+from openspace.sandbox.leases import FilesystemCapability
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -142,9 +142,7 @@ def _resolve_no_symlinks(path: Path, jail_root: Path) -> Path:
 
     # Must be jail_root itself or a child
     if resolved_str != jail_str and not resolved_str.startswith(jail_str + os.sep):
-        raise PathEscapeError(
-            f"Path escapes jail: resolved to {resolved}, jail root is {jail_resolved}"
-        )
+        raise PathEscapeError(f"Path escapes jail: resolved to {resolved}, jail root is {jail_resolved}")
 
     return resolved
 
@@ -302,9 +300,7 @@ def check_write(
         raise WriteNotAllowedError(f"Path not in write allowlist: {path_str}")
 
     if size_bytes > config.max_file_size_bytes:
-        raise FileSizeLimitError(
-            f"Write of {size_bytes} bytes exceeds limit of {config.max_file_size_bytes} bytes"
-        )
+        raise FileSizeLimitError(f"Write of {size_bytes} bytes exceeds limit of {config.max_file_size_bytes} bytes")
 
 
 # ---------------------------------------------------------------------------
@@ -325,9 +321,7 @@ def _ensure_regular_file(fd: int, path: Path) -> None:
         raise
     if not stat.S_ISREG(mode):
         os.close(fd)
-        raise PathEscapeError(
-            f"Not a regular file (mode={oct(mode)}): {path}"
-        )
+        raise PathEscapeError(f"Not a regular file (mode={oct(mode)}): {path}")
 
 
 def safe_open_read(path: Union[str, Path], jail_root: Path) -> int:
@@ -389,9 +383,7 @@ def safe_open_write(
             st = os.fstat(fd)
             if st.st_size > max_size_bytes:
                 os.close(fd)
-                raise FileSizeLimitError(
-                    f"Existing file {resolved} is {st.st_size} bytes, exceeds {max_size_bytes}"
-                )
+                raise FileSizeLimitError(f"Existing file {resolved} is {st.st_size} bytes, exceeds {max_size_bytes}")
         except FileSizeLimitError:
             raise
         except OSError:
@@ -429,8 +421,7 @@ def bounded_write(fd: int, data: bytes, max_size_bytes: int) -> int:
         effective_pos = max(current_size, current_offset)
         if effective_pos + len(data) > max_size_bytes:
             raise FileSizeLimitError(
-                f"Write of {len(data)} bytes at offset {effective_pos} would exceed "
-                f"limit of {max_size_bytes} bytes"
+                f"Write of {len(data)} bytes at offset {effective_pos} would exceed limit of {max_size_bytes} bytes"
             )
     return os.write(fd, data)
 
@@ -465,9 +456,7 @@ def _verify_fd_path(
             if unlink_on_escape:
                 _safe_unlink(expected)
             os.close(fd)
-            raise PathEscapeError(
-                f"File device ({fd_stat.st_dev}) differs from jail device ({jail_stat.st_dev})"
-            )
+            raise PathEscapeError(f"File device ({fd_stat.st_dev}) differs from jail device ({jail_stat.st_dev})")
     except PathEscapeError:
         raise
     except OSError:
@@ -490,9 +479,7 @@ def _verify_fd_path(
         if unlink_on_escape:
             _safe_unlink(expected)
         os.close(fd)
-        raise PathEscapeError(
-            f"Post-open verification failed: fd points to {actual}, outside jail {jail_resolved}"
-        )
+        raise PathEscapeError(f"Post-open verification failed: fd points to {actual}, outside jail {jail_resolved}")
 
     return actual
 
@@ -610,16 +597,12 @@ class FilesystemBroker:
         jail_str = str(self._jail_root)
         if actual_str != jail_str and not actual_str.startswith(jail_str + os.sep):
             os.close(fd)
-            raise PathEscapeError(
-                f"Post-open: actual path {actual_path} is outside jail {self._jail_root}"
-            )
+            raise PathEscapeError(f"Post-open: actual path {actual_path} is outside jail {self._jail_root}")
 
         # 2. Deny patterns
         if _matches_any(actual_str, self._config.denied_patterns, jail_root=self._jail_root):
             os.close(fd)
-            raise DeniedPathError(
-                f"Post-open deny check: actual path {actual_path} matches deny pattern"
-            )
+            raise DeniedPathError(f"Post-open deny check: actual path {actual_path} matches deny pattern")
 
         # 3. Read/write allowlist
         if is_write:
@@ -627,23 +610,17 @@ class FilesystemBroker:
                 actual_str, self._config.write_patterns, jail_root=self._jail_root
             ):
                 os.close(fd)
-                raise WriteNotAllowedError(
-                    f"Post-open: actual path {actual_path} not in write allowlist"
-                )
+                raise WriteNotAllowedError(f"Post-open: actual path {actual_path} not in write allowlist")
             if self._config.temp_dir_only:
                 if not _is_temp_path(actual_str, actual_path):
                     os.close(fd)
-                    raise WriteNotAllowedError(
-                        f"Post-open: actual path {actual_path} not in temp directory"
-                    )
+                    raise WriteNotAllowedError(f"Post-open: actual path {actual_path} not in temp directory")
         else:
             if self._config.read_patterns and not _matches_any(
                 actual_str, self._config.read_patterns, jail_root=self._jail_root
             ):
                 os.close(fd)
-                raise ReadNotAllowedError(
-                    f"Post-open: actual path {actual_path} not in read allowlist"
-                )
+                raise ReadNotAllowedError(f"Post-open: actual path {actual_path} not in read allowlist")
 
     @staticmethod
     def _resolve_fd_actual_path(fd: int) -> Optional[Path]:
@@ -666,6 +643,7 @@ class FilesystemBroker:
         # Try fcntl F_GETPATH (macOS)
         try:
             import fcntl
+
             F_GETPATH = 50  # macOS-specific
             result = fcntl.fcntl(fd, F_GETPATH, b"\0" * 1024)
             if isinstance(result, bytes):

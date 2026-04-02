@@ -77,6 +77,7 @@ class _MCPSafeStdout:
     def __getattr__(self, name):
         return getattr(self._stderr, name)
 
+
 _LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 _LOG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -88,9 +89,7 @@ _real_stdout = sys.stdout
 # pipe buffer, blocking this process on write() → deadlock → timeout.
 # Redirect stderr to a log file on Windows to prevent this.
 if os.name == "nt":
-    _stderr_file = open(
-        _LOG_DIR / "mcp_stderr.log", "a", encoding="utf-8", buffering=1
-    )
+    _stderr_file = open(_LOG_DIR / "mcp_stderr.log", "a", encoding="utf-8", buffering=1)
     sys.stderr = _stderr_file
 
 sys.stdout = _MCPSafeStdout(_real_stdout, sys.stderr)
@@ -107,9 +106,7 @@ from mcp.server.fastmcp import FastMCP
 _fastmcp_kwargs: dict = {}
 try:
     if "description" in inspect.signature(FastMCP.__init__).parameters:
-        _fastmcp_kwargs["description"] = (
-            "OpenSpace: Unite the Agents. Evolve the Mind. Rebuild the World."
-        )
+        _fastmcp_kwargs["description"] = "OpenSpace: Unite the Agents. Evolve the Mind. Rebuild the World."
 except (TypeError, ValueError):
     pass
 
@@ -136,8 +133,8 @@ async def _get_openspace():
             return _openspace_instance
 
         logger.info("Initializing OpenSpace engine ...")
+        from openspace.host_detection import build_grounding_config_path, build_llm_kwargs
         from openspace.tool_layer import OpenSpace, OpenSpaceConfig
-        from openspace.host_detection import build_llm_kwargs, build_grounding_config_path
 
         env_model = os.environ.get("OPENSPACE_MODEL", "")
         workspace = os.environ.get("OPENSPACE_WORKSPACE")
@@ -145,10 +142,7 @@ async def _get_openspace():
         enable_rec = os.environ.get("OPENSPACE_ENABLE_RECORDING", "true").lower() in ("true", "1", "yes")
 
         backend_scope_raw = os.environ.get("OPENSPACE_BACKEND_SCOPE")
-        backend_scope = (
-            [b.strip() for b in backend_scope_raw.split(",") if b.strip()]
-            if backend_scope_raw else None
-        )
+        backend_scope = [b.strip() for b in backend_scope_raw.split(",") if b.strip()] if backend_scope_raw else None
 
         config_path = build_grounding_config_path()
         model, llm_kwargs = build_llm_kwargs(env_model)
@@ -163,7 +157,7 @@ async def _get_openspace():
             workspace_dir=workspace,
             grounding_max_iterations=max_iter,
             enable_recording=enable_rec,
-            recording_backends=["shell"] if enable_rec else None, # ["shell", "mcp", "web"] if enable_rec else None
+            recording_backends=["shell"] if enable_rec else None,  # ["shell", "mcp", "web"] if enable_rec else None
             recording_log_dir=recording_log_dir,
             backend_scope=backend_scope,
             grounding_config_path=config_path,
@@ -193,6 +187,7 @@ def _get_store():
             return internal
     if _standalone_store is None or _standalone_store._closed:
         from openspace.skill_engine import SkillStore
+
         _standalone_store = SkillStore()
     return _standalone_store
 
@@ -215,6 +210,7 @@ def _get_cloud_client():
     """Get a OpenSpaceClient instance (raises CloudError if not configured)."""
     from openspace.cloud.auth import get_openspace_auth
     from openspace.cloud.client import OpenSpaceClient
+
     auth_headers, api_base = get_openspace_auth()
     return OpenSpaceClient(auth_headers, api_base)
 
@@ -315,10 +311,7 @@ async def _auto_register_skill_dirs(skill_dirs: List[str]) -> int:
 
     if added:
         action = "Auto-registered" if is_first else "Re-scanned & found"
-        logger.info(
-            f"{action} {len(added)} skill(s) from {len(valid_dirs)} dir(s), "
-            f"{db_created} new DB record(s)"
-        )
+        logger.info(f"{action} {len(added)} skill(s) from {len(valid_dirs)} dir(s), {db_created} new DB record(s)")
     return len(added)
 
 
@@ -343,17 +336,20 @@ async def _cloud_search_and_import(task: str, limit: int = 8) -> List[Dict[str, 
         logger.debug("Cloud auto-import is disabled (auto_import_enabled=False)")
         return []
     try:
-        from openspace.cloud.search import (
-            SkillSearchEngine, build_cloud_candidates,
-        )
         from openspace.cloud.embedding import generate_embedding, resolve_embedding_api
+        from openspace.cloud.search import (
+            SkillSearchEngine,
+            build_cloud_candidates,
+        )
 
         client = _get_cloud_client()
         embedding_api_key, _ = resolve_embedding_api()
         has_embedding = bool(embedding_api_key)
 
         items = await asyncio.to_thread(
-            client.fetch_metadata, include_embedding=has_embedding, limit=200,
+            client.fetch_metadata,
+            include_embedding=has_embedding,
+            limit=200,
         )
         if not items:
             return []
@@ -365,29 +361,31 @@ async def _cloud_search_and_import(task: str, limit: int = 8) -> List[Dict[str, 
         query_embedding: Optional[List[float]] = None
         if has_embedding:
             query_embedding = await asyncio.to_thread(
-                generate_embedding, task,
+                generate_embedding,
+                task,
             )
 
         engine = SkillSearchEngine()
         results = engine.search(task, candidates, query_embedding=query_embedding, limit=limit * 2)
 
         cloud_hits = [
-            r for r in results
-            if r.get("source") == "cloud"
-            and r.get("visibility", "public") == "public"
-            and r.get("skill_id")
+            r
+            for r in results
+            if r.get("source") == "cloud" and r.get("visibility", "public") == "public" and r.get("skill_id")
         ][:limit]
 
         import_results: List[Dict[str, Any]] = []
         for hit in cloud_hits:
             try:
                 imp = await _do_import_cloud_skill(skill_id=hit["skill_id"])
-                import_results.append({
-                    "skill_id": hit["skill_id"],
-                    "name": hit.get("name", ""),
-                    "import_status": imp.get("status", "error"),
-                    "local_path": imp.get("local_path", ""),
-                })
+                import_results.append(
+                    {
+                        "skill_id": hit["skill_id"],
+                        "name": hit.get("name", ""),
+                        "import_status": imp.get("status", "error"),
+                        "local_path": imp.get("local_path", ""),
+                    }
+                )
             except Exception as e:
                 logger.warning(f"Cloud import failed for {hit['skill_id']}: {e}")
 
@@ -412,10 +410,7 @@ async def _do_import_cloud_skill(skill_id: str, target_dir: Optional[str] = None
     if target_dir:
         base_dir = Path(target_dir)
     else:
-        host_ws = (
-            os.environ.get("NANOBOT_WORKSPACE")
-            or os.environ.get("OPENCLAW_STATE_DIR")
-        )
+        host_ws = os.environ.get("NANOBOT_WORKSPACE") or os.environ.get("OPENCLAW_STATE_DIR")
         if host_ws:
             base_dir = Path(host_ws) / "skills"
             base_dir.mkdir(parents=True, exist_ok=True)
@@ -476,13 +471,15 @@ def _format_task_result(result: Dict[str, Any]) -> Dict[str, Any]:
         for es in raw_evolved:
             skill_path = es.get("path", "")
             skill_dir = str(Path(skill_path).parent) if skill_path else ""
-            formatted_evolved.append({
-                "skill_dir": skill_dir,
-                "name": es.get("name", ""),
-                "origin": es.get("origin", ""),
-                "change_summary": es.get("change_summary", ""),
-                "upload_ready": bool(skill_dir),
-            })
+            formatted_evolved.append(
+                {
+                    "skill_dir": skill_dir,
+                    "name": es.get("name", ""),
+                    "origin": es.get("origin", ""),
+                    "change_summary": es.get("change_summary", ""),
+                    "upload_ready": bool(skill_dir),
+                }
+            )
         output["evolved_skills"] = formatted_evolved
         # Prompt the calling agent to upload evolved skills
         names = [es["name"] for es in formatted_evolved if es.get("upload_ready")]
@@ -504,6 +501,7 @@ def _json_ok(data: Any) -> str:
 def _json_error(error_msg: str, *, error_code: str = "VALIDATION_ERROR") -> str:
     """Return a structured error for validation / not-found cases."""
     from openspace.errors import safe_error_response
+
     return safe_error_response(error_code, error_msg)
 
 
@@ -583,7 +581,8 @@ async def execute_task(
         return _json_ok(formatted)
 
     except Exception as e:
-        from openspace.errors import handle_mcp_exception, EXECUTION_ERROR
+        from openspace.errors import EXECUTION_ERROR, handle_mcp_exception
+
         return handle_mcp_exception(e, tool_name="execute_task", error_code=EXECUTION_ERROR)
 
 
@@ -650,32 +649,34 @@ async def search_skills(
         import_summary: List[Dict[str, Any]] = []
         if auto_import and _is_auto_import_enabled():
             cloud_results = [
-                r for r in results
-                if r.get("source") == "cloud"
-                and r.get("visibility", "public") == "public"
-                and r.get("skill_id")
+                r
+                for r in results
+                if r.get("source") == "cloud" and r.get("visibility", "public") == "public" and r.get("skill_id")
             ][:_AUTO_IMPORT_MAX]
             for cr in cloud_results:
                 try:
                     imp_result = await _do_import_cloud_skill(skill_id=cr["skill_id"])
                     status = imp_result.get("status", "error")
-                    import_summary.append({
-                        "skill_id": cr["skill_id"],
-                        "name": cr.get("name", ""),
-                        "import_status": status,
-                        "local_path": imp_result.get("local_path", ""),
-                    })
+                    import_summary.append(
+                        {
+                            "skill_id": cr["skill_id"],
+                            "name": cr.get("name", ""),
+                            "import_status": status,
+                            "local_path": imp_result.get("local_path", ""),
+                        }
+                    )
                     if status in ("success", "already_exists"):
                         cr["auto_imported"] = True
                         cr["local_path"] = imp_result.get("local_path", "")
                 except Exception as imp_err:
-                    logger.warning(f"auto_import failed for {cr['skill_id']}: {imp_err}",
-                                   exc_info=True)
-                    import_summary.append({
-                        "skill_id": cr["skill_id"],
-                        "import_status": "error",
-                        "error": "Cloud skill import failed",
-                    })
+                    logger.warning(f"auto_import failed for {cr['skill_id']}: {imp_err}", exc_info=True)
+                    import_summary.append(
+                        {
+                            "skill_id": cr["skill_id"],
+                            "import_status": "error",
+                            "error": "Cloud skill import failed",
+                        }
+                    )
 
         output: Dict[str, Any] = {"results": results, "count": len(results)}
         if import_summary:
@@ -683,7 +684,8 @@ async def search_skills(
         return _json_ok(output)
 
     except Exception as e:
-        from openspace.errors import handle_mcp_exception, EXECUTION_ERROR
+        from openspace.errors import EXECUTION_ERROR, handle_mcp_exception
+
         return handle_mcp_exception(e, tool_name="search_skills", error_code=EXECUTION_ERROR)
 
 
@@ -717,8 +719,8 @@ async def fix_skill(
                    "Add retry logic for HTTP 429 rate limit errors".
     """
     try:
-        from openspace.skill_engine.types import EvolutionSuggestion, EvolutionType
         from openspace.skill_engine.evolver import EvolutionContext, EvolutionTrigger
+        from openspace.skill_engine.types import EvolutionSuggestion, EvolutionType
 
         if not direction:
             return _json_error("direction is required — describe what to fix.")
@@ -774,34 +776,42 @@ async def fix_skill(
         new_record = await evolver.evolve(ctx)
 
         if not new_record:
-            return _json_ok({
-                "status": "failed",
-                "error": "Evolution did not produce a new skill.",
-            })
+            return _json_ok(
+                {
+                    "status": "failed",
+                    "error": "Evolution did not produce a new skill.",
+                }
+            )
 
         # Step 4: Write .upload_meta.json
         new_skill_dir = Path(new_record.path).parent if new_record.path else skill_path
-        _write_upload_meta(new_skill_dir, {
-            "origin": new_record.lineage.origin.value,
-            "parent_skill_ids": new_record.lineage.parent_skill_ids,
-            "change_summary": new_record.lineage.change_summary,
-            "created_by": new_record.lineage.created_by or "openspace",
-            "tags": new_record.tags,
-        })
-
-        return _json_ok({
-            "status": "success",
-            "new_skill": {
-                "skill_dir": str(new_skill_dir),
-                "name": new_record.name,
+        _write_upload_meta(
+            new_skill_dir,
+            {
                 "origin": new_record.lineage.origin.value,
+                "parent_skill_ids": new_record.lineage.parent_skill_ids,
                 "change_summary": new_record.lineage.change_summary,
-                "upload_ready": True,
+                "created_by": new_record.lineage.created_by or "openspace",
+                "tags": new_record.tags,
             },
-        })
+        )
+
+        return _json_ok(
+            {
+                "status": "success",
+                "new_skill": {
+                    "skill_dir": str(new_skill_dir),
+                    "name": new_record.name,
+                    "origin": new_record.lineage.origin.value,
+                    "change_summary": new_record.lineage.change_summary,
+                    "upload_ready": True,
+                },
+            }
+        )
 
     except Exception as e:
-        from openspace.errors import handle_mcp_exception, EXECUTION_ERROR
+        from openspace.errors import EXECUTION_ERROR, handle_mcp_exception
+
         return handle_mcp_exception(e, tool_name="fix_skill", error_code=EXECUTION_ERROR)
 
 
@@ -872,8 +882,10 @@ async def upload_skill(
         return _json_ok(result)
 
     except Exception as e:
-        from openspace.errors import handle_mcp_exception, EXECUTION_ERROR
+        from openspace.errors import EXECUTION_ERROR, handle_mcp_exception
+
         return handle_mcp_exception(e, tool_name="upload_skill", error_code=EXECUTION_ERROR)
+
 
 def run_mcp_server() -> None:
     """Console-script entry point for ``openspace-mcp``.

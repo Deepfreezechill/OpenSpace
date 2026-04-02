@@ -18,6 +18,7 @@ OpenSpace uses qwen3.5-plus → same pricing as ClawWork's Qwen3.5-Plus agent.
 Usage:
     python -m gdpval_bench.calc_subset_performance
 """
+
 from __future__ import annotations
 
 import json
@@ -44,24 +45,24 @@ LEADERBOARD_AGENTS = {
 
 # Display names matching ClawWork leaderboard
 DISPLAY_NAMES = {
-    "ATIC + Qwen3.5-Plus":                  "ATIC + Qwen3.5-Plus",
-    "Gemini 3.1 Pro Preview":               "Gemini 3.1 Pro Preview",
-    "Qwen3.5-Plus":                         "Qwen3.5-Plus",
-    "GLM-4.7-test-openrouter-10dollar-1":   "GLM-4.7",
-    "ATIC-DEEPSEEK":                        "ATIC-DEEPSEEK",
-    "qwen3-max-10dollar-1":                 "Qwen3-Max",
+    "ATIC + Qwen3.5-Plus": "ATIC + Qwen3.5-Plus",
+    "Gemini 3.1 Pro Preview": "Gemini 3.1 Pro Preview",
+    "Qwen3.5-Plus": "Qwen3.5-Plus",
+    "GLM-4.7-test-openrouter-10dollar-1": "GLM-4.7",
+    "ATIC-DEEPSEEK": "ATIC-DEEPSEEK",
+    "qwen3-max-10dollar-1": "Qwen3-Max",
     "kimi-k2.5-test-openrouter-10dollar-1": "Kimi-K2.5",
 }
 
 # Per-agent token pricing from ClawWork configs (input_per_1m, output_per_1m)
 AGENT_PRICING = {
-    "Qwen3.5-Plus":                          (0.12, 0.69),
-    "qwen3-max-10dollar-1":                  (0.35, 1.41),
-    "GLM-4.7-test-openrouter-10dollar-1":    (0.40, 1.50),
-    "ATIC + Qwen3.5-Plus":                   (0.50, 1.50),
-    "ATIC-DEEPSEEK":                         (0.50, 1.50),
-    "kimi-k2.5-test-openrouter-10dollar-1":  (0.50, 2.80),
-    "Gemini 3.1 Pro Preview":                (2.00, 12.00),
+    "Qwen3.5-Plus": (0.12, 0.69),
+    "qwen3-max-10dollar-1": (0.35, 1.41),
+    "GLM-4.7-test-openrouter-10dollar-1": (0.40, 1.50),
+    "ATIC + Qwen3.5-Plus": (0.50, 1.50),
+    "ATIC-DEEPSEEK": (0.50, 1.50),
+    "kimi-k2.5-test-openrouter-10dollar-1": (0.50, 2.80),
+    "Gemini 3.1 Pro Preview": (2.00, 12.00),
 }
 # OpenSpace uses qwen3.5-plus, same pricing
 CS_INPUT_PER_1M = 0.12
@@ -90,11 +91,13 @@ def _bar(ratio: float, width: int = 40) -> str:
     return "█" * filled + "░" * (width - filled)
 
 
-def calc_token_cost(prompt_tokens: int, completion_tokens: int,
-                    input_per_1m: float = CS_INPUT_PER_1M,
-                    output_per_1m: float = CS_OUTPUT_PER_1M) -> float:
-    return (prompt_tokens / 1_000_000) * input_per_1m + \
-           (completion_tokens / 1_000_000) * output_per_1m
+def calc_token_cost(
+    prompt_tokens: int,
+    completion_tokens: int,
+    input_per_1m: float = CS_INPUT_PER_1M,
+    output_per_1m: float = CS_OUTPUT_PER_1M,
+) -> float:
+    return (prompt_tokens / 1_000_000) * input_per_1m + (completion_tokens / 1_000_000) * output_per_1m
 
 
 def _calc_agent_subset_token_cost(agent_dir: Path, task_ids: set, agent: str) -> float:
@@ -202,8 +205,7 @@ def main():
     print(f"Phase2: {p2_n} tasks ({len(p2_scores)} evaluated), Task Value ${p2_total_value:,.2f}")
     print()
 
-    agents = sorted(d.name for d in AGENT_DATA.iterdir()
-                    if d.is_dir() and d.name in LEADERBOARD_AGENTS)
+    agents = sorted(d.name for d in AGENT_DATA.iterdir() if d.is_dir() and d.name in LEADERBOARD_AGENTS)
     rows = []
 
     for agent in agents:
@@ -260,65 +262,71 @@ def main():
         cw_scores_asgn_common = [eval_by_tid.get(tid, 0.0) for tid in common]
         cw_avgq_asgn_common = sum(cw_scores_asgn_common) / len(cw_scores_asgn_common) if cw_scores_asgn_common else 0
 
-        rows.append({
-            "name": agent,
-            "earned": earned,
-            "avg_q_eval": avg_q_eval,
-            "avg_q_assigned": avg_q_assigned,
-            "scored": len(score_vals_eval),
-            "assigned": len(assigned),
-            "completions": len(earn_by_tid),
-            "token_cost": token_cost,
-            "balance": balance,
-            "common_n": len(common),
-            "common_tids": common,
-            "common_value": cs_value_common,
-            "common_cs_earn": cs_earn_common,
-            "common_cw_earn": cw_earn_common,
-            "common_cs_avgq": cs_avgq_common,
-            "common_cw_avgq_eval": cw_avgq_eval_common,
-            "common_cw_avgq_asgn": cw_avgq_asgn_common,
-            "common_cw_scored": len(cw_scores_eval_common),
-            "is_openspace": False,
-            "task_count": n,
-        })
+        rows.append(
+            {
+                "name": agent,
+                "earned": earned,
+                "avg_q_eval": avg_q_eval,
+                "avg_q_assigned": avg_q_assigned,
+                "scored": len(score_vals_eval),
+                "assigned": len(assigned),
+                "completions": len(earn_by_tid),
+                "token_cost": token_cost,
+                "balance": balance,
+                "common_n": len(common),
+                "common_tids": common,
+                "common_value": cs_value_common,
+                "common_cs_earn": cs_earn_common,
+                "common_cw_earn": cw_earn_common,
+                "common_cs_avgq": cs_avgq_common,
+                "common_cw_avgq_eval": cw_avgq_eval_common,
+                "common_cw_avgq_asgn": cw_avgq_asgn_common,
+                "common_cw_scored": len(cw_scores_eval_common),
+                "is_openspace": False,
+                "task_count": n,
+            }
+        )
 
-    rows.append({
-        "name": "OpenSpace Phase1",
-        "earned": cs_earned,
-        "avg_q_eval": cs_avg_q,
-        "avg_q_assigned": cs_avg_q,
-        "scored": n,
-        "assigned": n,
-        "completions": n,
-        "token_cost": cs_token_cost,
-        "balance": cs_balance,
-        "common_n": n,
-        "common_value": cs_total_value,
-        "common_cs_earn": cs_earned,
-        "common_cw_earn": cs_earned,
-        "is_openspace": True,
-        "task_count": n,
-    })
+    rows.append(
+        {
+            "name": "OpenSpace Phase1",
+            "earned": cs_earned,
+            "avg_q_eval": cs_avg_q,
+            "avg_q_assigned": cs_avg_q,
+            "scored": n,
+            "assigned": n,
+            "completions": n,
+            "token_cost": cs_token_cost,
+            "balance": cs_balance,
+            "common_n": n,
+            "common_value": cs_total_value,
+            "common_cs_earn": cs_earned,
+            "common_cw_earn": cs_earned,
+            "is_openspace": True,
+            "task_count": n,
+        }
+    )
 
     if p2_records:
-        rows.append({
-            "name": "OpenSpace Phase2",
-            "earned": p2_earned,
-            "avg_q_eval": p2_avg_q,
-            "avg_q_assigned": p2_avg_q,
-            "scored": len(p2_scores),
-            "assigned": p2_n,
-            "completions": p2_n,
-            "token_cost": p2_token_cost,
-            "balance": p2_balance,
-            "common_n": p2_n,
-            "common_value": p2_total_value,
-            "common_cs_earn": p2_earned,
-            "common_cw_earn": p2_earned,
-            "is_openspace": True,
-            "task_count": p2_n,
-        })
+        rows.append(
+            {
+                "name": "OpenSpace Phase2",
+                "earned": p2_earned,
+                "avg_q_eval": p2_avg_q,
+                "avg_q_assigned": p2_avg_q,
+                "scored": len(p2_scores),
+                "assigned": p2_n,
+                "completions": p2_n,
+                "token_cost": p2_token_cost,
+                "balance": p2_balance,
+                "common_n": p2_n,
+                "common_value": p2_total_value,
+                "common_cs_earn": p2_earned,
+                "common_cw_earn": p2_earned,
+                "is_openspace": True,
+                "task_count": p2_n,
+            }
+        )
 
     cs_total_tokens = sum(r.get("tokens", {}).get("total_tokens", 0) for r in cs_records)
     cs_agent_tokens = cs_agent_prompt + cs_agent_completion
@@ -344,10 +352,12 @@ def main():
     # ═══════════════════════════════════════════════════════
     print("=" * 115)
     print(f"  Table 1: Leaderboard (Task Value ${cs_total_value:,.2f} for 50 tasks)")
-    print(f"  Balance = $10 initial + Income - Token Cost")
+    print("  Balance = $10 initial + Income - Token Cost")
     print("=" * 115)
     print()
-    print(f"  {'#':>2} {'Agent':{W}} {'Tasks':>5} {'Income':>11} {'Balance':>11} {'TkCost':>7} {'Capture':>8} │ {'Avg Quality':>11} {'Evaluated':>10}")
+    print(
+        f"  {'#':>2} {'Agent':{W}} {'Tasks':>5} {'Income':>11} {'Balance':>11} {'TkCost':>7} {'Capture':>8} │ {'Avg Quality':>11} {'Evaluated':>10}"
+    )
     print("─" * 110)
 
     for i, r in enumerate(t1_rows):
@@ -355,9 +365,11 @@ def main():
         tv = r.get("common_value", cs_total_value)
         cap = r["earned"] / tv * 100 if tv else 0
         marker = " ◀◀◀" if r.get("is_openspace") else ""
-        aq = f"{r['avg_q_eval']*100:.1f}%" if r["scored"] else "—"
-        print(f"  {i+1:>2} {dn(r['name']):{W}} {tc:>5} ${r['earned']:>9,.2f} ${r['balance']:>9,.2f} ${r['token_cost']:>5,.2f} {cap:>6.1f}%"
-              f" │ {aq:>11} {r['scored']:>5}/{tc}{marker}")
+        aq = f"{r['avg_q_eval'] * 100:.1f}%" if r["scored"] else "—"
+        print(
+            f"  {i + 1:>2} {dn(r['name']):{W}} {tc:>5} ${r['earned']:>9,.2f} ${r['balance']:>9,.2f} ${r['token_cost']:>5,.2f} {cap:>6.1f}%"
+            f" │ {aq:>11} {r['scored']:>5}/{tc}{marker}"
+        )
 
     print("─" * 110)
 
@@ -404,10 +416,12 @@ def main():
     print()
     hdr_cs = "── OpenSpace (P1 │ P2) ──"
     hdr_cw = "── ClawWork Agent ──"
-    print(f"  {'Agent':{W}} {'Tasks':>5} │"
-          f" {'P1 Inc':>9} {'P2 Inc':>9} {'CW Inc':>9} {'P2/CW':>6} │"
-          f" {'P1 Cap':>7} {'P2 Cap':>7} {'CW Cap':>7} │"
-          f" {'P1 AvgQ':>8} {'P2 AvgQ':>8} {'CW(eval)':>9} {'CW(all)':>8} {'CW Eval':>8}")
+    print(
+        f"  {'Agent':{W}} {'Tasks':>5} │"
+        f" {'P1 Inc':>9} {'P2 Inc':>9} {'CW Inc':>9} {'P2/CW':>6} │"
+        f" {'P1 Cap':>7} {'P2 Cap':>7} {'CW Cap':>7} │"
+        f" {'P1 AvgQ':>8} {'P2 AvgQ':>8} {'CW(eval)':>9} {'CW(all)':>8} {'CW Eval':>8}"
+    )
     print("─" * 160)
 
     for r in cw_rows:
@@ -416,23 +430,27 @@ def main():
         cs_e = r["common_cs_earn"]
         p2_e = r["common_p2_earn"]
         cw_e = r["common_cw_earn"]
-        ratio_p2 = p2_e / cw_e if cw_e > 0 else float('inf')
+        ratio_p2 = p2_e / cw_e if cw_e > 0 else float("inf")
         ratio_str = f"{ratio_p2:.1f}x" if cw_e > 0 else "∞"
         cs_cap = cs_e / cv * 100 if cv > 0 else 0
         p2_cap = r["common_p2_cap"]
         cw_cap = cw_e / cv * 100 if cv > 0 else 0
 
-        print(f"  {dn(r['name']):{W}} {cn:>5} │"
-              f" ${cs_e:>8,.0f} ${p2_e:>8,.0f} ${cw_e:>8,.0f} {ratio_str:>6} │"
-              f" {cs_cap:>6.1f}% {p2_cap:>6.1f}% {cw_cap:>6.1f}% │"
-              f" {r['common_cs_avgq']*100:>7.1f}% {r['common_p2_avgq']*100:>7.1f}%"
-              f" {r['common_cw_avgq_eval']*100:>7.1f}%  {r['common_cw_avgq_asgn']*100:>7.1f}%"
-              f" {r['common_cw_scored']:>4}/{cn}")
+        print(
+            f"  {dn(r['name']):{W}} {cn:>5} │"
+            f" ${cs_e:>8,.0f} ${p2_e:>8,.0f} ${cw_e:>8,.0f} {ratio_str:>6} │"
+            f" {cs_cap:>6.1f}% {p2_cap:>6.1f}% {cw_cap:>6.1f}% │"
+            f" {r['common_cs_avgq'] * 100:>7.1f}% {r['common_p2_avgq'] * 100:>7.1f}%"
+            f" {r['common_cw_avgq_eval'] * 100:>7.1f}%  {r['common_cw_avgq_asgn'] * 100:>7.1f}%"
+            f" {r['common_cw_scored']:>4}/{cn}"
+        )
 
     print("─" * 160)
     print()
     print(f"  P1 = Phase 1 (cold start, {cs_model})")
-    print(f"  P2 = Phase 2 (warm start with {cs_agent_tokens:,} → {p2_agent_tokens:,} agent tokens, {ag_save:+.0f}% savings)")
+    print(
+        f"  P2 = Phase 2 (warm start with {cs_agent_tokens:,} → {p2_agent_tokens:,} agent tokens, {ag_save:+.0f}% savings)"
+    )
     print("  Capture  = Income / Task Value")
     print("  CW(eval) = Agent mean(score) on evaluated tasks only")
     print("  CW(all)  = Agent mean(score) on all shared tasks (unevaluated = 0)")
