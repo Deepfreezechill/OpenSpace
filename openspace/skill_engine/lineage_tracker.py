@@ -143,7 +143,9 @@ class LineageTracker:
         """Open a temporary read-only connection (WAL parallel reads)."""
         self._ensure_open()
         if not self._owns_conn:
-            yield self._conn
+            # Fix 3: Acquire lock when using shared connection to prevent dirty reads
+            with self._mu:
+                yield self._conn
             return
         conn = self._make_connection(read_only=True)
         try:
@@ -267,7 +269,7 @@ class LineageTracker:
             generation (oldest first).
         """
         with self._reader() as conn:
-            visited: set[str] = set()
+            visited: set[str] = {skill_id}  # Fix 1: Seed with starting skill_id to prevent cycles
             ancestors: List[SkillRecord] = []
             frontier = [skill_id]
 
@@ -289,7 +291,7 @@ class LineageTracker:
                         ).fetchone()
                         if row:
                             ancestors.append(
-                                SkillRepository._to_record(conn, row)
+                                SkillRepository.to_record(conn, row)
                             )
                             next_frontier.append(pid)
                 frontier = next_frontier
@@ -318,7 +320,7 @@ class LineageTracker:
                 "ORDER BY lineage_generation ASC",
                 (name,),
             ).fetchall()
-            return [SkillRepository._to_record(conn, r) for r in rows]
+            return [SkillRepository.to_record(conn, r) for r in rows]
 
     @_db_retry()
     def get_lineage_tree(
@@ -370,7 +372,8 @@ class LineageTracker:
         ).fetchall():
             cid = cr["skill_id"]
             if cid not in visited:
+                # Fix 2: Pass copy of visited to prevent diamond DAG edge loss
                 node["children"].append(
-                    self._subtree(conn, cid, depth - 1, visited)
+                    self._subtree(conn, cid, depth - 1, visited.copy())
                 )
         return node

@@ -699,7 +699,9 @@ class SkillStore:
 
         Delegates to :class:`LineageTracker` (Epic 3.3).
         """
-        return self._lineage.get_evolution_chain(name)
+        # Fix 5: Hydrate recent_analyses after delegation
+        records = self._lineage.get_evolution_chain(name)
+        return [self._hydrate_recent_analyses(record) for record in records]
 
     @_db_retry()
     def load_by_category(self, category: SkillCategory, *, active_only: bool = True) -> List[SkillRecord]:
@@ -998,7 +1000,9 @@ class SkillStore:
 
         Delegates to :class:`LineageTracker` (Epic 3.3).
         """
-        return self._lineage.get_ancestors(skill_id, max_depth=max_depth)
+        # Fix 5: Hydrate recent_analyses after delegation
+        records = self._lineage.get_ancestors(skill_id, max_depth=max_depth)
+        return [self._hydrate_recent_analyses(record) for record in records]
 
     @_db_retry()
     def get_lineage_tree(self, skill_id: str, max_depth: int = 5) -> Dict[str, Any]:
@@ -1197,6 +1201,41 @@ class SkillStore:
             )
 
         return analysis_id
+
+    # Fix 5: Helper method to hydrate recent_analyses for records from LineageTracker
+    def _hydrate_recent_analyses(self, record: SkillRecord) -> SkillRecord:
+        """Hydrate recent_analyses for a SkillRecord from LineageTracker delegation."""
+        with self._reader() as conn:
+            analysis_rows = conn.execute(
+                "SELECT ea.* FROM execution_analyses ea "
+                "JOIN skill_judgments sj ON ea.id = sj.analysis_id "
+                "WHERE sj.skill_id = ? "
+                "ORDER BY ea.timestamp DESC LIMIT ?",
+                (record.skill_id, SkillRecord.MAX_RECENT),
+            ).fetchall()
+            
+            # Create a new record with hydrated recent_analyses
+            return SkillRecord(
+                skill_id=record.skill_id,
+                name=record.name,
+                description=record.description,
+                path=record.path,
+                is_active=record.is_active,
+                category=record.category,
+                tags=record.tags,
+                visibility=record.visibility,
+                creator_id=record.creator_id,
+                lineage=record.lineage,
+                tool_dependencies=record.tool_dependencies,
+                critical_tools=record.critical_tools,
+                total_selections=record.total_selections,
+                total_applied=record.total_applied,
+                total_completions=record.total_completions,
+                total_fallbacks=record.total_fallbacks,
+                recent_analyses=[self._to_analysis(conn, r) for r in reversed(analysis_rows)],
+                first_seen=record.first_seen,
+                last_updated=record.last_updated,
+            )
 
     # Deserialization
     def _to_record(self, conn: sqlite3.Connection, row: sqlite3.Row) -> SkillRecord:
