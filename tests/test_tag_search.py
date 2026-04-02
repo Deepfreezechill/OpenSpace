@@ -337,7 +337,7 @@ class TestSkillDiscovery:
         assert "total_skills" in stats
         assert "total_skills_all" in stats
         assert "by_category" in stats
-        assert "by_lineage_origin" in stats
+        assert "by_origin" in stats  # Fixed Finding 4: Use corrected field name
         assert "total_selections" in stats
         
         # Check values
@@ -599,3 +599,173 @@ class TestSkillStoreFacadeIntegration:
         assert set(tags) == {"python", "web"}
         
         store.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Fix Finding 6: Missing Integration Tests  
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestDuplicateTagFixes:
+    """Test duplicate tag handling fixes (Findings 1 & 2)."""
+
+    def test_sync_tags_with_duplicates(self, tag_search):
+        """Verify sync_tags deduplicates duplicate input."""
+        # Create skill record first
+        with tag_search._conn as conn:
+            conn.execute(
+                "INSERT INTO skill_records(skill_id, name, first_seen, last_updated, lineage_created_at) VALUES(?,?,?,?,?)",
+                ("skill_123", "Test Skill", "2023-01-01T00:00:00", "2023-01-01T00:00:00", "2023-01-01T00:00:00")
+            )
+            conn.commit()
+        
+        # Sync tags with duplicates - should not crash
+        duplicate_tags = ["python", "python", "web", "python"]
+        tag_search.sync_tags("skill_123", duplicate_tags)
+        
+        # Verify only unique tags are stored
+        retrieved = tag_search.get_tags("skill_123")
+        assert set(retrieved) == {"python", "web"}
+        assert len(retrieved) == 2  # No duplicates stored
+
+    def test_find_by_tags_with_duplicate_input(self, populated_tag_search):
+        """Verify find_skills_by_tags handles duplicate input correctly with match_all."""
+        # With duplicate input that reduces to single unique tag
+        duplicate_input = ["development", "development"]
+        
+        # match_all=True should work correctly (use unique count, not input len)
+        skills = populated_tag_search.find_skills_by_tags(
+            duplicate_input, match_all=True
+        )
+        # Should find both skills with "development" tag
+        assert "python__dev001" in skills
+        assert "git__tool003" in skills
+        
+        # Verify this doesn't break with complex duplicates
+        complex_dupes = ["python", "development", "python", "development"]
+        skills = populated_tag_search.find_skills_by_tags(
+            complex_dupes, match_all=True  
+        )
+        # Should only find python__dev001 (has both unique tags)
+        assert "python__dev001" in skills
+        assert "git__tool003" not in skills  # Only has "development", not "python"
+
+    def test_search_skills_with_duplicate_tags(self, populated_tag_search):
+        """Verify search_skills handles duplicate tag input correctly."""
+        duplicate_tags = ["python", "python", "development"]
+        
+        # match_all_tags=True should work (unique count = 2, not 3)
+        results = populated_tag_search.search_skills(
+            tags=duplicate_tags,
+            match_all_tags=True
+        )
+        skill_ids = {skill["skill_id"] for skill in results}
+        
+        # Should find the skill with both unique tags
+        assert "python__dev001" in skill_ids
+        assert "git__tool003" not in skill_ids  # Missing "python"
+
+
+class TestSkillStoreFacadeCompleteness:
+    """Test SkillStore facade completeness (Finding 3)."""
+
+    def test_skill_store_facade_completeness(self, tmp_path: Path):
+        """Verify ALL TagSearch public methods are accessible through SkillStore."""
+        from openspace.skill_engine.store import SkillStore
+        from openspace.skill_engine.tag_search import TagSearch
+        
+        store = SkillStore(db_path=tmp_path / "facade_test.db")
+        
+        # Get all public methods from TagSearch
+        tag_search_methods = [
+            name for name in dir(TagSearch) 
+            if not name.startswith('_') and callable(getattr(TagSearch, name))
+        ]
+        
+        # Remove constructor and close method (not facades)
+        tag_search_methods = [m for m in tag_search_methods if m not in ('__init__', 'close')]
+        
+        # Verify each public TagSearch method has a corresponding SkillStore method
+        missing_facades = []
+        for method in tag_search_methods:
+            if not hasattr(store, method):
+                missing_facades.append(method)
+        
+        store.close()
+        
+        # All TagSearch methods should be available on SkillStore
+        assert missing_facades == [], f"SkillStore missing facade methods: {missing_facades}"
+
+    def test_facade_method_delegation(self, tmp_path: Path):
+        """Verify facade methods actually delegate to TagSearch."""
+        from openspace.skill_engine.store import SkillStore
+        
+        store = SkillStore(db_path=tmp_path / "delegation_test.db")
+        
+        # Create a test record
+        record = _make_record(tags=["python", "test"])
+        
+        # Save record (to create it in DB)
+        import asyncio
+        asyncio.run(store.save_record(record))
+        
+        # Test that facade methods work
+        assert store.get_tags(record.skill_id) == ["python", "test"]
+        
+        all_tags = store.get_all_tags()
+        assert any(tag["tag"] == "python" for tag in all_tags)
+        
+        # Test search_skills facade
+        results = store.search_skills(tags=["python"])
+        assert len(results) > 0
+        assert results[0]["skill_id"] == record.skill_id
+        
+        # Test find_skills_by_tags facade
+        found = store.find_skills_by_tags(["python"])
+        assert record.skill_id in found
+        
+        # Test sync_tags facade (modify existing tags)
+        store.sync_tags(record.skill_id, ["python", "modified"])
+        assert set(store.get_tags(record.skill_id)) == {"python", "modified"}
+        
+        store.close()
+
+
+class TestBackwardCompatibility:
+    """Test backward compatibility fixes (Finding 4)."""
+
+    def test_skill_store_get_stats_field_names(self, tmp_path: Path):
+        """Verify get_stats returns backward-compatible field names."""
+        from openspace.skill_engine.store import SkillStore
+        
+        store = SkillStore(db_path=tmp_path / "compat_test.db")
+        
+        # Create test data
+        record = _make_record(tags=["python"])
+        import asyncio
+        asyncio.run(store.save_record(record))
+        
+        # Get stats through SkillStore facade
+        stats = store.get_stats()
+        
+        # Should have the original field name for backward compatibility
+        assert "by_origin" in stats, "Missing backward-compatible 'by_origin' field"
+        assert "by_lineage_origin" not in stats, "Should not have renamed 'by_lineage_origin' field"
+        
+        # The field should contain the expected data
+        assert isinstance(stats["by_origin"], dict)
+        
+        store.close()
+
+    def test_tag_search_direct_call_uses_original_field(self, tmp_path: Path):
+        """Verify TagSearch.get_stats() returns the corrected field name."""
+        from openspace.skill_engine.tag_search import TagSearch
+        
+        tag_search = TagSearch(db_path=tmp_path / "direct_test.db")
+        
+        # TagSearch should use the backward-compatible field name
+        stats = tag_search.get_stats()
+        assert "by_origin" in stats
+        assert "by_lineage_origin" not in stats
+        
+        tag_search.close()

@@ -215,20 +215,27 @@ class TagSearch:
         When used with shared connection, assumes caller manages transactions.
         """
         self._ensure_open()
+        # Fix Finding 1: Deduplicate tags at the start to prevent PK constraint violations
+        tags = list(set(tags))
+        
         if self._owns_conn:
             with self._mu:
-                # Clear existing tags
-                self._conn.execute(
-                    "DELETE FROM skill_tags WHERE skill_id=?",
-                    (skill_id,),
-                )
-                # Insert new tags
-                for tag in tags:
+                try:
+                    # Clear existing tags
                     self._conn.execute(
-                        "INSERT INTO skill_tags(skill_id, tag) VALUES(?,?)",
-                        (skill_id, tag),
+                        "DELETE FROM skill_tags WHERE skill_id=?",
+                        (skill_id,),
                     )
-                self._conn.commit()
+                    # Insert new tags
+                    for tag in tags:
+                        self._conn.execute(
+                            "INSERT INTO skill_tags(skill_id, tag) VALUES(?,?)",
+                            (skill_id, tag),
+                        )
+                    self._conn.commit()
+                except sqlite3.Error:
+                    self._conn.rollback()
+                    raise
         else:
             # Shared connection - assume caller manages transaction
             # Clear existing tags
@@ -273,11 +280,14 @@ class TagSearch:
         """
         if not tags:
             return []
+        
+        # Fix Finding 2: Use unique tags for match_all to handle duplicates correctly
+        unique_tags = list(set(tags))
 
         with self._reader() as conn:
             if match_all:
                 # Skills that have ALL tags
-                placeholders = ",".join("?" * len(tags))
+                placeholders = ",".join("?" * len(unique_tags))
                 active_clause = " AND sr.is_active=1" if active_only else ""
                 query = f"""
                     SELECT st.skill_id
@@ -287,10 +297,10 @@ class TagSearch:
                     GROUP BY st.skill_id
                     HAVING COUNT(DISTINCT st.tag) = ?
                 """
-                rows = conn.execute(query, tags + [len(tags)]).fetchall()
+                rows = conn.execute(query, unique_tags + [len(unique_tags)]).fetchall()
             else:
                 # Skills that have ANY tag
-                placeholders = ",".join("?" * len(tags))
+                placeholders = ",".join("?" * len(unique_tags))
                 active_clause = " AND sr.is_active=1" if active_only else ""
                 query = f"""
                     SELECT DISTINCT st.skill_id
@@ -298,7 +308,7 @@ class TagSearch:
                     JOIN skill_records sr ON st.skill_id = sr.skill_id
                     WHERE st.tag IN ({placeholders}){active_clause}
                 """
-                rows = conn.execute(query, tags).fetchall()
+                rows = conn.execute(query, unique_tags).fetchall()
 
             return [r["skill_id"] for r in rows]
 
@@ -399,7 +409,8 @@ class TagSearch:
                 "total_skills": total,
                 "total_skills_all": total_all,
                 "by_category": by_category,
-                "by_lineage_origin": by_origin,
+                # Fix Finding 4: Use original field name for backward compatibility
+                "by_origin": by_origin,
                 "total_selections": agg["sel"] or 0,
                 "total_applied": agg["app"] or 0,
                 "total_completions": agg["comp"] or 0,
@@ -506,26 +517,31 @@ class TagSearch:
             
             # Tag filtering requires JOIN
             if tags:
+                # Fix Finding 2: Use unique tags for match_all to handle duplicates correctly
+                unique_tags = list(set(tags))
+                
                 if match_all_tags:
                     # For ALL tags, we need the skill to have ALL specified tags
-                    placeholders = ",".join("?" * len(tags))
+                    placeholders = ",".join("?" * len(unique_tags))
                     query_sql += f"""
                         JOIN skill_tags st ON sr.skill_id = st.skill_id
                         WHERE st.tag IN ({placeholders})
                     """
-                    params = tags + params
+                    params = unique_tags + params
                     # Group by skill_id and ensure it has all tags
                     if conditions:
                         query_sql += " AND " + " AND ".join(conditions)
-                    query_sql += f" GROUP BY sr.skill_id HAVING COUNT(DISTINCT st.tag) = {len(tags)}"
+                    # Fix Finding 5: Use parameterized query instead of f-string
+                    query_sql += " GROUP BY sr.skill_id HAVING COUNT(DISTINCT st.tag) = ?"
+                    params.append(len(unique_tags))
                 else:
                     # For ANY tags, simpler JOIN
-                    placeholders = ",".join("?" * len(tags))
+                    placeholders = ",".join("?" * len(unique_tags))
                     query_sql += f"""
                         JOIN skill_tags st ON sr.skill_id = st.skill_id
                         WHERE st.tag IN ({placeholders})
                     """
-                    params = tags + params
+                    params = unique_tags + params
                     if conditions:
                         query_sql += " AND " + " AND ".join(conditions)
             else:

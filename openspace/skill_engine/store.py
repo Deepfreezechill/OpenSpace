@@ -1089,3 +1089,52 @@ class SkillStore:
             first_seen=datetime.fromisoformat(row["first_seen"]),
             last_updated=datetime.fromisoformat(row["last_updated"]),
         )
+
+    # ── Tag Search Facade Methods (Epic 3.5) ──────────────────────────────
+    # Fix Finding 3: Complete SkillStore facade for all extracted TagSearch methods
+
+    def find_skills_by_tags(
+        self,
+        tags: List[str],
+        *,
+        match_all: bool = False,
+        active_only: bool = True,
+    ) -> List[str]:
+        """Find skills by tags (facade to TagSearch)."""
+        return self._tag_search.find_skills_by_tags(
+            tags, match_all=match_all, active_only=active_only
+        )
+
+    def search_skills(
+        self,
+        query: Optional[str] = None,
+        *,
+        category: Optional[SkillCategory] = None,
+        visibility: Optional[SkillVisibility] = None,
+        tags: Optional[List[str]] = None,
+        match_all_tags: bool = False,
+        active_only: bool = True,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Search skills by multiple criteria (facade to TagSearch)."""
+        return self._tag_search.search_skills(
+            query,
+            category=category,
+            visibility=visibility,
+            tags=tags,
+            match_all_tags=match_all_tags,
+            active_only=active_only,
+            limit=limit,
+        )
+
+    def get_tags(self, skill_id: str) -> List[str]:
+        """Get all tags for a skill (facade to TagSearch)."""
+        return self._tag_search.get_tags(skill_id)
+
+    def get_all_tags(self) -> List[Dict[str, Any]]:
+        """Get all tags with usage counts (facade to TagSearch)."""
+        return self._tag_search.get_all_tags()
+
+    def sync_tags(self, skill_id: str, tags: List[str]) -> None:
+        """Synchronize tags for a skill (facade to TagSearch)."""
+        return self._tag_search.sync_tags(skill_id, tags)
