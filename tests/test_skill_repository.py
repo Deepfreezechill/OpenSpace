@@ -388,3 +388,134 @@ class TestEdgeCases:
         repo.close()
         with pytest.raises(RuntimeError):
             repo.get("anything")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  F2: Shared Lock (dual-mutex fix)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestSharedLock:
+    """When given an external lock, SkillRepository should use it."""
+
+    def test_uses_provided_lock(self, tmp_path):
+        from openspace.skill_engine.skill_repository import SkillRepository
+        import threading
+
+        external_lock = threading.Lock()
+        db_path = tmp_path / "shared_lock.db"
+        repo = SkillRepository(db_path=db_path, lock=external_lock)
+        assert repo._mu is external_lock
+        repo.close()
+
+    def test_creates_own_lock_when_none_provided(self, tmp_path):
+        from openspace.skill_engine.skill_repository import SkillRepository
+        import threading
+
+        db_path = tmp_path / "own_lock.db"
+        repo = SkillRepository(db_path=db_path)
+        assert isinstance(repo._mu, type(threading.Lock()))
+        repo.close()
+
+    def test_shared_conn_and_lock(self, tmp_path):
+        """Shared connection + shared lock should work without deadlock."""
+        from openspace.skill_engine.skill_repository import SkillRepository
+        import sqlite3
+        import threading
+
+        db_path = tmp_path / "shared.db"
+        conn = sqlite3.connect(str(db_path), check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        lock = threading.Lock()
+
+        repo = SkillRepository(conn=conn, lock=lock)
+        # Init tables manually since shared conn skips _init_db
+        repo._owns_conn = True  # temporarily to init
+        repo._db_path = db_path
+        repo._init_db()
+        repo._owns_conn = False
+        repo._db_path = Path(":shared:")
+
+        record = _make_record()
+        repo.save(record)
+        loaded = repo.get(record.skill_id)
+        assert loaded is not None
+        assert loaded.skill_id == record.skill_id
+
+        repo.close()
+        conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  F3: LIKE Wildcard Escaping
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestSearchEscaping:
+    """search() must escape SQL LIKE wildcards in user input."""
+
+    def test_percent_in_name_does_not_match_broadly(self, repo):
+        repo.save_many([
+            _make_record(skill_id="s1", name="100%_done"),
+            _make_record(skill_id="s2", name="100_other_tasks"),
+            _make_record(skill_id="s3", name="something_else"),
+        ])
+
+        results = repo.search(name="100%_done")
+        assert len(results) == 1
+        assert results[0].skill_id == "s1"
+
+    def test_underscore_in_name_is_literal(self, repo):
+        repo.save_many([
+            _make_record(skill_id="s1", name="my_skill"),
+            _make_record(skill_id="s2", name="myXskill"),
+        ])
+
+        # Without escaping, "_" would match any single char including "X"
+        results = repo.search(name="my_skill")
+        assert len(results) == 1
+        assert results[0].skill_id == "s1"
+
+    def test_backslash_in_name_is_literal(self, repo):
+        repo.save(_make_record(skill_id="s1", name="path\\to\\skill"))
+        results = repo.search(name="path\\to")
+        assert len(results) == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  F4: JSON Safety in _to_record
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestJsonSafety:
+    """_to_record should survive malformed JSON in lineage_content_snapshot."""
+
+    def test_malformed_snapshot_falls_back_to_empty_dict(self, repo):
+        """Insert a record, corrupt the JSON, then load it."""
+        record = _make_record(skill_id="corrupt1", name="corrupt_test")
+        repo.save(record)
+
+        # Directly corrupt the snapshot column
+        repo._conn.execute(
+            "UPDATE skill_records SET lineage_content_snapshot = ? WHERE skill_id = ?",
+            ("NOT VALID JSON {{{", "corrupt1"),
+        )
+        repo._conn.commit()
+
+        loaded = repo.get("corrupt1")
+        assert loaded is not None
+        assert loaded.lineage.content_snapshot == {}
+
+    def test_empty_snapshot_falls_back_to_empty_dict(self, repo):
+        record = _make_record(skill_id="empty1", name="empty_test")
+        repo.save(record)
+
+        repo._conn.execute(
+            "UPDATE skill_records SET lineage_content_snapshot = '' WHERE skill_id = ?",
+            ("empty1",),
+        )
+        repo._conn.commit()
+
+        loaded = repo.get("empty1")
+        assert loaded is not None
+        assert loaded.lineage.content_snapshot == {}

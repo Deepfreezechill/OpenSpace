@@ -136,16 +136,20 @@ class SkillRepository:
         db_path: Path to the SQLite database file.
         conn: Optional existing SQLite connection (for embedding in SkillStore).
                If provided, the repository will NOT own or close this connection.
+        lock: Optional :class:`threading.Lock` to use instead of creating a
+              private one.  When sharing a connection with another component
+              (e.g. ``SkillStore``), pass the same lock to avoid dual-mutex.
     """
 
     def __init__(
         self,
         db_path: Optional[Path] = None,
         conn: Optional[sqlite3.Connection] = None,
+        lock: Optional[threading.Lock] = None,
     ) -> None:
         self._owns_conn = conn is None
         self._closed = False
-        self._mu = threading.Lock()
+        self._mu = lock if lock is not None else threading.Lock()
 
         if conn is not None:
             self._conn = conn
@@ -349,8 +353,9 @@ class SkillRepository:
                 conditions.append("sr.is_active = 1")
 
             if name is not None:
-                conditions.append("sr.name LIKE ?")
-                params.append(f"%{name}%")
+                escaped = name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                conditions.append("sr.name LIKE ? ESCAPE '\\'")
+                params.append(f"%{escaped}%")
 
             if category is not None:
                 conditions.append("sr.category = ?")
@@ -533,7 +538,10 @@ class SkillRepository:
         ]
 
         raw_snapshot = row["lineage_content_snapshot"] or "{}"
-        snapshot: Dict[str, str] = json.loads(raw_snapshot)
+        try:
+            snapshot: Dict[str, str] = json.loads(raw_snapshot)
+        except json.JSONDecodeError:
+            snapshot = {}
 
         lineage = SkillLineage(
             origin=SkillOrigin(row["lineage_origin"]),

@@ -193,8 +193,9 @@ class SkillStore:
         self._conn = self._make_connection(read_only=False)
         self._init_db()
 
-        # CRUD repository (Epic 3.2) — delegates data-access operations
-        self._repo = SkillRepository(conn=self._conn)
+        # CRUD repository (Epic 3.2) — delegates simple CRUD operations.
+        # Shares our lock to avoid dual-mutex on the same connection.
+        self._repo = SkillRepository(conn=self._conn, lock=self._mu)
 
         logger.debug(f"SkillStore ready at {self._db_path}")
 
@@ -504,13 +505,38 @@ class SkillStore:
     # Sync write implementations (thread-safe via self._mu)
     @_db_retry()
     def _save_record_sync(self, record: SkillRecord) -> None:
+        """Persist a SkillRecord including its recent_analyses.
+
+        NOT delegated to SkillRepository — analyses persistence is
+        handled by SkillStore._upsert until Epic 3.4 (AnalysisStore).
+        """
         self._ensure_open()
-        self._repo.save(record)
+        with self._mu:
+            self._conn.execute("BEGIN")
+            try:
+                self._upsert(record)
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
 
     @_db_retry()
     def _save_records_sync(self, records: List[SkillRecord]) -> None:
+        """Batch persist SkillRecords including their recent_analyses.
+
+        NOT delegated to SkillRepository — analyses persistence is
+        handled by SkillStore._upsert until Epic 3.4 (AnalysisStore).
+        """
         self._ensure_open()
-        self._repo.save_many(records)
+        with self._mu:
+            self._conn.execute("BEGIN")
+            try:
+                for r in records:
+                    self._upsert(r)
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
 
     @_db_retry()
     def _record_analysis_sync(self, analysis: ExecutionAnalysis) -> None:
@@ -619,19 +645,41 @@ class SkillStore:
     # Read API (sync, each call opens its own read-only conn)
     @_db_retry()
     def load_record(self, skill_id: str) -> Optional[SkillRecord]:
-        """Load a single :class:`SkillRecord` by id."""
-        return self._repo.get(skill_id)
+        """Load a single :class:`SkillRecord` by id, including recent_analyses.
+
+        NOT delegated to SkillRepository — analysis hydration is
+        handled by SkillStore._to_record until Epic 3.4 (AnalysisStore).
+        """
+        with self._reader() as conn:
+            row = conn.execute(
+                "SELECT * FROM skill_records WHERE skill_id=?",
+                (skill_id,),
+            ).fetchone()
+            return self._to_record(conn, row) if row else None
 
     @_db_retry()
     def load_all(self, *, active_only: bool = False) -> Dict[str, SkillRecord]:
-        """Load skill records, keyed by ``skill_id``.
+        """Load skill records, keyed by ``skill_id``, including recent_analyses.
+
+        NOT delegated to SkillRepository — analysis hydration is
+        handled by SkillStore._to_record until Epic 3.4 (AnalysisStore).
 
         Args:
             active_only: If True, only return records with ``is_active=True``.
         """
-        result = self._repo.list_all(active_only=active_only)
-        logger.info(f"Loaded {len(result)} skill records (active_only={active_only})")
-        return result
+        with self._reader() as conn:
+            if active_only:
+                rows = conn.execute(
+                    "SELECT * FROM skill_records WHERE is_active=1"
+                ).fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM skill_records").fetchall()
+            result: Dict[str, SkillRecord] = {}
+            for row in rows:
+                rec = self._to_record(conn, row)
+                result[rec.skill_id] = rec
+            logger.info(f"Loaded {len(result)} skill records (active_only={active_only})")
+            return result
 
     @_db_retry()
     def load_active(self) -> Dict[str, SkillRecord]:
@@ -1240,7 +1288,10 @@ class SkillStore:
         # Deserialize content_snapshot: stored as JSON dict
         # mapping relative file paths to their text content
         raw_snapshot = row["lineage_content_snapshot"] or "{}"
-        snapshot: Dict[str, str] = json.loads(raw_snapshot)
+        try:
+            snapshot: Dict[str, str] = json.loads(raw_snapshot)
+        except json.JSONDecodeError:
+            snapshot = {}
 
         lineage = SkillLineage(
             origin=SkillOrigin(row["lineage_origin"]),
