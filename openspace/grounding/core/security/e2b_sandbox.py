@@ -57,12 +57,12 @@ class E2BSandbox(BaseSandbox):
                 "'pip install e2b-code-interpreter'."
             )
         
-        # Get API key from options or environment
-        self.api_key = options.get("api_key") or os.environ.get("E2B_API_KEY")
+        # API key MUST come from environment only (never caller-supplied options)
+        self.api_key = os.environ.get("E2B_API_KEY")
         if not self.api_key:
             raise ValueError(
-                "E2B API key is required. Provide it via 'options.api_key'"
-                " or the E2B_API_KEY environment variable."
+                "E2B API key is required. Set the E2B_API_KEY environment variable. "
+                "Caller-supplied API keys are not accepted for security."
             )
         
         # Get sandbox configuration

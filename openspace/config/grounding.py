@@ -105,7 +105,7 @@ class WebConfig(BackendConfig):
 
 class MCPConfig(BackendConfig):
     """MCP backend configuration"""
-    sandbox: bool = Field(False, description="Whether to enable sandbox")
+    sandbox: bool = Field(True, description="Whether to enable sandbox (enforced by default for security)")
     auto_initialize: bool = Field(True, description="Whether to auto initialize")
     eager_sessions: bool = Field(False, description="Whether to eagerly create sessions for all servers on initialization")
     retry_interval: float = Field(2.0, ge=0.1, le=60.0, description="Wait time between retries in seconds")
@@ -220,6 +220,14 @@ class SkillConfig(BaseModel):
     max_select: int = Field(
         2, ge=1, le=20,
         description="Maximum number of skills to inject per task"
+    )
+    auto_import_enabled: bool = Field(
+        False,
+        description=(
+            "Allow automatic import of cloud skills. "
+            "Disabled by default — importing untrusted code is a "
+            "supply-chain risk until a trust-tier system is in place."
+        ),
     )
 
 

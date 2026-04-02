@@ -184,12 +184,6 @@ class ExecutionAnalyzer:
             return existing
 
         try:
-            from gdpval_bench.token_tracker import set_call_source, reset_call_source
-            _src_tok = set_call_source("analyzer")
-        except ImportError:
-            _src_tok = None
-
-        try:
             # 1. Load recording artifacts
             context = self._load_recording_context(rec_path, execution_result)
             if context is None:
@@ -232,9 +226,6 @@ class ExecutionAnalyzer:
         except Exception as e:
             logger.error(f"Execution analysis failed for task {task_id}: {e}")
             return None
-        finally:
-            if _src_tok is not None:
-                reset_call_source(_src_tok)
 
     async def get_evolution_candidates(
         self, limit: int = 20

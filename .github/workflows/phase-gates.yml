@@ -1,0 +1,49 @@
+name: Phase Gate Monitor
+on:
+  issues:
+    types: [closed]
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday at 9 AM UTC
+
+jobs:
+  check-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check milestone completion
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const milestones = await github.rest.issues.listMilestones({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+
+            for (const ms of milestones.data) {
+              const total = ms.open_issues + ms.closed_issues;
+              if (total === 0) continue;
+
+              const pct = Math.round((ms.closed_issues / total) * 100);
+
+              // Phase complete!
+              if (ms.open_issues === 0) {
+                // Check if we already created a completion issue
+                const existing = await github.rest.issues.listForRepo({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  labels: 'phase-complete',
+                  state: 'all'
+                });
+                const alreadyDone = existing.data.some(i => i.title.includes(ms.title));
+                if (alreadyDone) continue;
+
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: `🎉 ${ms.title} — COMPLETE (${total} tasks)`,
+                  body: `## ✅ Phase Complete\n\nAll **${total}** tasks in **${ms.title}** are done.\n\n### Gate Checklist\n- [ ] All tests pass\n- [ ] Manual smoke test passed\n- [ ] No P0 bugs open\n- [ ] ADRs written for any plan deviations\n- [ ] Ready to begin next phase\n\n### Summary\nPhase closed automatically when all ${total} issues were resolved.`,
+                  labels: ['phase-complete']
+                });
+                console.log(`🎉 ${ms.title} complete!`);
+              }
+            }

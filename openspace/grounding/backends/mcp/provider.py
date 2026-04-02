@@ -39,7 +39,7 @@ class MCPProvider(Provider[MCPSession]):
         super().__init__(BackendType.MCP, config)
         
         # Extract MCP-specific configuration
-        sandbox = get_config_value(config, "sandbox", False)
+        sandbox = get_config_value(config, "sandbox", True)
         timeout = get_config_value(config, "timeout", 30)
         sse_read_timeout = get_config_value(config, "sse_read_timeout", 300.0)
         max_retries = get_config_value(config, "max_retries", 3)

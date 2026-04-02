@@ -73,3 +73,8 @@ openspace/skills/*
 node_modules/
 # Frontend local dependency link
 frontend/node_modules
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml

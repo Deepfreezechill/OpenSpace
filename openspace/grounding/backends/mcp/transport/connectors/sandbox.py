@@ -16,6 +16,7 @@ from openspace.utils.logging import Logger
 from openspace.grounding.backends.mcp.transport.task_managers import SseConnectionManager
 from openspace.grounding.core.security import BaseSandbox
 from openspace.grounding.backends.mcp.transport.connectors.base import MCPBaseConnector
+from openspace.security.env_filter import get_safe_env, ENV_ALLOWLIST
 
 logger = Logger.get_logger(__name__)
 
@@ -54,7 +55,12 @@ class SandboxConnector(MCPBaseConnector):
         # Store user command configuration
         self.user_command = command
         self.user_args = args or []
-        self.user_env = env or {}
+        # Filter env vars through the security allowlist so that host
+        # secrets (API keys, tokens, DB URLs) never reach the sandbox.
+        raw_env = env or {}
+        self.user_env = {
+            k: v for k, v in raw_env.items() if k in ENV_ALLOWLIST
+        }
         self.port = port
         
         # Create a placeholder connection manager (will be set up in connect())

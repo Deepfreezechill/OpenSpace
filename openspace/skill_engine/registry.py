@@ -454,12 +454,6 @@ class SkillRegistry:
         }
 
         try:
-            from gdpval_bench.token_tracker import set_call_source, reset_call_source
-            _src_tok = set_call_source("skill_select")
-        except ImportError:
-            _src_tok = None
-
-        try:
             llm_kwargs = {}
             if model:
                 llm_kwargs["model"] = model
@@ -498,9 +492,6 @@ class SkillRegistry:
             selection_record["method"] = "llm_failed"
             selection_record["selected"] = []
             return [], selection_record
-        finally:
-            if _src_tok is not None:
-                reset_call_source(_src_tok)
 
     def _prefilter_skills(
         self,

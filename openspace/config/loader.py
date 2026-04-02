@@ -33,12 +33,24 @@ def _deep_merge_dict(base: dict, update: dict) -> dict:
             result[key] = value
     return result
 
-def _load_json_file(path: Path) -> Dict[str, Any]:
+def _load_json_file(path: Path, *, critical: bool = False) -> Dict[str, Any]:
     """Load single JSON configuration file.
     
-    This function wraps the generic load_json_file and adds global configuration specific error handling and logging.
+    This function wraps the generic load_json_file and adds global
+    configuration specific error handling and logging.
+    
+    Args:
+        path: Path to JSON file.
+        critical: If True, raise on parse errors instead of returning {}.
+                  Use for security-critical config files where silent
+                  fallback to empty dict could weaken security posture.
     """
     if not path.exists():
+        if critical:
+            raise FileNotFoundError(
+                f"Critical configuration file missing: {path}. "
+                "Cannot start with potentially insecure defaults."
+            )
         logger.debug(f"Configuration file does not exist, skipping: {path}")
         return {}
     
@@ -47,17 +59,32 @@ def _load_json_file(path: Path) -> Dict[str, Any]:
         logger.info(f"Loaded configuration file: {path}")
         return data
     except Exception as e:
+        if critical:
+            raise RuntimeError(
+                f"Failed to parse critical configuration file {path}: {e}. "
+                "Refusing to start with potentially insecure defaults."
+            ) from e
         logger.warning(f"Failed to load configuration file {path}: {e}")
         return {}
 
-def _load_multiple_files(paths: Iterable[Path]) -> Dict[str, Any]:
-    """Load configuration from multiple files"""
+def _load_multiple_files(paths: Iterable[Path], critical_files: frozenset[str] = frozenset()) -> Dict[str, Any]:
+    """Load configuration from multiple files.
+    
+    Args:
+        paths: Config file paths to load and merge.
+        critical_files: Filenames (not full paths) that must not fail silently.
+    """
     merged = {}
     for path in paths:
-        data = _load_json_file(path)
+        is_critical = path.name in critical_files
+        data = _load_json_file(path, critical=is_critical)
         if data:
             merged = _deep_merge_dict(merged, data)
     return merged
+
+# Security config must not fail silently — malformed security config
+# could silently disable sandbox enforcement.
+_CRITICAL_CONFIG_FILES = frozenset({CONFIG_SECURITY})
 
 def load_config(*config_paths: Union[str, Path]) -> GroundingConfig:
     """
@@ -76,7 +103,9 @@ def load_config(*config_paths: Union[str, Path]) -> GroundingConfig:
             ]
         
         # Load and merge configuration
-        raw_data = _load_multiple_files(paths)
+        # Security config is marked critical — parse errors raise instead of
+        # silently falling back to defaults (which could disable sandbox).
+        raw_data = _load_multiple_files(paths, critical_files=_CRITICAL_CONFIG_FILES)
         
         # Load MCP configuration (separate processing)
         # Check if mcpServers already provided in merged custom configs
@@ -98,11 +127,17 @@ def load_config(*config_paths: Union[str, Path]) -> GroundingConfig:
                 logger.debug(f"Loaded MCP servers from default config_mcp.json ({len(raw_data['mcp']['servers'])} servers)")
         
         # Validate and create configuration object
+        # Fail-closed: invalid config raises instead of silently falling back
+        # to defaults (which could disable sandbox enforcement)
         try:
             _config = GroundingConfig.model_validate(raw_data)
         except Exception as e:
-            logger.error(f"Validation failed, using default configuration: {e}")
-            _config = GroundingConfig()
+            logger.error(f"Configuration validation failed: {e}")
+            raise RuntimeError(
+                f"GroundingConfig validation failed — refusing to start with "
+                f"potentially insecure defaults. Fix the config or remove it "
+                f"to use secure defaults. Error: {e}"
+            ) from e
         
         # Adjust log level according to configuration
         if _config.debug:

@@ -22,7 +22,6 @@ import json
 import logging
 import os
 import sys
-import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -198,6 +197,20 @@ def _get_store():
     return _standalone_store
 
 
+def _is_auto_import_enabled() -> bool:
+    """Check whether cloud auto-import is enabled in SkillConfig.
+
+    Returns ``False`` (safe default) if the config is unavailable or the
+    flag is not explicitly set to ``True``.  This ensures that untrusted
+    cloud skills are never imported without an explicit opt-in.
+    """
+    if _openspace_instance and _openspace_instance.is_initialized():
+        gc = getattr(_openspace_instance, "_grounding_config", None)
+        if gc and gc.skills:
+            return gc.skills.auto_import_enabled
+    return False
+
+
 def _get_cloud_client():
     """Get a OpenSpaceClient instance (raises CloudError if not configured)."""
     from openspace.cloud.auth import get_openspace_auth
@@ -321,7 +334,14 @@ async def _cloud_search_and_import(task: str, limit: int = 8) -> List[Dict[str, 
     that stage 2 has a larger pool to choose from.  The two BM25 passes
     are NOT redundant — stage 1 filters thousands of cloud candidates down
     to a manageable import set; stage 2 makes the final task-specific choice.
+
+    Returns an empty list immediately when ``auto_import_enabled`` is
+    ``False`` (the default) — untrusted cloud code is never imported
+    without an explicit opt-in.
     """
+    if not _is_auto_import_enabled():
+        logger.debug("Cloud auto-import is disabled (auto_import_enabled=False)")
+        return []
     try:
         from openspace.cloud.search import (
             SkillSearchEngine, build_cloud_candidates,
@@ -381,7 +401,12 @@ async def _cloud_search_and_import(task: str, limit: int = 8) -> List[Dict[str, 
 
 
 async def _do_import_cloud_skill(skill_id: str, target_dir: Optional[str] = None) -> Dict[str, Any]:
-    """Download a cloud skill and register it locally."""
+    """Download a cloud skill and register it locally.
+
+    Refuses to proceed when ``auto_import_enabled`` is ``False``.
+    """
+    if not _is_auto_import_enabled():
+        return {"status": "blocked", "reason": "auto_import_enabled is False"}
     client = _get_cloud_client()
 
     if target_dir:
@@ -476,8 +501,10 @@ def _json_ok(data: Any) -> str:
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 
-def _json_error(error: Any, **extra) -> str:
-    return json.dumps({"error": str(error), **extra}, ensure_ascii=False)
+def _json_error(error_msg: str, *, error_code: str = "VALIDATION_ERROR") -> str:
+    """Return a structured error for validation / not-found cases."""
+    from openspace.errors import safe_error_response
+    return safe_error_response(error_code, error_msg)
 
 
 # MCP Tools (4 tools)
@@ -556,8 +583,8 @@ async def execute_task(
         return _json_ok(formatted)
 
     except Exception as e:
-        logger.error(f"execute_task failed: {e}", exc_info=True)
-        return _json_error(e, status="error", traceback=traceback.format_exc(limit=5))
+        from openspace.errors import handle_mcp_exception, EXECUTION_ERROR
+        return handle_mcp_exception(e, tool_name="execute_task", error_code=EXECUTION_ERROR)
 
 
 @mcp.tool()
@@ -621,7 +648,7 @@ async def search_skills(
 
         _AUTO_IMPORT_MAX = 3
         import_summary: List[Dict[str, Any]] = []
-        if auto_import:
+        if auto_import and _is_auto_import_enabled():
             cloud_results = [
                 r for r in results
                 if r.get("source") == "cloud"
@@ -642,11 +669,12 @@ async def search_skills(
                         cr["auto_imported"] = True
                         cr["local_path"] = imp_result.get("local_path", "")
                 except Exception as imp_err:
-                    logger.warning(f"auto_import failed for {cr['skill_id']}: {imp_err}")
+                    logger.warning(f"auto_import failed for {cr['skill_id']}: {imp_err}",
+                                   exc_info=True)
                     import_summary.append({
                         "skill_id": cr["skill_id"],
                         "import_status": "error",
-                        "error": str(imp_err),
+                        "error": "Cloud skill import failed",
                     })
 
         output: Dict[str, Any] = {"results": results, "count": len(results)}
@@ -655,8 +683,8 @@ async def search_skills(
         return _json_ok(output)
 
     except Exception as e:
-        logger.error(f"search_skills failed: {e}", exc_info=True)
-        return _json_error(e)
+        from openspace.errors import handle_mcp_exception, EXECUTION_ERROR
+        return handle_mcp_exception(e, tool_name="search_skills", error_code=EXECUTION_ERROR)
 
 
 @mcp.tool()
@@ -698,19 +726,19 @@ async def fix_skill(
         skill_path = Path(skill_dir)
         skill_md = skill_path / "SKILL.md"
         if not skill_md.exists():
-            return _json_error(f"SKILL.md not found in {skill_dir}")
+            return _json_error("SKILL.md not found in the specified skill directory", error_code="SKILL_NOT_FOUND")
 
         openspace = await _get_openspace()
         registry = openspace._skill_registry
         if not registry:
-            return _json_error("SkillRegistry not initialized")
+            return _json_error("SkillRegistry not initialized", error_code="INTERNAL_ERROR")
         if not openspace._skill_evolver:
-            return _json_error("Skill evolution is not enabled")
+            return _json_error("Skill evolution is not enabled", error_code="INTERNAL_ERROR")
 
         # Step 1: Register the skill (idempotent)
         meta = registry.register_skill_dir(skill_path)
         if not meta:
-            return _json_error(f"Failed to register skill from {skill_dir}")
+            return _json_error("Failed to register skill from the specified directory", error_code="SKILL_NOT_FOUND")
 
         store = _get_store()
         await store.sync_from_registry([meta])
@@ -718,12 +746,12 @@ async def fix_skill(
         # Step 2: Load record + content
         rec = store.load_record(meta.skill_id)
         if not rec:
-            return _json_error(f"Failed to load skill record for {meta.skill_id}")
+            return _json_error("Failed to load skill record", error_code="SKILL_NOT_FOUND")
 
         evolver = openspace._skill_evolver
         content = evolver._load_skill_content(rec)
         if not content:
-            return _json_error(f"Cannot load content for skill: {meta.skill_id}")
+            return _json_error("Cannot load content for the specified skill", error_code="SKILL_NOT_FOUND")
 
         # Step 3: Run FIX evolution
         recent = store.load_analyses(skill_id=meta.skill_id, limit=5)
@@ -773,8 +801,8 @@ async def fix_skill(
         })
 
     except Exception as e:
-        logger.error(f"fix_skill failed: {e}", exc_info=True)
-        return _json_error(e, status="error", traceback=traceback.format_exc(limit=5))
+        from openspace.errors import handle_mcp_exception, EXECUTION_ERROR
+        return handle_mcp_exception(e, tool_name="fix_skill", error_code=EXECUTION_ERROR)
 
 
 @mcp.tool()
@@ -818,7 +846,7 @@ async def upload_skill(
     try:
         skill_path = Path(skill_dir)
         if not (skill_path / "SKILL.md").exists():
-            return _json_error(f"SKILL.md not found in {skill_dir}")
+            return _json_error("SKILL.md not found in the specified skill directory", error_code="SKILL_NOT_FOUND")
 
         # Read pre-saved metadata (written by execute_task/fix_skill)
         meta = _read_upload_meta(skill_path)
@@ -844,22 +872,90 @@ async def upload_skill(
         return _json_ok(result)
 
     except Exception as e:
-        logger.error(f"upload_skill failed: {e}", exc_info=True)
-        return _json_error(e, status="error", traceback=traceback.format_exc(limit=5))
+        from openspace.errors import handle_mcp_exception, EXECUTION_ERROR
+        return handle_mcp_exception(e, tool_name="upload_skill", error_code=EXECUTION_ERROR)
 
 def run_mcp_server() -> None:
-    """Console-script entry point for ``openspace-mcp``."""
+    """Console-script entry point for ``openspace-mcp``.
+
+    For HTTP transports (SSE, streamable-http), bearer token auth is
+    REQUIRED.  Set OPENSPACE_MCP_BEARER_TOKEN in the environment.
+    The server refuses to start without it (fail-closed).
+
+    For stdio transport, auth is not applicable (local process IPC).
+    """
     import argparse
 
+    import uvicorn
+
+    from openspace.auth.bearer import (
+        BEARER_TOKEN_ENV,
+        BearerTokenMiddleware,
+        get_bearer_token,
+        validate_token_strength,
+    )
+    from openspace.auth.rate_limit import RateLimitMiddleware
+
     parser = argparse.ArgumentParser(description="OpenSpace MCP Server")
-    parser.add_argument("--transport", choices=["stdio", "sse"], default="stdio")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse", "streamable-http"],
+        default="stdio",
+    )
     parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--host", type=str, default="127.0.0.1")
     args = parser.parse_args()
 
-    if args.transport == "sse":
-        mcp.run(transport="sse", sse_params={"port": args.port})
-    else:
+    if args.transport == "stdio":
         mcp.run(transport="stdio")
+        return
+
+    # --- HTTP transports: enforce bearer token auth (fail-closed) ---
+    token = get_bearer_token()
+    if not token:
+        logger.critical(
+            "FAIL-CLOSED: %s not set. Refusing to start %s transport "
+            "without authentication. Set the environment variable or "
+            "use --transport stdio for local-only access.",
+            BEARER_TOKEN_ENV,
+            args.transport,
+        )
+        sys.exit(1)
+
+    token_ok, reason = validate_token_strength(token)
+    if not token_ok:
+        logger.critical("FAIL-CLOSED: %s — %s", BEARER_TOKEN_ENV, reason)
+        sys.exit(1)
+
+    if args.transport == "sse":
+        starlette_app = mcp.sse_app()
+    else:
+        starlette_app = mcp.streamable_http_app()
+
+    # Middleware chain: request → BearerAuth → RateLimit → MCP app
+    # Auth is outermost: unauthenticated floods are rejected immediately
+    # (cheap hmac check) before any rate-limit state is created.
+    # This prevents memory DoS via fake tokens from unauthenticated requests.
+    rate_limited_app = RateLimitMiddleware(starlette_app)
+    protected_app = BearerTokenMiddleware(rate_limited_app, token)
+
+    logger.info(
+        "Starting MCP server with bearer auth + rate limiting on %s:%d (%s transport)",
+        args.host,
+        args.port,
+        args.transport,
+    )
+
+    config = uvicorn.Config(
+        protected_app,
+        host=args.host,
+        port=args.port,
+        log_level="info",
+    )
+    server = uvicorn.Server(config)
+    import anyio
+
+    anyio.run(server.serve)
 
 
 if __name__ == "__main__":

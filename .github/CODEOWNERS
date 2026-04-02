@@ -1,0 +1,11 @@
+# Phase Gate Enforcement — Protected Files
+# ==========================================
+# Changes to enforcement infrastructure require admin review.
+# This mitigates the PR-self-modification attack vector where
+# a PR modifies phase-config.yml or workflow files to weaken gates.
+
+# All GitHub configuration (workflows, config, templates)
+.github/** @Deepfreezechill
+
+# Enforcement documentation
+docs/enforcement/** @Deepfreezechill

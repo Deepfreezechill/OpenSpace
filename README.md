@@ -1,3 +1,5 @@
+[![CI](https://github.com/Deepfreezechill/openspace-upgrade/actions/workflows/ci.yml/badge.svg)](https://github.com/Deepfreezechill/openspace-upgrade/actions/workflows/ci.yml)
+
 <div align="center">
 
 <picture>

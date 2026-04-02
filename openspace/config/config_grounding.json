@@ -14,7 +14,7 @@
     "timeout": 30,
     "max_retries": 3,
     "retry_interval": 2.0,
-    "sandbox": false,
+    "sandbox": true,
     "auto_initialize": true,
     "eager_sessions": false,
     "sse_read_timeout": 300.0,
