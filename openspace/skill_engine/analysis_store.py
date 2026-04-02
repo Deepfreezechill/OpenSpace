@@ -108,7 +108,7 @@ class AnalysisStore:
     Usage (standalone)::
 
         store = AnalysisStore(db_path=Path("analyses.db"))
-        await store.record_execution_analysis(analysis)
+        store.record_execution_analysis(analysis)
         recent = store.load_analyses(skill_id="some_skill")
         store.close()
 
@@ -221,7 +221,7 @@ class AnalysisStore:
         with self._mu:
             self._conn.execute("BEGIN")
             try:
-                analysis_id = self._insert_analysis(analysis)
+                analysis_id = self.insert_analysis(analysis)
                 self._conn.commit()
             except Exception:
                 self._conn.rollback()
@@ -243,8 +243,9 @@ class AnalysisStore:
         """
         with self._reader() as conn:
             if skill_id is not None:
+                # Use DISTINCT to avoid duplicate analyses when multiple judgments match
                 rows = conn.execute(
-                    "SELECT ea.* FROM execution_analyses ea "
+                    "SELECT DISTINCT ea.* FROM execution_analyses ea "
                     "JOIN skill_judgments sj ON ea.id = sj.analysis_id "
                     "WHERE sj.skill_id = ? "
                     "ORDER BY ea.timestamp DESC LIMIT ?",
@@ -300,8 +301,9 @@ class AnalysisStore:
                 so filtering uses exact match.
         """
         with self._reader() as conn:
+            # Use DISTINCT to avoid duplicate analyses when multiple judgments match
             analysis_rows = conn.execute(
-                "SELECT ea.* FROM execution_analyses ea "
+                "SELECT DISTINCT ea.* FROM execution_analyses ea "
                 "JOIN skill_judgments sj ON ea.id = sj.analysis_id "
                 "WHERE sj.skill_id = ? "
                 "ORDER BY ea.timestamp DESC LIMIT ?",
@@ -361,21 +363,25 @@ class AnalysisStore:
                             (a.task_id,),
                         ).fetchone()
                         if existing is None:
-                            self._insert_analysis(a)
+                            self.insert_analysis(a)
                     self._conn.commit()
                 except Exception:
                     self._conn.rollback()
                     raise
         else:
             # Shared connection mode - assume caller has transaction and lock
-            # No mutex acquisition needed, just do the work
+            # Validate ALL analyses first before inserting any to ensure atomicity
+            for a in analyses:
+                a.validate()
+            
+            # Then insert all (caller's transaction guarantees atomicity)
             for a in analyses:
                 existing = self._conn.execute(
                     "SELECT id FROM execution_analyses WHERE task_id=?",
                     (a.task_id,),
                 ).fetchone()
                 if existing is None:
-                    self._insert_analysis(a)
+                    self.insert_analysis(a)
 
     @_db_retry()
     def clear_all_analyses(self) -> None:
@@ -435,7 +441,7 @@ class AnalysisStore:
                 "timestamp": row["timestamp"],
                 "task_completed": bool(row["task_completed"]),
                 "execution_note": row["execution_note"],
-                "tool_issues": json.loads(row["tool_issues"]),
+                "tool_issues": AnalysisStore._safe_json_loads(row["tool_issues"], []),
                 "candidate_for_evolution": bool(row["candidate_for_evolution"]),
                 "evolution_suggestions": evo_suggestions,
                 "analyzed_by": row["analyzed_by"],
@@ -464,9 +470,17 @@ class AnalysisStore:
                 "evolution_candidates": n_candidates,
             }
 
+    @staticmethod
+    def _safe_json_loads(json_str: str, default: Any) -> Any:
+        """Safely parse JSON string, returning default on error."""
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            return default
+
     # ── Private Helpers ────────────────────────────────────────────────
 
-    def _insert_analysis(self, a: ExecutionAnalysis) -> int:
+    def insert_analysis(self, a: ExecutionAnalysis) -> int:
         """Insert an execution_analyses row + its skill_judgments.
 
         Called within a transaction holding ``self._mu``.
@@ -537,7 +551,7 @@ class AnalysisStore:
             timestamp=datetime.fromisoformat(row["timestamp"]),
             task_completed=bool(row["task_completed"]),
             execution_note=row["execution_note"],
-            tool_issues=json.loads(row["tool_issues"]),
+            tool_issues=AnalysisStore._safe_json_loads(row["tool_issues"], []),
             skill_judgments=[
                 SkillJudgment(
                     skill_id=jr["skill_id"],

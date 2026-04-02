@@ -567,7 +567,7 @@ class SkillStore:
             self._conn.execute("BEGIN")
             try:
                 # Delegate analysis storage to AnalysisStore (Epic 3.4)
-                self._analyses._insert_analysis(analysis)
+                self._analyses.insert_analysis(analysis)
 
                 # Update skill counters in skill_records (remains in SkillStore)
                 now_iso = datetime.now().isoformat()

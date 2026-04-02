@@ -407,3 +407,123 @@ def test_analysis_store_integration_with_skill_store(temp_db_path):
     assert summary["task_id"] == "integration_test"
     
     store.close()
+
+
+def test_duplicate_judgments_no_duplicate_analysis_rows(temp_db_path):
+    """Test that multiple judgments for same analysis don't create duplicate analysis rows."""
+    store = AnalysisStore(db_path=temp_db_path)
+    
+    # Create analysis with multiple judgments for same skill
+    analysis = ExecutionAnalysis(
+        task_id="duplicate_judgment_test",
+        timestamp=datetime.now(),
+        skill_judgments=[
+            SkillJudgment(skill_id="shared_skill", skill_applied=True, note="First judgment"),
+            SkillJudgment(skill_id="shared_skill", skill_applied=False, note="Second judgment"),
+            SkillJudgment(skill_id="other_skill", skill_applied=True, note="Other judgment"),
+        ]
+    )
+    
+    store.record_execution_analysis_sync(analysis)
+    
+    # Load analyses for the shared skill - should only get one analysis back
+    analyses = store.load_analyses(skill_id="shared_skill", limit=10)
+    assert len(analyses) == 1, "Should not get duplicate analysis rows due to multiple judgments"
+    assert analyses[0].task_id == "duplicate_judgment_test"
+    
+    # Load recent analyses - should also not have duplicates  
+    recent_analyses = store.load_recent_analyses_for_skill("shared_skill", limit=10)
+    assert len(recent_analyses) == 1, "Should not get duplicate analysis rows in recent analyses"
+    
+    store.close()
+
+
+def test_bulk_upsert_atomicity_with_validation_error(temp_db_path):
+    """Test that bulk_upsert with mixed valid/invalid analyses is all-or-nothing."""
+    import sqlite3
+    import threading
+    
+    # Test in shared connection mode where atomicity issue exists
+    conn = sqlite3.connect(str(temp_db_path))
+    conn.row_factory = sqlite3.Row
+    lock = threading.Lock()
+    
+    # Initialize DDL
+    from openspace.skill_engine.analysis_store import _DDL
+    conn.executescript(_DDL)
+    
+    store = AnalysisStore(conn=conn, lock=lock)
+    
+    # Create mix of valid and invalid analyses
+    valid_analysis1 = ExecutionAnalysis(
+        task_id="valid_1",
+        timestamp=datetime.now(),
+        execution_note="Valid analysis 1"
+    )
+    
+    valid_analysis2 = ExecutionAnalysis(
+        task_id="valid_2", 
+        timestamp=datetime.now(),
+        execution_note="Valid analysis 2"
+    )
+    
+    # Create invalid analysis (missing required task_id)
+    invalid_analysis = ExecutionAnalysis(
+        task_id="",  # Invalid empty task_id
+        timestamp=datetime.now(),
+        execution_note="Invalid analysis"
+    )
+    
+    analyses = [valid_analysis1, invalid_analysis, valid_analysis2]
+    
+    # Bulk upsert should fail due to invalid analysis
+    with pytest.raises(Exception):  # Should raise validation error
+        with lock:
+            conn.execute("BEGIN")
+            try:
+                store.bulk_upsert_analyses(analyses)
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+    
+    # Verify NO analyses were inserted (atomicity)
+    all_analyses = store.load_all_analyses()
+    assert len(all_analyses) == 0, "No analyses should be inserted when bulk operation fails"
+    
+    conn.close()
+
+
+def test_store_calls_public_insert_analysis_method(tmp_path):
+    """Test that store.py calls the public insert_analysis method (not private)."""
+    # This test verifies the layering fix - store.py should call public methods
+    temp_db_path = tmp_path / "test_public_method.db"
+    
+    from openspace.skill_engine.store import SkillStore
+    
+    store = SkillStore(db_path=temp_db_path)
+    
+    # Verify the AnalysisStore has public insert_analysis method
+    assert hasattr(store._analyses, 'insert_analysis'), "insert_analysis should be public"
+    
+    # Verify it's callable (not private)
+    assert callable(store._analyses.insert_analysis), "insert_analysis should be callable"
+    
+    # This should work without accessing private methods
+    analysis = ExecutionAnalysis(
+        task_id="public_method_test", 
+        timestamp=datetime.now(),
+        skill_judgments=[
+            SkillJudgment(skill_id="test_skill", skill_applied=True)
+        ]
+    )
+    
+    import asyncio
+    asyncio.run(store.record_analysis(analysis))
+    
+    # Verify it was recorded successfully
+    loaded = store.load_analyses_for_task("public_method_test")
+    assert loaded is not None
+    assert loaded.task_id == "public_method_test"
+    
+    store.close()
