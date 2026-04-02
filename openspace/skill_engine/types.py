@@ -2,10 +2,106 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from functools import total_ordering
 from typing import Any, ClassVar, Dict, List, Optional
+
+
+class ValidationError(Exception):
+    """Raised when a data type fails validation."""
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  SkillVersion — semantic versioning for skills
+# ═══════════════════════════════════════════════════════════════════════
+
+_VERSION_RE = re.compile(r"^(\d+)(?:\.(\d+))?(?:\.(\d+))?$")
+
+
+@total_ordering
+@dataclass(frozen=True)
+class SkillVersion:
+    """Semantic version (major.minor.patch) for skill revisions.
+
+    Supports parsing, comparison, bumping, and serialization.
+    """
+
+    major: int = 0
+    minor: int = 0
+    patch: int = 0
+
+    def __post_init__(self) -> None:
+        if self.major < 0 or self.minor < 0 or self.patch < 0:
+            raise ValueError(
+                f"Version components must be non-negative, got {self.major}.{self.minor}.{self.patch}"
+            )
+
+    # --- Parsing ---
+
+    @classmethod
+    def parse(cls, text: str) -> "SkillVersion":
+        """Parse a version string like ``'1.2.3'``, ``'1.2'``, or ``'1'``."""
+        m = _VERSION_RE.match(text.strip())
+        if not m:
+            raise ValueError(f"Invalid version string: {text!r}")
+        major = int(m.group(1))
+        minor = int(m.group(2)) if m.group(2) is not None else 0
+        patch = int(m.group(3)) if m.group(3) is not None else 0
+        return cls(major=major, minor=minor, patch=patch)
+
+    # --- Comparison ---
+
+    def _as_tuple(self) -> tuple[int, int, int]:
+        return (self.major, self.minor, self.patch)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SkillVersion):
+            return NotImplemented
+        return self._as_tuple() == other._as_tuple()
+
+    def __lt__(self, other: object) -> bool:
+        if not isinstance(other, SkillVersion):
+            return NotImplemented
+        return self._as_tuple() < other._as_tuple()
+
+    def __hash__(self) -> int:
+        return hash(self._as_tuple())
+
+    # --- Bumping ---
+
+    def bump_patch(self) -> "SkillVersion":
+        return SkillVersion(self.major, self.minor, self.patch + 1)
+
+    def bump_minor(self) -> "SkillVersion":
+        return SkillVersion(self.major, self.minor + 1, 0)
+
+    def bump_major(self) -> "SkillVersion":
+        return SkillVersion(self.major + 1, 0, 0)
+
+    # --- Serialization ---
+
+    def __str__(self) -> str:
+        return f"{self.major}.{self.minor}.{self.patch}"
+
+    def __repr__(self) -> str:
+        return f"SkillVersion({self.major}, {self.minor}, {self.patch})"
+
+    def to_dict(self) -> Dict[str, int]:
+        return {"major": self.major, "minor": self.minor, "patch": self.patch}
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SkillVersion":
+        try:
+            return cls(
+                major=int(data.get("major", 0)),
+                minor=int(data.get("minor", 0)),
+                patch=int(data.get("patch", 0)),
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"Invalid SkillVersion data: {exc}") from exc
 
 
 class SkillCategory(str, Enum):
@@ -126,6 +222,28 @@ class SkillLineage:
     created_at: datetime = field(default_factory=datetime.now)
     created_by: str = ""  # "human" | model name (version-level actor)
 
+    def validate(self) -> None:
+        """Validate lineage rules by origin type."""
+        if self.generation < 0:
+            raise ValidationError(f"generation must be >= 0, got {self.generation}")
+        origin = self.origin
+        parents = self.parent_skill_ids
+        if origin in (SkillOrigin.IMPORTED, SkillOrigin.CAPTURED):
+            if parents:
+                raise ValidationError(
+                    f"{origin.value} lineage must have no parents, got {len(parents)}"
+                )
+        elif origin == SkillOrigin.FIXED:
+            if len(parents) != 1:
+                raise ValidationError(
+                    f"FIXED lineage must have exactly 1 parent, got {len(parents)}"
+                )
+        elif origin == SkillOrigin.DERIVED:
+            if not parents:
+                raise ValidationError(
+                    "DERIVED lineage must have at least 1 parent"
+                )
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "origin": self.origin.value,
@@ -173,6 +291,11 @@ class SkillJudgment:
     skill_applied: bool = False  # Whether the skill was actually applied
     note: str = ""  # Per-skill observation (deviation, usage, etc.)
 
+    def validate(self) -> None:
+        """Validate judgment fields."""
+        if not self.skill_id:
+            raise ValidationError("skill_id must be non-empty")
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "skill_id": self.skill_id,
@@ -204,6 +327,26 @@ class EvolutionSuggestion:
     target_skill_ids: List[str] = field(default_factory=list)  # True skill_id(s)
     category: Optional[SkillCategory] = None  # Desired category of the result
     direction: str = ""  # Free-text: what to evolve / capture
+
+    def validate(self) -> None:
+        """Validate target rules per evolution type."""
+        et = self.evolution_type
+        targets = self.target_skill_ids
+        if et == EvolutionType.FIX:
+            if len(targets) != 1:
+                raise ValidationError(
+                    f"FIX suggestion must have exactly 1 target, got {len(targets)}"
+                )
+        elif et == EvolutionType.DERIVED:
+            if not targets:
+                raise ValidationError(
+                    "DERIVED suggestion must have at least 1 target"
+                )
+        elif et == EvolutionType.CAPTURED:
+            if targets:
+                raise ValidationError(
+                    f"CAPTURED suggestion must have no targets, got {len(targets)}"
+                )
 
     @property
     def target_skill_id(self) -> str:
@@ -287,6 +430,15 @@ class ExecutionAnalysis:
         """Filter evolution suggestions by type."""
         return [s for s in self.evolution_suggestions if s.evolution_type == evo_type]
 
+    def validate(self) -> None:
+        """Validate analysis fields and nested objects."""
+        if not self.task_id:
+            raise ValidationError("task_id must be non-empty")
+        for j in self.skill_judgments:
+            j.validate()
+        for s in self.evolution_suggestions:
+            s.validate()
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "task_id": self.task_id,
@@ -302,17 +454,20 @@ class ExecutionAnalysis:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ExecutionAnalysis":
-        return cls(
-            task_id=data["task_id"],
-            timestamp=datetime.fromisoformat(data["timestamp"]),
-            task_completed=data.get("task_completed", False),
-            execution_note=data.get("execution_note", ""),
-            tool_issues=data.get("tool_issues", []),
-            skill_judgments=[SkillJudgment.from_dict(j) for j in data.get("skill_judgments", [])],
-            evolution_suggestions=[EvolutionSuggestion.from_dict(s) for s in data.get("evolution_suggestions", [])],
-            analyzed_by=data.get("analyzed_by", ""),
-            analyzed_at=(datetime.fromisoformat(data["analyzed_at"]) if data.get("analyzed_at") else datetime.now()),
-        )
+        try:
+            return cls(
+                task_id=str(data["task_id"]),
+                timestamp=datetime.fromisoformat(data["timestamp"]),
+                task_completed=data.get("task_completed", False),
+                execution_note=data.get("execution_note", ""),
+                tool_issues=data.get("tool_issues", []),
+                skill_judgments=[SkillJudgment.from_dict(j) for j in data.get("skill_judgments", [])],
+                evolution_suggestions=[EvolutionSuggestion.from_dict(s) for s in data.get("evolution_suggestions", [])],
+                analyzed_by=data.get("analyzed_by", ""),
+                analyzed_at=(datetime.fromisoformat(data["analyzed_at"]) if data.get("analyzed_at") else datetime.now()),
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"Invalid ExecutionAnalysis data: {exc}") from exc
 
 
 # Full skill profile (identity + lineage + deps + quality)
@@ -385,6 +540,34 @@ class SkillRecord:
     # performed atomically in SQL by SkillStore.record_analysis().
     # Do NOT duplicate that logic here in Python.
 
+    def validate(self) -> None:
+        """Validate record fields and nested lineage."""
+        if not self.skill_id:
+            raise ValidationError("skill_id must be non-empty")
+        if not self.name:
+            raise ValidationError("name must be non-empty")
+        counters = {
+            "total_selections": self.total_selections,
+            "total_applied": self.total_applied,
+            "total_completions": self.total_completions,
+            "total_fallbacks": self.total_fallbacks,
+        }
+        for field_name, value in counters.items():
+            if value < 0:
+                raise ValidationError(f"{field_name} must be >= 0, got {value}")
+        if self.total_applied > self.total_selections:
+            raise ValidationError(
+                f"total_applied ({self.total_applied}) must not exceed "
+                f"total_selections ({self.total_selections})"
+            )
+        if self.total_completions > self.total_applied:
+            raise ValidationError(
+                f"total_completions ({self.total_completions}) must not exceed "
+                f"total_applied ({self.total_applied})"
+            )
+        if self.lineage is not None:
+            self.lineage.validate()
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "skill_id": self.skill_id,
@@ -410,30 +593,33 @@ class SkillRecord:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SkillRecord":
-        record = cls(
-            skill_id=data["skill_id"],
-            name=data["name"],
-            description=data.get("description", ""),
-            path=data.get("path", ""),
-            is_active=data.get("is_active", True),
-            category=SkillCategory(data["category"]) if data.get("category") else SkillCategory.WORKFLOW,
-            tags=data.get("tags", []),
-            visibility=(SkillVisibility(data["visibility"]) if data.get("visibility") else SkillVisibility.PRIVATE),
-            creator_id=data.get("creator_id", ""),
-            lineage=(
-                SkillLineage.from_dict(data["lineage"])
-                if data.get("lineage")
-                else SkillLineage(origin=SkillOrigin.IMPORTED)
-            ),
-            tool_dependencies=data.get("tool_dependencies", []),
-            critical_tools=data.get("critical_tools", []),
-            total_selections=data.get("total_selections", 0),
-            total_applied=data.get("total_applied", 0),
-            total_completions=data.get("total_completions", 0),
-            total_fallbacks=data.get("total_fallbacks", 0),
-            first_seen=(datetime.fromisoformat(data["first_seen"]) if data.get("first_seen") else datetime.now()),
-            last_updated=(datetime.fromisoformat(data["last_updated"]) if data.get("last_updated") else datetime.now()),
-        )
+        try:
+            record = cls(
+                skill_id=str(data["skill_id"]),
+                name=str(data["name"]),
+                description=data.get("description", ""),
+                path=data.get("path", ""),
+                is_active=data.get("is_active", True),
+                category=SkillCategory(data["category"]) if data.get("category") else SkillCategory.WORKFLOW,
+                tags=data.get("tags", []),
+                visibility=(SkillVisibility(data["visibility"]) if data.get("visibility") else SkillVisibility.PRIVATE),
+                creator_id=data.get("creator_id", ""),
+                lineage=(
+                    SkillLineage.from_dict(data["lineage"])
+                    if data.get("lineage")
+                    else SkillLineage(origin=SkillOrigin.IMPORTED)
+                ),
+                tool_dependencies=data.get("tool_dependencies", []),
+                critical_tools=data.get("critical_tools", []),
+                total_selections=int(data.get("total_selections", 0)),
+                total_applied=int(data.get("total_applied", 0)),
+                total_completions=int(data.get("total_completions", 0)),
+                total_fallbacks=int(data.get("total_fallbacks", 0)),
+                first_seen=(datetime.fromisoformat(data["first_seen"]) if data.get("first_seen") else datetime.now()),
+                last_updated=(datetime.fromisoformat(data["last_updated"]) if data.get("last_updated") else datetime.now()),
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"Invalid SkillRecord data: {exc}") from exc
         for a in data.get("recent_analyses", []):
             record.recent_analyses.append(ExecutionAnalysis.from_dict(a))
         return record

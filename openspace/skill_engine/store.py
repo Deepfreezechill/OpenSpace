@@ -35,6 +35,7 @@ from .types import (
     SkillOrigin,
     SkillRecord,
     SkillVisibility,
+    ValidationError,
 )
 
 logger = Logger.get_logger(__name__)
@@ -1089,6 +1090,12 @@ class SkillStore:
 
         Called within a transaction holding ``self._mu``.
         """
+        try:
+            record.validate()
+        except ValidationError as exc:
+            raise ValidationError(
+                f"Cannot persist invalid SkillRecord '{record.skill_id}': {exc}"
+            ) from exc
         lin = record.lineage
         # content_snapshot is Dict[str, str]; store as JSON text
         snapshot_json = json.dumps(lin.content_snapshot, ensure_ascii=False)
@@ -1204,6 +1211,12 @@ class SkillStore:
         Returns:
             int: The ``execution_analyses.id`` of the newly inserted row.
         """
+        try:
+            a.validate()
+        except ValidationError as exc:
+            raise ValidationError(
+                f"Cannot persist invalid ExecutionAnalysis '{a.task_id}': {exc}"
+            ) from exc
         cur = self._conn.execute(
             """
             INSERT INTO execution_analyses (
