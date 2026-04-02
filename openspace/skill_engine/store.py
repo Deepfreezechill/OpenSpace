@@ -26,6 +26,7 @@ from openspace.config.constants import PROJECT_ROOT
 from openspace.utils.logging import Logger
 
 from .patch import collect_skill_snapshot, compute_unified_diff
+from .skill_repository import SkillRepository
 from .types import (
     EvolutionSuggestion,
     ExecutionAnalysis,
@@ -191,6 +192,10 @@ class SkillStore:
         # Persistent write connection
         self._conn = self._make_connection(read_only=False)
         self._init_db()
+
+        # CRUD repository (Epic 3.2) — delegates data-access operations
+        self._repo = SkillRepository(conn=self._conn)
+
         logger.debug(f"SkillStore ready at {self._db_path}")
 
     def _make_connection(self, *, read_only: bool) -> sqlite3.Connection:
@@ -268,6 +273,10 @@ class SkillStore:
         if self._closed:
             return
         self._closed = True
+        try:
+            self._repo.close()
+        except Exception:
+            pass
         try:
             # Flush WAL → main DB so external readers see all data
             self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -496,27 +505,12 @@ class SkillStore:
     @_db_retry()
     def _save_record_sync(self, record: SkillRecord) -> None:
         self._ensure_open()
-        with self._mu:
-            self._conn.execute("BEGIN")
-            try:
-                self._upsert(record)
-                self._conn.commit()
-            except Exception:
-                self._conn.rollback()
-                raise
+        self._repo.save(record)
 
     @_db_retry()
     def _save_records_sync(self, records: List[SkillRecord]) -> None:
         self._ensure_open()
-        with self._mu:
-            self._conn.execute("BEGIN")
-            try:
-                for r in records:
-                    self._upsert(r)
-                self._conn.commit()
-            except Exception:
-                self._conn.rollback()
-                raise
+        self._repo.save_many(records)
 
     @_db_retry()
     def _record_analysis_sync(self, analysis: ExecutionAnalysis) -> None:
@@ -620,23 +614,13 @@ class SkillStore:
     @_db_retry()
     def _delete_record_sync(self, skill_id: str) -> bool:
         self._ensure_open()
-        with self._mu:
-            # ON DELETE CASCADE automatically cleans up lineage_parents / deps / tags
-            # skill_judgments are NOT cascade-deleted (no FK to skill_records)
-            cur = self._conn.execute("DELETE FROM skill_records WHERE skill_id=?", (skill_id,))
-            self._conn.commit()
-            return cur.rowcount > 0
+        return self._repo.delete(skill_id)
 
     # Read API (sync, each call opens its own read-only conn)
     @_db_retry()
     def load_record(self, skill_id: str) -> Optional[SkillRecord]:
         """Load a single :class:`SkillRecord` by id."""
-        with self._reader() as conn:
-            row = conn.execute(
-                "SELECT * FROM skill_records WHERE skill_id=?",
-                (skill_id,),
-            ).fetchone()
-            return self._to_record(conn, row) if row else None
+        return self._repo.get(skill_id)
 
     @_db_retry()
     def load_all(self, *, active_only: bool = False) -> Dict[str, SkillRecord]:
@@ -645,17 +629,9 @@ class SkillStore:
         Args:
             active_only: If True, only return records with ``is_active=True``.
         """
-        with self._reader() as conn:
-            if active_only:
-                rows = conn.execute("SELECT * FROM skill_records WHERE is_active=1").fetchall()
-            else:
-                rows = conn.execute("SELECT * FROM skill_records").fetchall()
-            result: Dict[str, SkillRecord] = {}
-            for row in rows:
-                rec = self._to_record(conn, row)
-                result[rec.skill_id] = rec
-            logger.info(f"Loaded {len(result)} skill records (active_only={active_only})")
-            return result
+        result = self._repo.list_all(active_only=active_only)
+        logger.info(f"Loaded {len(result)} skill records (active_only={active_only})")
+        return result
 
     @_db_retry()
     def load_active(self) -> Dict[str, SkillRecord]:
@@ -807,10 +783,7 @@ class SkillStore:
     @_db_retry()
     def count(self, *, active_only: bool = False) -> int:
         """Total number of skill records."""
-        with self._reader() as conn:
-            if active_only:
-                return conn.execute("SELECT COUNT(*) FROM skill_records WHERE is_active=1").fetchone()[0]
-            return conn.execute("SELECT COUNT(*) FROM skill_records").fetchone()[0]
+        return self._repo.count(active_only=active_only)
 
     # Analytics / Summary
     @_db_retry()
