@@ -9,3 +9,7 @@
 
 # Enforcement documentation
 docs/enforcement/** @Deepfreezechill
+
+# Autonomous loop control files — highest-leverage attack surface
+/AGENTS.md @Deepfreezechill
+/RUNBOOK.yaml @Deepfreezechill
