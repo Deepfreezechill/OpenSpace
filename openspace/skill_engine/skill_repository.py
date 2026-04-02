@@ -136,8 +136,9 @@ class SkillRepository:
         """Open a temporary read-only connection (WAL parallel reads)."""
         self._ensure_open()
         if not self._owns_conn:
-            # When sharing a connection, just use it directly
-            yield self._conn
+            # When sharing a connection, acquire lock to prevent dirty reads
+            with self._mu:
+                yield self._conn
             return
         conn = self._make_connection(read_only=True)
         try:

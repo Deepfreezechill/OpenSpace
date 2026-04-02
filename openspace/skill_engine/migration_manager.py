@@ -290,7 +290,10 @@ class MigrationManager:
             # Note: PRAGMA user_version does not support parameterized queries
             # This is safe because version is validated as an integer above
             self._conn.execute(f"PRAGMA user_version = {version}")
-            self._conn.commit()
+            # Only commit if we're not inside an outer transaction —
+            # prevents escaping caller's transaction boundary
+            if not self._conn.in_transaction:
+                self._conn.commit()
         
         logger.debug(f"Schema version set to {version}")
 

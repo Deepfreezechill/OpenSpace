@@ -139,8 +139,6 @@ class TagSearch:
             conn.close()
 
     @_db_retry()
-    @_db_retry()
-    @_db_retry()
     def _init_db(self) -> None:
         """Create tables if they don't exist (idempotent).
         
@@ -461,7 +459,7 @@ class TagSearch:
             # Text search in name and description
             if query:
                 # Escape SQL LIKE wildcards in user input
-                escaped_query = query.replace("%", "\\%").replace("_", "\\_")
+                escaped_query = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
                 conditions.append("(sr.name LIKE ? ESCAPE '\\' OR sr.description LIKE ? ESCAPE '\\')")
                 like_pattern = f"%{escaped_query}%"
                 params.extend([like_pattern, like_pattern])

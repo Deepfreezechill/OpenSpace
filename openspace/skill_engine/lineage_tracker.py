@@ -192,7 +192,11 @@ class LineageTracker:
         """
         self._ensure_open()
         with self._mu:
-            self._conn.execute("BEGIN")
+            owns_txn = not self._conn.in_transaction
+            if owns_txn:
+                self._conn.execute("BEGIN")
+            else:
+                self._conn.execute("SAVEPOINT sp_record_derivation")
             try:
                 # For FIXED: deactivate same-name parents (superseded)
                 if new_record.lineage.origin == SkillOrigin.FIXED:
@@ -207,7 +211,10 @@ class LineageTracker:
                 new_record.is_active = True
 
                 self._repo._upsert(new_record)
-                self._conn.commit()
+                if owns_txn:
+                    self._conn.commit()
+                else:
+                    self._conn.execute("RELEASE sp_record_derivation")
 
                 origin = new_record.lineage.origin.value
                 logger.info(
@@ -216,7 +223,10 @@ class LineageTracker:
                     f"[{new_record.skill_id}] ← parents={parent_skill_ids}"
                 )
             except Exception:
-                self._conn.rollback()
+                if owns_txn:
+                    self._conn.rollback()
+                else:
+                    self._conn.execute("ROLLBACK TO sp_record_derivation")
                 raise
 
     # ── Lineage queries ───────────────────────────────────────────────

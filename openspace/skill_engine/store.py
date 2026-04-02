@@ -1,5 +1,16 @@
-"""
+"""SkillStore — SQLite persistence facade for skill quality tracking and evolution.
+
+Architecture (Phase 3 decomposition):
+
+SkillStore (facade) — store.py
+├── MigrationManager — Schema creation & versioning (migration_manager.py)
+├── SkillRepository — CRUD operations (skill_repository.py)  
+├── LineageTracker — Lineage traversal & evolution (lineage_tracker.py)
+├── AnalysisStore — Execution analysis persistence (analysis_store.py)
+└── TagSearch — Tag indexing & search operations (tag_search.py)
+
 Storage location: <project_root>/.openspace/openspace.db
+
 Tables:
   skill_records          — SkillRecord main table
   skill_lineage_parents  — Lineage parent-child relationships (many-to-many)
@@ -7,6 +18,12 @@ Tables:
   skill_judgments         — Per-skill judgments within an analysis
   skill_tool_deps        — Tool dependencies
   skill_tags             — Auxiliary tags
+
+The SkillStore class serves as a unified facade that:
+1. Manages the persistent SQLite connection and transaction safety
+2. Delegates specialized operations to focused modules
+3. Coordinates cross-module workflows (e.g., evolve_skill touches both lineage & repository)
+4. Provides async API via asyncio.to_thread for thread-safe database access
 """
 
 from __future__ import annotations
@@ -81,9 +98,13 @@ def _db_retry(
 
 
 class SkillStore:
-    """SQLite persistence engine — Skill quality tracking and evolution ledger.
+    """SQLite persistence facade for skill quality tracking and evolution.
 
-    Architecture:
+    Phase 3 Architecture:
+    Delegates specialized operations to focused modules while maintaining unified API.
+    All modules share the same connection and lock for transaction consistency.
+
+    Concurrency:
         Write path: async method → asyncio.to_thread → _xxx_sync → self._mu lock → self._conn
         Read path: sync method → self._reader() → independent short connection (WAL parallel read)
 
@@ -185,8 +206,6 @@ class SkillStore:
                 if f.exists():
                     f.unlink()
 
-
-
     # Lifecycle
     def close(self) -> None:
         """Close the persistent connection. Subsequent ops will raise.
@@ -280,7 +299,11 @@ class SkillStore:
         created = 0
         refreshed = 0
         with self._mu:
-            self._conn.execute("BEGIN")
+            owns_txn = not self._conn.in_transaction
+            if owns_txn:
+                self._conn.execute("BEGIN")
+            else:
+                self._conn.execute("SAVEPOINT sp_sync_from_registry")
             try:
                 # Fetch all existing records keyed by skill_id
                 rows = self._conn.execute(
@@ -374,9 +397,15 @@ class SkillStore:
                     created += 1
                     logger.debug(f"sync_from_registry: created {meta.name} [{meta.skill_id}]")
 
-                self._conn.commit()
+                if owns_txn:
+                    self._conn.commit()
+                else:
+                    self._conn.execute("RELEASE sp_sync_from_registry")
             except Exception:
-                self._conn.rollback()
+                if owns_txn:
+                    self._conn.rollback()
+                else:
+                    self._conn.execute("ROLLBACK TO sp_sync_from_registry")
                 raise
 
         if created or refreshed:
@@ -399,6 +428,11 @@ class SkillStore:
            - total_completions += 1         (if applied and completed)
            - total_fallbacks   += 1         (if not applied and not completed)
            - last_updated = now
+
+        Note: record_analysis() and evolve_skill() are individually atomic but
+        not jointly atomic. If evolve_skill() fails after record_analysis()
+        succeeded, the analysis persists (this is intentional — analysis records
+        what happened, regardless of whether evolution succeeds).
         """
         await asyncio.to_thread(self._record_analysis_sync, analysis)
 
@@ -421,6 +455,11 @@ class SkillStore:
           - ``new_record.is_active=True``
 
         In the same SQL transaction, guaranteed by ``self._mu``.
+
+        Note: record_analysis() and evolve_skill() are individually atomic but
+        not jointly atomic. If evolve_skill() fails after record_analysis()
+        succeeded, the analysis persists (this is intentional — analysis records
+        what happened, regardless of whether evolution succeeds).
 
         Args:
         new_record : SkillRecord
@@ -453,12 +492,22 @@ class SkillStore:
         """
         self._ensure_open()
         with self._mu:
-            self._conn.execute("BEGIN")
+            owns_txn = not self._conn.in_transaction
+            if owns_txn:
+                self._conn.execute("BEGIN")
+            else:
+                self._conn.execute("SAVEPOINT sp_save_record")
             try:
                 self._upsert(record)
-                self._conn.commit()
+                if owns_txn:
+                    self._conn.commit()
+                else:
+                    self._conn.execute("RELEASE sp_save_record")
             except Exception:
-                self._conn.rollback()
+                if owns_txn:
+                    self._conn.rollback()
+                else:
+                    self._conn.execute("ROLLBACK TO sp_save_record")
                 raise
 
     @_db_retry()
@@ -470,13 +519,23 @@ class SkillStore:
         """
         self._ensure_open()
         with self._mu:
-            self._conn.execute("BEGIN")
+            owns_txn = not self._conn.in_transaction
+            if owns_txn:
+                self._conn.execute("BEGIN")
+            else:
+                self._conn.execute("SAVEPOINT sp_save_records")
             try:
                 for r in records:
                     self._upsert(r)
-                self._conn.commit()
+                if owns_txn:
+                    self._conn.commit()
+                else:
+                    self._conn.execute("RELEASE sp_save_records")
             except Exception:
-                self._conn.rollback()
+                if owns_txn:
+                    self._conn.rollback()
+                else:
+                    self._conn.execute("ROLLBACK TO sp_save_records")
                 raise
 
     @_db_retry()
@@ -493,7 +552,11 @@ class SkillStore:
         """
         self._ensure_open()
         with self._mu:
-            self._conn.execute("BEGIN")
+            owns_txn = not self._conn.in_transaction
+            if owns_txn:
+                self._conn.execute("BEGIN")
+            else:
+                self._conn.execute("SAVEPOINT sp_record_analysis")
             try:
                 # Delegate analysis storage to AnalysisStore (Epic 3.4)
                 self._analyses.insert_analysis(analysis)
@@ -517,9 +580,15 @@ class SkillStore:
                         (applied, completed, fallback, now_iso, j.skill_id),
                     )
 
-                self._conn.commit()
+                if owns_txn:
+                    self._conn.commit()
+                else:
+                    self._conn.execute("RELEASE sp_record_analysis")
             except Exception:
-                self._conn.rollback()
+                if owns_txn:
+                    self._conn.rollback()
+                else:
+                    self._conn.execute("ROLLBACK TO sp_record_analysis")
                 raise
 
     @_db_retry()
@@ -531,35 +600,94 @@ class SkillStore:
         """Atomic: insert new version + deactivate parents (for FIXED).
 
         Delegates to :class:`LineageTracker` (Epic 3.3).
+
+        Note: evolve_skill() is individually atomic but not jointly atomic
+        with record_analysis(). If evolve fails after analysis succeeded,
+        the analysis persists — this is intentional (analysis records what
+        happened regardless of evolution outcome).
         """
+        self._ensure_open()
+        # Note: We don't acquire self._mu here because the lineage tracker
+        # will acquire it and both use the same mutex (would cause deadlock).
+        # The lineage tracker handles its own transaction management.
         self._lineage.record_derivation(new_record, parent_skill_ids)
 
     @_db_retry()
     def _deactivate_record_sync(self, skill_id: str) -> bool:
         self._ensure_open()
         with self._mu:
-            cur = self._conn.execute(
-                "UPDATE skill_records SET is_active=0, last_updated=? WHERE skill_id=?",
-                (datetime.now().isoformat(), skill_id),
-            )
-            self._conn.commit()
-            return cur.rowcount > 0
+            owns_txn = not self._conn.in_transaction
+            if owns_txn:
+                self._conn.execute("BEGIN")
+            else:
+                self._conn.execute("SAVEPOINT sp_deactivate_record")
+            try:
+                cur = self._conn.execute(
+                    "UPDATE skill_records SET is_active=0, last_updated=? WHERE skill_id=?",
+                    (datetime.now().isoformat(), skill_id),
+                )
+                if owns_txn:
+                    self._conn.commit()
+                else:
+                    self._conn.execute("RELEASE sp_deactivate_record")
+                return cur.rowcount > 0
+            except Exception:
+                if owns_txn:
+                    self._conn.rollback()
+                else:
+                    self._conn.execute("ROLLBACK TO sp_deactivate_record")
+                raise
 
     @_db_retry()
     def _reactivate_record_sync(self, skill_id: str) -> bool:
         self._ensure_open()
         with self._mu:
-            cur = self._conn.execute(
-                "UPDATE skill_records SET is_active=1, last_updated=? WHERE skill_id=?",
-                (datetime.now().isoformat(), skill_id),
-            )
-            self._conn.commit()
-            return cur.rowcount > 0
+            owns_txn = not self._conn.in_transaction
+            if owns_txn:
+                self._conn.execute("BEGIN")
+            else:
+                self._conn.execute("SAVEPOINT sp_reactivate_record")
+            try:
+                cur = self._conn.execute(
+                    "UPDATE skill_records SET is_active=1, last_updated=? WHERE skill_id=?",
+                    (datetime.now().isoformat(), skill_id),
+                )
+                if owns_txn:
+                    self._conn.commit()
+                else:
+                    self._conn.execute("RELEASE sp_reactivate_record")
+                return cur.rowcount > 0
+            except Exception:
+                if owns_txn:
+                    self._conn.rollback()
+                else:
+                    self._conn.execute("ROLLBACK TO sp_reactivate_record")
+                raise
 
     @_db_retry()
     def _delete_record_sync(self, skill_id: str) -> bool:
         self._ensure_open()
-        return self._repo.delete(skill_id)
+        with self._mu:
+            owns_txn = not self._conn.in_transaction
+            if owns_txn:
+                self._conn.execute("BEGIN")
+            else:
+                self._conn.execute("SAVEPOINT sp_delete_record")
+            try:
+                # Handle deletion directly rather than delegating to avoid double-commit
+                cur = self._conn.execute("DELETE FROM skill_records WHERE skill_id=?", (skill_id,))
+                result = cur.rowcount > 0
+                if owns_txn:
+                    self._conn.commit()
+                else:
+                    self._conn.execute("RELEASE sp_delete_record")
+                return result
+            except Exception:
+                if owns_txn:
+                    self._conn.rollback()
+                else:
+                    self._conn.execute("ROLLBACK TO sp_delete_record")
+                raise
 
     # Read API (sync, each call opens its own read-only conn)
     @_db_retry()
@@ -619,12 +747,18 @@ class SkillStore:
         The match uses ``path LIKE '{skill_dir}%'`` so both
         ``/a/b/SKILL.md`` and ``/a/b/scenarios/x.md`` match ``/a/b``.
         Returns the newest active record (by ``last_updated DESC``).
+
+        The trailing ``/`` in the LIKE pattern prevents prefix collisions:
+        ``/a/`` does NOT match ``/ab/SKILL.md``.
         """
-        normalized = skill_dir.rstrip("/")
+        normalized = skill_dir.rstrip("/").rstrip("\\")
+        # Escape LIKE wildcards to prevent %, _, and \ injection
+        # Backslash must be escaped FIRST (it's our ESCAPE char)
+        escaped = normalized.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         with self._reader() as conn:
             row = conn.execute(
-                "SELECT * FROM skill_records WHERE path LIKE ? AND is_active=1 ORDER BY last_updated DESC LIMIT 1",
-                (f"{normalized}%",),
+                "SELECT * FROM skill_records WHERE path LIKE ? ESCAPE '\\' AND is_active=1 ORDER BY last_updated DESC LIMIT 1",
+                (f"{escaped}/%",),
             ).fetchone()
             return self._to_record(conn, row) if row else None
 
@@ -811,16 +945,26 @@ class SkillStore:
         """Delete all data (keeps schema)."""
         self._ensure_open()
         with self._mu:
-            self._conn.execute("BEGIN")
+            owns_txn = not self._conn.in_transaction
+            if owns_txn:
+                self._conn.execute("BEGIN")
+            else:
+                self._conn.execute("SAVEPOINT sp_clear")
             try:
                 # CASCADE on skill_records cleans up: lineage_parents, tool_deps, tags
                 self._conn.execute("DELETE FROM skill_records")
                 # Delegate analysis clearing to AnalysisStore (Epic 3.4)
                 self._analyses.clear_all_analyses()
-                self._conn.commit()
+                if owns_txn:
+                    self._conn.commit()
+                else:
+                    self._conn.execute("RELEASE sp_clear")
                 logger.info("SkillStore cleared")
             except Exception:
-                self._conn.rollback()
+                if owns_txn:
+                    self._conn.rollback()
+                else:
+                    self._conn.execute("ROLLBACK TO sp_clear")
                 raise
 
     def vacuum(self) -> None:
@@ -1053,8 +1197,30 @@ class SkillStore:
         return self._tag_search.get_all_tags()
 
     def sync_tags(self, skill_id: str, tags: List[str]) -> None:
-        """Synchronize tags for a skill (facade to TagSearch)."""
-        return self._tag_search.sync_tags(skill_id, tags)
+        """Synchronize tags for a skill (facade to TagSearch).
+
+        Must manage transaction explicitly — TagSearch shared-mode
+        delegates commit responsibility to the caller (us).
+        """
+        self._ensure_open()
+        with self._mu:
+            owns_txn = not self._conn.in_transaction
+            if owns_txn:
+                self._conn.execute("BEGIN")
+            else:
+                self._conn.execute("SAVEPOINT sp_sync_tags")
+            try:
+                self._tag_search.sync_tags(skill_id, tags)
+                if owns_txn:
+                    self._conn.commit()
+                else:
+                    self._conn.execute("RELEASE sp_sync_tags")
+            except Exception:
+                if owns_txn:
+                    self._conn.rollback()
+                else:
+                    self._conn.execute("ROLLBACK TO sp_sync_tags")
+                raise
 
     # ── Migration Management (Epic 3.6) ─────────────────────────────────
 
@@ -1070,6 +1236,7 @@ class SkillStore:
         """Set schema version (facade to MigrationManager).
         
         DEPRECATED: Use ensure_current_schema() instead.
+        This method is kept for backward compatibility with existing tests.
         """
         return self._migrations._set_schema_version(version)
 
