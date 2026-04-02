@@ -25,6 +25,7 @@ from typing import Any, Dict, Generator, List, Optional
 from openspace.config.constants import PROJECT_ROOT
 from openspace.utils.logging import Logger
 
+from .analysis_store import AnalysisStore
 from .lineage_tracker import LineageTracker
 from .patch import collect_skill_snapshot, compute_unified_diff
 from .skill_repository import SkillRepository
@@ -200,6 +201,9 @@ class SkillStore:
 
         # Lineage tracker (Epic 3.3) — delegates lineage traversal/evolution.
         self._lineage = LineageTracker(conn=self._conn, lock=self._mu)
+
+        # Analysis store (Epic 3.4) — delegates execution analyses and judgments.
+        self._analyses = AnalysisStore(conn=self._conn, lock=self._mu)
 
         logger.debug(f"SkillStore ready at {self._db_path}")
 
@@ -562,8 +566,10 @@ class SkillStore:
         with self._mu:
             self._conn.execute("BEGIN")
             try:
-                analysis_id = self._insert_analysis(analysis)
+                # Delegate analysis storage to AnalysisStore (Epic 3.4)
+                self._analyses._insert_analysis(analysis)
 
+                # Update skill counters in skill_records (remains in SkillStore)
                 now_iso = datetime.now().isoformat()
                 for j in analysis.skill_judgments:
                     applied = 1 if j.skill_applied else 0
@@ -737,54 +743,22 @@ class SkillStore:
                 so filtering uses exact match.
                 If None, return pure-execution analyses (no judgments).
         """
-        with self._reader() as conn:
-            if skill_id is not None:
-                rows = conn.execute(
-                    "SELECT ea.* FROM execution_analyses ea "
-                    "JOIN skill_judgments sj ON ea.id = sj.analysis_id "
-                    "WHERE sj.skill_id = ? "
-                    "ORDER BY ea.timestamp DESC LIMIT ?",
-                    (skill_id, limit),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT ea.* FROM execution_analyses ea "
-                    "LEFT JOIN skill_judgments sj ON ea.id = sj.analysis_id "
-                    "WHERE sj.id IS NULL "
-                    "ORDER BY ea.timestamp DESC LIMIT ?",
-                    (limit,),
-                ).fetchall()
-            return [self._to_analysis(conn, r) for r in reversed(rows)]
+        return self._analyses.load_analyses(skill_id=skill_id, limit=limit)
 
     @_db_retry()
     def load_analyses_for_task(self, task_id: str) -> Optional[ExecutionAnalysis]:
         """Load the analysis for a specific task, or None."""
-        with self._reader() as conn:
-            row = conn.execute(
-                "SELECT * FROM execution_analyses WHERE task_id=?",
-                (task_id,),
-            ).fetchone()
-            return self._to_analysis(conn, row) if row else None
+        return self._analyses.load_analyses_for_task(task_id)
 
     @_db_retry()
     def load_all_analyses(self, limit: int = 200) -> List[ExecutionAnalysis]:
         """Load recent analyses across all tasks."""
-        with self._reader() as conn:
-            rows = conn.execute(
-                "SELECT * FROM execution_analyses ORDER BY timestamp DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
-            return [self._to_analysis(conn, r) for r in reversed(rows)]
+        return self._analyses.load_all_analyses(limit)
 
     @_db_retry()
     def load_evolution_candidates(self, limit: int = 50) -> List[ExecutionAnalysis]:
         """Load analyses marked as evolution candidates."""
-        with self._reader() as conn:
-            rows = conn.execute(
-                "SELECT * FROM execution_analyses WHERE candidate_for_evolution=1 ORDER BY timestamp DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
-            return [self._to_analysis(conn, r) for r in reversed(rows)]
+        return self._analyses.load_evolution_candidates(limit)
 
     @_db_retry()
     def find_skills_by_tool(self, tool_key: str) -> List[str]:
@@ -858,10 +832,10 @@ class SkillStore:
                     f"SELECT lineage_origin, COUNT(*) AS cnt FROM skill_records{where} GROUP BY lineage_origin"
                 ).fetchall()
             }
-            n_analyses = conn.execute("SELECT COUNT(*) FROM execution_analyses").fetchone()[0]
-            n_candidates = conn.execute(
-                "SELECT COUNT(*) FROM execution_analyses WHERE candidate_for_evolution=1"
-            ).fetchone()[0]
+            # Delegate analysis stats to AnalysisStore (Epic 3.4)
+            analysis_stats = self._analyses.get_analysis_stats()
+            n_analyses = analysis_stats["total_analyses"]
+            n_candidates = analysis_stats["evolution_candidates"]
             agg = conn.execute(
                 f"""
                 SELECT SUM(total_selections)  AS sel,
@@ -900,42 +874,7 @@ class SkillStore:
                 "tool_issues", "judgments": [{skill_id, skill_applied, note}],
                 ...}`` or empty dict if the task has no analysis.
         """
-        with self._reader() as conn:
-            row = conn.execute(
-                "SELECT * FROM execution_analyses WHERE task_id=?",
-                (task_id,),
-            ).fetchone()
-            if not row:
-                return {}
-
-            judgment_rows = conn.execute(
-                "SELECT skill_id, skill_applied, note FROM skill_judgments WHERE analysis_id=?",
-                (row["id"],),
-            ).fetchall()
-
-            try:
-                evo_suggestions = json.loads(row["evolution_suggestions"] or "[]")
-            except json.JSONDecodeError:
-                evo_suggestions = []
-
-            return {
-                "task_id": row["task_id"],
-                "timestamp": row["timestamp"],
-                "task_completed": bool(row["task_completed"]),
-                "execution_note": row["execution_note"],
-                "tool_issues": json.loads(row["tool_issues"]),
-                "candidate_for_evolution": bool(row["candidate_for_evolution"]),
-                "evolution_suggestions": evo_suggestions,
-                "analyzed_by": row["analyzed_by"],
-                "judgments": [
-                    {
-                        "skill_id": jr["skill_id"],
-                        "skill_applied": bool(jr["skill_applied"]),
-                        "note": jr["note"],
-                    }
-                    for jr in judgment_rows
-                ],
-            }
+        return self._analyses.get_task_skill_summary(task_id)
 
     @_db_retry()
     def get_top_skills(
@@ -1021,8 +960,8 @@ class SkillStore:
             try:
                 # CASCADE on skill_records cleans up: lineage_parents, tool_deps, tags
                 self._conn.execute("DELETE FROM skill_records")
-                # execution_analyses CASCADE cleans up skill_judgments
-                self._conn.execute("DELETE FROM execution_analyses")
+                # Delegate analysis clearing to AnalysisStore (Epic 3.4)
+                self._analyses.clear_all_analyses()
                 self._conn.commit()
                 logger.info("SkillStore cleared")
             except Exception:
@@ -1145,97 +1084,13 @@ class SkillStore:
                 (record.skill_id, tag),
             )
 
-        # Sync analyses (insert only NEW ones, dedup by task_id)
-        for a in record.recent_analyses:
-            existing = self._conn.execute(
-                "SELECT id FROM execution_analyses WHERE task_id=?",
-                (a.task_id,),
-            ).fetchone()
-            if existing is None:
-                self._insert_analysis(a)
-
-    def _insert_analysis(self, a: ExecutionAnalysis) -> int:
-        """Insert an execution_analyses row + its skill_judgments.
-
-        Called within a transaction holding ``self._mu``.
-
-        Returns:
-            int: The ``execution_analyses.id`` of the newly inserted row.
-        """
-        try:
-            a.validate()
-        except ValidationError as exc:
-            raise ValidationError(
-                f"Cannot persist invalid ExecutionAnalysis '{a.task_id}': {exc}"
-            ) from exc
-        cur = self._conn.execute(
-            """
-            INSERT INTO execution_analyses (
-                task_id, timestamp,
-                task_completed, execution_note,
-                tool_issues, candidate_for_evolution,
-                evolution_suggestions, analyzed_by, analyzed_at
-            ) VALUES (?,?, ?,?, ?,?, ?,?,?)
-            """,
-            (
-                a.task_id,
-                a.timestamp.isoformat(),
-                int(a.task_completed),
-                a.execution_note,
-                json.dumps(a.tool_issues, ensure_ascii=False),
-                int(a.candidate_for_evolution),
-                json.dumps(
-                    [s.to_dict() for s in a.evolution_suggestions],
-                    ensure_ascii=False,
-                ),
-                a.analyzed_by,
-                a.analyzed_at.isoformat(),
-            ),
-        )
-        analysis_id = cur.lastrowid
-
-        for j in a.skill_judgments:
-            self._conn.execute(
-                "INSERT INTO skill_judgments (analysis_id, skill_id, skill_applied, note) VALUES (?,?,?,?)",
-                (analysis_id, j.skill_id, int(j.skill_applied), j.note),
-            )
-
-        return analysis_id
+        # Sync analyses (insert only NEW ones, dedup by task_id) - delegate to AnalysisStore
+        self._analyses.bulk_upsert_analyses(record.recent_analyses)
 
     # Fix 5: Helper method to hydrate recent_analyses for records from LineageTracker
     def _hydrate_recent_analyses(self, record: SkillRecord) -> SkillRecord:
-        """Hydrate recent_analyses for a SkillRecord from LineageTracker delegation."""
-        with self._reader() as conn:
-            analysis_rows = conn.execute(
-                "SELECT ea.* FROM execution_analyses ea "
-                "JOIN skill_judgments sj ON ea.id = sj.analysis_id "
-                "WHERE sj.skill_id = ? "
-                "ORDER BY ea.timestamp DESC LIMIT ?",
-                (record.skill_id, SkillRecord.MAX_RECENT),
-            ).fetchall()
-            
-            # Create a new record with hydrated recent_analyses
-            return SkillRecord(
-                skill_id=record.skill_id,
-                name=record.name,
-                description=record.description,
-                path=record.path,
-                is_active=record.is_active,
-                category=record.category,
-                tags=record.tags,
-                visibility=record.visibility,
-                creator_id=record.creator_id,
-                lineage=record.lineage,
-                tool_dependencies=record.tool_dependencies,
-                critical_tools=record.critical_tools,
-                total_selections=record.total_selections,
-                total_applied=record.total_applied,
-                total_completions=record.total_completions,
-                total_fallbacks=record.total_fallbacks,
-                recent_analyses=[self._to_analysis(conn, r) for r in reversed(analysis_rows)],
-                first_seen=record.first_seen,
-                last_updated=record.last_updated,
-            )
+        """Hydrate recent_analyses for a SkillRecord from AnalysisStore delegation."""
+        return self._analyses.hydrate_recent_analyses(record)
 
     # Deserialization
     def _to_record(self, conn: sqlite3.Connection, row: sqlite3.Row) -> SkillRecord:
@@ -1277,15 +1132,10 @@ class SkillStore:
 
         tag_rows = conn.execute("SELECT tag FROM skill_tags WHERE skill_id=?", (sid,)).fetchall()
 
-        # Load recent analyses involving this skill (via skill_judgments).
-        # skill_judgments.skill_id stores the true skill_id (same as DB PK).
-        analysis_rows = conn.execute(
-            "SELECT ea.* FROM execution_analyses ea "
-            "JOIN skill_judgments sj ON ea.id = sj.analysis_id "
-            "WHERE sj.skill_id = ? "
-            "ORDER BY ea.timestamp DESC LIMIT ?",
-            (sid, SkillRecord.MAX_RECENT),
-        ).fetchall()
+        # Load recent analyses involving this skill - delegate to AnalysisStore (Epic 3.4)
+        recent_analyses = self._analyses.load_recent_analyses_for_skill(
+            sid, SkillRecord.MAX_RECENT
+        )
 
         return SkillRecord(
             skill_id=sid,
@@ -1304,44 +1154,7 @@ class SkillStore:
             total_applied=row["total_applied"],
             total_completions=row["total_completions"],
             total_fallbacks=row["total_fallbacks"],
-            recent_analyses=[self._to_analysis(conn, r) for r in reversed(analysis_rows)],
+            recent_analyses=recent_analyses,
             first_seen=datetime.fromisoformat(row["first_seen"]),
             last_updated=datetime.fromisoformat(row["last_updated"]),
-        )
-
-    @staticmethod
-    def _to_analysis(conn: sqlite3.Connection, row: sqlite3.Row) -> ExecutionAnalysis:
-        """Deserialize an execution_analyses row + judgments → ExecutionAnalysis."""
-        analysis_id = row["id"]
-
-        judgment_rows = conn.execute(
-            "SELECT skill_id, skill_applied, note FROM skill_judgments WHERE analysis_id=?",
-            (analysis_id,),
-        ).fetchall()
-
-        suggestions: list[EvolutionSuggestion] = []
-        raw_suggestions = row["evolution_suggestions"]
-        if raw_suggestions:
-            try:
-                suggestions = [EvolutionSuggestion.from_dict(s) for s in json.loads(raw_suggestions)]
-            except (json.JSONDecodeError, KeyError, ValueError):
-                pass
-
-        return ExecutionAnalysis(
-            task_id=row["task_id"],
-            timestamp=datetime.fromisoformat(row["timestamp"]),
-            task_completed=bool(row["task_completed"]),
-            execution_note=row["execution_note"],
-            tool_issues=json.loads(row["tool_issues"]),
-            skill_judgments=[
-                SkillJudgment(
-                    skill_id=jr["skill_id"],
-                    skill_applied=bool(jr["skill_applied"]),
-                    note=jr["note"],
-                )
-                for jr in judgment_rows
-            ],
-            evolution_suggestions=suggestions,
-            analyzed_by=row["analyzed_by"],
-            analyzed_at=datetime.fromisoformat(row["analyzed_at"]),
         )
