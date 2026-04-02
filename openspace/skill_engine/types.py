@@ -30,7 +30,7 @@ class SkillVersion:
     """
 
     major: int = 0
-    minor: int = 1
+    minor: int = 0
     patch: int = 0
 
     def __post_init__(self) -> None:
@@ -94,11 +94,14 @@ class SkillVersion:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SkillVersion":
-        return cls(
-            major=data.get("major", 0),
-            minor=data.get("minor", 1),
-            patch=data.get("patch", 0),
-        )
+        try:
+            return cls(
+                major=int(data.get("major", 0)),
+                minor=int(data.get("minor", 0)),
+                patch=int(data.get("patch", 0)),
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"Invalid SkillVersion data: {exc}") from exc
 
 
 class SkillCategory(str, Enum):
@@ -428,9 +431,13 @@ class ExecutionAnalysis:
         return [s for s in self.evolution_suggestions if s.evolution_type == evo_type]
 
     def validate(self) -> None:
-        """Validate analysis fields."""
+        """Validate analysis fields and nested objects."""
         if not self.task_id:
             raise ValidationError("task_id must be non-empty")
+        for j in self.skill_judgments:
+            j.validate()
+        for s in self.evolution_suggestions:
+            s.validate()
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -447,17 +454,20 @@ class ExecutionAnalysis:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ExecutionAnalysis":
-        return cls(
-            task_id=data["task_id"],
-            timestamp=datetime.fromisoformat(data["timestamp"]),
-            task_completed=data.get("task_completed", False),
-            execution_note=data.get("execution_note", ""),
-            tool_issues=data.get("tool_issues", []),
-            skill_judgments=[SkillJudgment.from_dict(j) for j in data.get("skill_judgments", [])],
-            evolution_suggestions=[EvolutionSuggestion.from_dict(s) for s in data.get("evolution_suggestions", [])],
-            analyzed_by=data.get("analyzed_by", ""),
-            analyzed_at=(datetime.fromisoformat(data["analyzed_at"]) if data.get("analyzed_at") else datetime.now()),
-        )
+        try:
+            return cls(
+                task_id=str(data["task_id"]),
+                timestamp=datetime.fromisoformat(data["timestamp"]),
+                task_completed=data.get("task_completed", False),
+                execution_note=data.get("execution_note", ""),
+                tool_issues=data.get("tool_issues", []),
+                skill_judgments=[SkillJudgment.from_dict(j) for j in data.get("skill_judgments", [])],
+                evolution_suggestions=[EvolutionSuggestion.from_dict(s) for s in data.get("evolution_suggestions", [])],
+                analyzed_by=data.get("analyzed_by", ""),
+                analyzed_at=(datetime.fromisoformat(data["analyzed_at"]) if data.get("analyzed_at") else datetime.now()),
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"Invalid ExecutionAnalysis data: {exc}") from exc
 
 
 # Full skill profile (identity + lineage + deps + quality)
@@ -555,7 +565,8 @@ class SkillRecord:
                 f"total_completions ({self.total_completions}) must not exceed "
                 f"total_applied ({self.total_applied})"
             )
-        self.lineage.validate()
+        if self.lineage is not None:
+            self.lineage.validate()
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -582,30 +593,33 @@ class SkillRecord:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SkillRecord":
-        record = cls(
-            skill_id=data["skill_id"],
-            name=data["name"],
-            description=data.get("description", ""),
-            path=data.get("path", ""),
-            is_active=data.get("is_active", True),
-            category=SkillCategory(data["category"]) if data.get("category") else SkillCategory.WORKFLOW,
-            tags=data.get("tags", []),
-            visibility=(SkillVisibility(data["visibility"]) if data.get("visibility") else SkillVisibility.PRIVATE),
-            creator_id=data.get("creator_id", ""),
-            lineage=(
-                SkillLineage.from_dict(data["lineage"])
-                if data.get("lineage")
-                else SkillLineage(origin=SkillOrigin.IMPORTED)
-            ),
-            tool_dependencies=data.get("tool_dependencies", []),
-            critical_tools=data.get("critical_tools", []),
-            total_selections=data.get("total_selections", 0),
-            total_applied=data.get("total_applied", 0),
-            total_completions=data.get("total_completions", 0),
-            total_fallbacks=data.get("total_fallbacks", 0),
-            first_seen=(datetime.fromisoformat(data["first_seen"]) if data.get("first_seen") else datetime.now()),
-            last_updated=(datetime.fromisoformat(data["last_updated"]) if data.get("last_updated") else datetime.now()),
-        )
+        try:
+            record = cls(
+                skill_id=str(data["skill_id"]),
+                name=str(data["name"]),
+                description=data.get("description", ""),
+                path=data.get("path", ""),
+                is_active=data.get("is_active", True),
+                category=SkillCategory(data["category"]) if data.get("category") else SkillCategory.WORKFLOW,
+                tags=data.get("tags", []),
+                visibility=(SkillVisibility(data["visibility"]) if data.get("visibility") else SkillVisibility.PRIVATE),
+                creator_id=data.get("creator_id", ""),
+                lineage=(
+                    SkillLineage.from_dict(data["lineage"])
+                    if data.get("lineage")
+                    else SkillLineage(origin=SkillOrigin.IMPORTED)
+                ),
+                tool_dependencies=data.get("tool_dependencies", []),
+                critical_tools=data.get("critical_tools", []),
+                total_selections=int(data.get("total_selections", 0)),
+                total_applied=int(data.get("total_applied", 0)),
+                total_completions=int(data.get("total_completions", 0)),
+                total_fallbacks=int(data.get("total_fallbacks", 0)),
+                first_seen=(datetime.fromisoformat(data["first_seen"]) if data.get("first_seen") else datetime.now()),
+                last_updated=(datetime.fromisoformat(data["last_updated"]) if data.get("last_updated") else datetime.now()),
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"Invalid SkillRecord data: {exc}") from exc
         for a in data.get("recent_analyses", []):
             record.recent_analyses.append(ExecutionAnalysis.from_dict(a))
         return record

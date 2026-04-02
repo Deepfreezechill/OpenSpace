@@ -43,7 +43,7 @@ class TestSkillVersion:
     def test_default_version(self):
         v = SkillVersion()
         assert v.major == 0
-        assert v.minor == 1
+        assert v.minor == 0
         assert v.patch == 0
 
     def test_explicit_construction(self):
@@ -746,3 +746,141 @@ class TestEdgeCases:
         restored = SkillLineage.from_dict(lin.to_dict())
         assert restored.created_at.year == 2025
         assert restored.created_at.second == 59
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Hostile / adversarial input tests (F5)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestFromDictHostileInput:
+    """from_dict() with wrong types, partial payloads, and adversarial values."""
+
+    # --- Wrong types: int where string expected ---
+
+    def test_skill_record_numeric_skill_id_coerced(self):
+        """Numeric skill_id should be coerced to str."""
+        d = {"skill_id": 12345, "name": "test"}
+        r = SkillRecord.from_dict(d)
+        assert r.skill_id == "12345"
+        assert isinstance(r.skill_id, str)
+
+    def test_skill_record_numeric_name_coerced(self):
+        """Numeric name should be coerced to str."""
+        d = {"skill_id": "s1", "name": 42}
+        r = SkillRecord.from_dict(d)
+        assert r.name == "42"
+        assert isinstance(r.name, str)
+
+    def test_execution_analysis_numeric_task_id_coerced(self):
+        """Numeric task_id should be coerced to str."""
+        d = {"task_id": 999, "timestamp": "2025-01-01T00:00:00"}
+        a = ExecutionAnalysis.from_dict(d)
+        assert a.task_id == "999"
+        assert isinstance(a.task_id, str)
+
+    def test_skill_version_string_components_coerced(self):
+        """String version components should be coerced to int."""
+        d = {"major": "2", "minor": "3", "patch": "4"}
+        v = SkillVersion.from_dict(d)
+        assert v == SkillVersion(2, 3, 4)
+
+    def test_skill_record_string_counters_coerced(self):
+        """String counter values should be coerced to int."""
+        d = {
+            "skill_id": "s1",
+            "name": "test",
+            "total_selections": "10",
+            "total_applied": "8",
+            "total_completions": "7",
+            "total_fallbacks": "1",
+        }
+        r = SkillRecord.from_dict(d)
+        assert r.total_selections == 10
+        assert isinstance(r.total_selections, int)
+        assert r.total_applied == 8
+        assert r.total_completions == 7
+        assert r.total_fallbacks == 1
+
+    # --- Partial payloads: missing keys ---
+
+    def test_skill_version_from_dict_empty(self):
+        """Empty dict should yield 0.0.0."""
+        v = SkillVersion.from_dict({})
+        assert v == SkillVersion(0, 0, 0)
+
+    def test_skill_version_from_dict_major_only(self):
+        """Only major → minor and patch default to 0."""
+        v = SkillVersion.from_dict({"major": 2})
+        assert v == SkillVersion(2, 0, 0)
+
+    def test_skill_record_from_dict_minimal(self):
+        """Only required keys; all optional fields get safe defaults."""
+        d = {"skill_id": "s1", "name": "n"}
+        r = SkillRecord.from_dict(d)
+        assert r.total_selections == 0
+        assert r.total_applied == 0
+        assert r.total_completions == 0
+        assert r.total_fallbacks == 0
+        assert r.description == ""
+        assert r.is_active is True
+
+    def test_execution_analysis_from_dict_minimal(self):
+        """Only required keys for ExecutionAnalysis."""
+        d = {"task_id": "t1", "timestamp": "2025-01-01T00:00:00"}
+        a = ExecutionAnalysis.from_dict(d)
+        assert a.task_id == "t1"
+        assert a.skill_judgments == []
+        assert a.evolution_suggestions == []
+
+    # --- Adversarial values ---
+
+    def test_skill_record_empty_string_skill_id(self):
+        """Empty string skill_id should be coerced to str, validation catches it."""
+        d = {"skill_id": "", "name": "test"}
+        r = SkillRecord.from_dict(d)
+        assert r.skill_id == ""
+        with pytest.raises(ValidationError, match="skill_id"):
+            r.validate()
+
+    def test_skill_record_very_long_name(self):
+        """Very long name should still round-trip without crash."""
+        long_name = "x" * 10_000
+        d = {"skill_id": "s1", "name": long_name}
+        r = SkillRecord.from_dict(d)
+        assert r.name == long_name
+        assert len(r.name) == 10_000
+
+    def test_skill_version_non_numeric_raises(self):
+        """Non-numeric version components should raise ValidationError."""
+        with pytest.raises(ValidationError):
+            SkillVersion.from_dict({"major": "abc"})
+
+    def test_skill_record_non_numeric_counter_raises(self):
+        """Non-numeric counter should raise ValidationError."""
+        with pytest.raises(ValidationError):
+            SkillRecord.from_dict({
+                "skill_id": "s1",
+                "name": "test",
+                "total_selections": "not_a_number",
+            })
+
+    # --- Type coercion correctness ---
+
+    def test_skill_version_float_coerced(self):
+        """Float version components should be truncated to int."""
+        d = {"major": 1.9, "minor": 2.1, "patch": 0.0}
+        v = SkillVersion.from_dict(d)
+        assert v == SkillVersion(1, 2, 0)
+
+    def test_skill_record_float_counters_coerced(self):
+        """Float counter values should be truncated to int."""
+        d = {
+            "skill_id": "s1",
+            "name": "test",
+            "total_selections": 5.7,
+            "total_applied": 3.2,
+        }
+        r = SkillRecord.from_dict(d)
+        assert r.total_selections == 5
+        assert r.total_applied == 3
