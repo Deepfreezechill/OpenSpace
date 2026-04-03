@@ -14,6 +14,7 @@ from openspace.grounding.core.grounding_client import GroundingClient
 from openspace.execution_engine import ExecutionEngine
 from openspace.llm import LLMClient
 from openspace.recording import RecordingManager
+from openspace.recording_service import RecordingService
 from openspace.skill_engine import ExecutionAnalyzer, SkillRegistry, SkillStore
 from openspace.skill_engine.evolver import SkillEvolver
 from openspace.tool_registry import ToolRegistry
@@ -126,6 +127,7 @@ class OpenSpace:
         self._grounding_config = None  # GroundingConfig reference for skill settings
         self._grounding_agent: Optional[GroundingAgent] = None
         self._recording_manager: Optional[RecordingManager] = None
+        self._recording_service: Optional[RecordingService] = None
         self._skill_registry: Optional[SkillRegistry] = None
         self._tool_registry: Optional[ToolRegistry] = None
         self._execution_engine: Optional[ExecutionEngine] = None
@@ -290,19 +292,9 @@ class OpenSpace:
             logger.debug(f"  Available backends: {[b.value for b in backends]}")
 
             if self.config.enable_recording:
-                self._recording_manager = RecordingManager(
-                    enabled=True,
-                    task_id="",
-                    log_dir=self.config.recording_log_dir,
-                    backends=self.config.recording_backends,
-                    enable_screenshot=self.config.enable_screenshot,
-                    enable_video=self.config.enable_video,
-                    enable_conversation_log=self.config.enable_conversation_log,
-                    agent_name="OpenSpace",
-                )
-                # Inject recording_manager to grounding_client for GUI intermediate steps
-                self._grounding_client.recording_manager = self._recording_manager
-                self._recording_manager.register_to_llm(self._llm_client)
+                self._recording_service = RecordingService(config=self.config)
+                self._recording_manager = self._recording_service.create(llm_client=self._llm_client)
+                self._recording_service.wire(grounding_client=self._grounding_client)
                 logger.info(f"✓ Recording enabled: {len(self._recording_manager.backends or [])} backends")
 
             # Create separate LLM client for tool retrieval if configured
@@ -455,12 +447,8 @@ class OpenSpace:
                 await self._grounding_client.close_all_sessions()
                 logger.debug("All grounding sessions closed")
 
-            if self._recording_manager and self._recording_manager.recording_status:
-                try:
-                    await self._recording_manager.stop()
-                    logger.debug("Recording manager stopped")
-                except Exception as e:
-                    logger.warning(f"Failed to stop recording: {e}")
+            if self._recording_service:
+                await self._recording_service.cleanup()
 
             if self._execution_analyzer:
                 try:
