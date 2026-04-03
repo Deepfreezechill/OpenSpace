@@ -320,6 +320,159 @@ class TestMaybeEvolveQuality:
         """No-op when quality_manager is None."""
         await engine._maybe_evolve_quality()  # Should not raise
 
+    @pytest.mark.asyncio
+    async def test_metric_check_on_every_5(self, engine):
+        """Trigger 3 fires every 5 executions."""
+        evolver = MagicMock()
+        evolver.schedule_background = MagicMock()
+        evolver.process_metric_check = MagicMock(return_value=AsyncMock())
+        evolver.set_available_tools = MagicMock()
+        engine._skill_evolver = evolver
+        engine._execution_count = 4  # next call → 5
+
+        await engine._maybe_evolve_quality()
+        evolver.schedule_background.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_quality_evolution_trigger(self, engine, mock_grounding_client):
+        """Trigger 2 fires when quality manager detects problems."""
+        qm = MagicMock()
+        qm.should_evolve = MagicMock(return_value=True)
+        qm.get_problematic_tools = MagicMock(return_value=["tool_a"])
+        mock_grounding_client.quality_manager = qm
+        mock_grounding_client.evolve_quality = AsyncMock(return_value={"recommendations": ["r1"]})
+
+        evolver = MagicMock()
+        evolver.set_available_tools = MagicMock()
+        evolver.schedule_background = MagicMock()
+        evolver.process_tool_degradation = MagicMock(return_value=AsyncMock())
+        engine._skill_evolver = evolver
+
+        await engine._maybe_evolve_quality()
+        mock_grounding_client.evolve_quality.assert_awaited_once()
+        evolver.schedule_background.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# _resolve_workspace
+# ---------------------------------------------------------------------------
+
+class TestResolveWorkspace:
+
+    def test_explicit_workspace_dir(self, engine):
+        """Explicit workspace_dir argument wins."""
+        ctx = {}
+        engine._resolve_workspace(ctx, "/explicit/dir", "t1")
+        assert ctx["workspace_dir"] == "/explicit/dir"
+
+    def test_config_workspace_dir(self, engine, mock_config):
+        """Falls back to config.workspace_dir."""
+        mock_config.workspace_dir = "/config/ws"
+        ctx = {}
+        engine._resolve_workspace(ctx, None, "t1")
+        assert ctx["workspace_dir"] == "/config/ws"
+
+    def test_recording_manager_trajectory_dir(self, engine, mock_recording_manager, mock_config):
+        """Falls back to recording_manager.trajectory_dir."""
+        mock_config.workspace_dir = None
+        engine._recording_manager = mock_recording_manager
+        mock_recording_manager.trajectory_dir = "/traj/dir"
+        ctx = {}
+        engine._resolve_workspace(ctx, None, "t1")
+        assert ctx["workspace_dir"] == "/traj/dir"
+
+    def test_tempdir_fallback(self, engine, mock_config):
+        """Creates temp directory when nothing else available."""
+        mock_config.workspace_dir = None
+        ctx = {}
+        engine._resolve_workspace(ctx, None, "task_abc")
+        assert "openspace_workspace" in ctx["workspace_dir"]
+        assert "task_abc" in ctx["workspace_dir"]
+
+
+# ---------------------------------------------------------------------------
+# _cleanup_workspace
+# ---------------------------------------------------------------------------
+
+class TestCleanupWorkspace:
+
+    def test_removes_new_files_preserves_old(self, tmp_path):
+        """Removes files not in pre_skill_files set, preserves originals."""
+        from openspace.execution_engine import ExecutionEngine
+
+        (tmp_path / "existing.txt").write_text("keep me")
+        (tmp_path / "new_file.txt").write_text("remove me")
+        new_dir = tmp_path / "new_dir"
+        new_dir.mkdir()
+
+        ExecutionEngine._cleanup_workspace(str(tmp_path), {"existing.txt"})
+        assert (tmp_path / "existing.txt").exists()
+        assert not (tmp_path / "new_file.txt").exists()
+        assert not new_dir.exists()
+
+    def test_empty_path_is_noop(self):
+        """Empty workspace path does nothing."""
+        from openspace.execution_engine import ExecutionEngine
+        ExecutionEngine._cleanup_workspace("", set())  # no raise
+
+
+# ---------------------------------------------------------------------------
+# Concurrency guards
+# ---------------------------------------------------------------------------
+
+class TestConcurrencyGuards:
+
+    @pytest.mark.asyncio
+    async def test_exception_resets_task_done(self, engine, mock_grounding_agent):
+        """_task_done event is re-set after exception (prevents deadlock)."""
+        mock_grounding_agent.process = AsyncMock(side_effect=RuntimeError("boom"))
+        await engine.execute("task")
+        assert engine._task_done.is_set()
+        assert engine.is_running is False
+
+    @pytest.mark.asyncio
+    async def test_concurrent_execute_raises_on_timeout(self, engine):
+        """Raises RuntimeError if busy-wait exceeds timeout."""
+        engine._running = True
+        engine._task_done.clear()
+        with patch("openspace.execution_engine.asyncio.wait_for", side_effect=asyncio.TimeoutError):
+            with pytest.raises(RuntimeError, match="still running"):
+                await engine.execute("task")
+
+
+# ---------------------------------------------------------------------------
+# _maybe_analyze_execution — evolution path
+# ---------------------------------------------------------------------------
+
+class TestAnalyzeExecutionEvolution:
+
+    @pytest.mark.asyncio
+    async def test_triggers_evolution(self, engine):
+        """Skills are evolved when analysis has candidate_for_evolution=True."""
+        analyzer = MagicMock()
+        analysis = MagicMock()
+        analysis.candidate_for_evolution = True
+        analysis.evolution_suggestions = [MagicMock()]
+        analyzer.analyze_execution = AsyncMock(return_value=analysis)
+
+        evolved_rec = MagicMock(
+            skill_id="s1", name="Skill1", description="desc", path=None,
+            lineage=MagicMock(
+                origin=MagicMock(value="synthesized"),
+                generation=1, parent_skill_ids=[], change_summary="init"
+            ),
+        )
+        evolver = MagicMock()
+        evolver.process_analysis = AsyncMock(return_value=[evolved_rec])
+        evolver.set_available_tools = MagicMock()
+
+        engine._execution_analyzer = analyzer
+        engine._skill_evolver = evolver
+
+        await engine._maybe_analyze_execution("t1", "/dir", {"status": "ok"})
+        assert len(engine._last_evolved_skills) == 1
+        assert engine._last_evolved_skills[0]["skill_id"] == "s1"
+
 
 # ---------------------------------------------------------------------------
 # OpenSpace backward compatibility

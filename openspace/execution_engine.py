@@ -147,16 +147,17 @@ class ExecutionEngine:
         self._running = True
         self._task_done.clear()
         self._last_evolved_skills = []
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
 
         if task_id is None:
             task_id = f"task_{uuid.uuid4().hex[:12]}"
         logger.info(f"Task ID: {task_id}")
 
         result: Dict[str, Any] = {}
+        execution_time = 0.0
 
         try:
-            execution_context = context or {}
+            execution_context = dict(context) if context else {}
             execution_context["task_id"] = task_id
             execution_context["instruction"] = task
 
@@ -217,11 +218,11 @@ class ExecutionEngine:
                 )
                 result = await self._grounding_agent.process(execution_context)
 
-            execution_time = asyncio.get_event_loop().time() - start_time
+            execution_time = asyncio.get_running_loop().time() - start_time
             self._log_result(result, execution_time)
 
         except Exception as e:
-            execution_time = asyncio.get_event_loop().time() - start_time
+            execution_time = asyncio.get_running_loop().time() - start_time
             tb = traceback.format_exc(limit=10)
             logger.error(f"Task execution failed: {e}", exc_info=True)
 
@@ -245,14 +246,14 @@ class ExecutionEngine:
                 recording_dir = self._recording_manager.trajectory_dir
 
                 try:
-                    exec_time = asyncio.get_event_loop().time() - start_time
+                    exec_time = asyncio.get_running_loop().time() - start_time
                     await self._recording_manager.save_execution_outcome(
                         status=result.get("status", "unknown"),
                         iterations=result.get("iterations", 0),
                         execution_time=exec_time,
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Failed to save execution outcome: %s", e)
 
                 try:
                     await self._recording_manager.stop()
@@ -335,7 +336,8 @@ class ExecutionEngine:
         execution_context_p2["max_iterations"] = max_iterations
 
         result = await self._grounding_agent.process(execution_context_p2)
-        result["active_skills"] = injected_skill_ids
+        result["active_skills"] = []
+        result["attempted_skills"] = injected_skill_ids
         logger.info(
             f"[Phase 2 — Fallback] {result.get('status', 'unknown')} "
             f"({result.get('iterations', 0)} iterations)"

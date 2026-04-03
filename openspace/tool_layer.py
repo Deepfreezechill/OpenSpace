@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import traceback
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -133,13 +132,8 @@ class OpenSpace:
         self._skill_store: Optional[SkillStore] = None
         self._execution_analyzer: Optional[ExecutionAnalyzer] = None
         self._skill_evolver: Optional[SkillEvolver] = None
-        self._execution_count: int = 0  # For periodic metric-based evolution
-        self._last_evolved_skills: List[Dict[str, Any]] = []  # Tracks skills evolved during last execute()
-
         self._initialized = False
-        self._running = False
-        self._task_done = asyncio.Event()
-        self._task_done.set()  # Initially not running, so "done"
+        self._running = False  # Fallback for pre-init; delegates to engine after init
 
         logger.debug("OpenSpace instance created")
 
@@ -477,7 +471,9 @@ class OpenSpace:
 
             self._initialized = False
             self._running = False
-            self._task_done.set()
+            if self._execution_engine:
+                self._execution_engine._running = False
+                self._execution_engine._task_done.set()
 
             logger.info("OpenSpace cleanup complete")
 
@@ -517,7 +513,7 @@ class OpenSpace:
 
     def __repr__(self) -> str:
         status = "initialized" if self._initialized else "not initialized"
-        if self._running:
+        if self.is_running():
             status = "running"
         backends = ", ".join(self.config.backend_scope) if self.config.backend_scope else "all"
         return f"<OpenSpace(status={status}, backends={backends}, model={self.config.llm_model})>"
