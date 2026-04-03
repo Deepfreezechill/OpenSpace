@@ -61,6 +61,10 @@ class _FakeEvolver:
         self._evolve_derived = AsyncMock(return_value=_FakeSkillRecord(name="derived"))
         self._evolve_captured = AsyncMock(return_value=_FakeSkillRecord(name="captured"))
 
+    async def evolve(self, ctx):
+        """Delegate to dispatch_evolution, mirroring real SkillEvolver."""
+        return await dispatch_evolution(self, ctx)
+
 
 # ---------------------------------------------------------------------------
 # Import orchestrator — patch EvolutionType so dispatch_evolution resolves
@@ -354,6 +358,80 @@ class TestBackwardCompat:
         assert isinstance(_canonical_execute, types.FunctionType)
         assert isinstance(_canonical_schedule, types.FunctionType)
         assert isinstance(_canonical_log, types.FunctionType)
+
+
+# ---------------------------------------------------------------------------
+# Delegation integration — SkillEvolver → orchestrator seam
+# ---------------------------------------------------------------------------
+
+try:
+    from openspace.skill_engine.evolver import SkillEvolver
+    _HAS_EVOLVER = True
+except ImportError:
+    _HAS_EVOLVER = False
+
+
+@pytest.mark.skipif(not _HAS_EVOLVER, reason="SkillEvolver not importable (litellm)")
+class TestDelegationSeam:
+    """Verify SkillEvolver methods actually delegate to orchestrator functions."""
+
+    @pytest.mark.asyncio
+    async def test_evolve_reaches_dispatch(self):
+        """SkillEvolver.evolve() → dispatch_evolution → _evolve_fix."""
+        evolver = object.__new__(SkillEvolver)  # skip __init__
+        called_with = []
+
+        async def fake_fix(ctx):
+            called_with.append(ctx)
+            return _FakeSkillRecord(name="via-evolve")
+
+        evolver._evolve_fix = fake_fix
+
+        ctx = _FakeContext(_FakeSuggestion(evolution_type=_FakeEvolutionType.FIX))
+        with patch("openspace.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
+            result = await evolver.evolve(ctx)
+
+        assert result is not None
+        assert result.name == "via-evolve"
+        assert called_with == [ctx], "evolve() should delegate through to _evolve_fix"
+
+    @pytest.mark.asyncio
+    async def test_execute_contexts_goes_through_evolve(self):
+        """_execute_contexts calls self.evolve(), not dispatch_evolution directly."""
+        evolver = object.__new__(SkillEvolver)
+        evolver._semaphore = asyncio.Semaphore(2)
+        evolve_calls = []
+
+        async def tracking_evolve(ctx):
+            evolve_calls.append(ctx)
+            return _FakeSkillRecord(name="tracked")
+
+        evolver.evolve = tracking_evolve
+
+        ctxs = [
+            _FakeContext(_FakeSuggestion(evolution_type=_FakeEvolutionType.FIX)),
+            _FakeContext(_FakeSuggestion(evolution_type=_FakeEvolutionType.DERIVED)),
+        ]
+        results = await evolver._execute_contexts(ctxs, "seam-test")
+
+        assert len(results) == 2
+        assert len(evolve_calls) == 2, "Batch path must go through evolve(), not bypass it"
+
+    @pytest.mark.asyncio
+    async def test_schedule_background_delegates(self):
+        """SkillEvolver.schedule_background() tracks task in _background_tasks."""
+        evolver = object.__new__(SkillEvolver)
+        evolver._background_tasks = set()
+
+        async def noop():
+            return "bg-done"
+
+        task = evolver.schedule_background(noop(), label="seam-bg")
+        assert task is not None
+        assert task in evolver._background_tasks
+
+        result = await task
+        assert result == "bg-done"
 
 
 # ---------------------------------------------------------------------------

@@ -13,6 +13,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, List, Optional
 
+from openspace.utils.logging import Logger
+
 from .models import EvolutionContext
 
 from openspace.skill_engine.types import EvolutionType
@@ -20,7 +22,7 @@ from openspace.skill_engine.types import EvolutionType
 if TYPE_CHECKING:
     from openspace.skill_engine.types import SkillRecord
 
-logger = logging.getLogger(__name__)
+logger = Logger.get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +80,7 @@ async def execute_contexts(
 
     async def _throttled(c: EvolutionContext) -> Optional["SkillRecord"]:
         async with evolver._semaphore:
-            return await dispatch_evolution(evolver, c)
+            return await evolver.evolve(c)
 
     raw = await asyncio.gather(
         *[_throttled(c) for c in contexts],
