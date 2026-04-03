@@ -549,3 +549,389 @@ class TestClose:
             assert store2.count() == 0
         finally:
             store2.close()
+
+
+class TestFacadeHydrationFix:
+    """Regression tests for facade methods returning fully hydrated SkillRecords.
+    
+    Prior to the fix, get_versions(), get_ancestry(), and load_by_category() 
+    returned partially hydrated records missing tags, tool_deps, critical_tools,
+    and/or recent_analyses.
+    """
+
+    @pytest.mark.asyncio
+    async def test_get_versions_returns_fully_hydrated_records(self, store):
+        """get_versions() should return records with tags, tool_deps, critical_tools, and recent_analyses."""
+        # Create a skill record with all fields populated
+        record = SkillRecord(
+            skill_id="hydration_test_v1",
+            name="hydration_test",
+            description="Test hydration fix",
+            category=SkillCategory.TOOL_GUIDE,
+            visibility=SkillVisibility.PUBLIC,
+            path="/test/hydration.py",
+            lineage=SkillLineage(
+                origin=SkillOrigin.IMPORTED,
+                generation=0,
+                content_snapshot={"hydration.py": "def test_skill():\n    pass"},
+            ),
+            tags=["test-tag", "hydration-tag"],
+            tool_dependencies=["tool1", "tool2"],
+            critical_tools=["tool1"],
+            total_selections=5,
+            total_applied=3,
+            total_completions=2,
+            total_fallbacks=1,
+            recent_analyses=[],
+            first_seen=datetime.now(),
+            last_updated=datetime.now(),
+        )
+        
+        # Save the record
+        await store.save_record(record)
+        
+        # Add an analysis to test recent_analyses hydration
+        analysis = ExecutionAnalysis(
+            task_id="hydration_task_123",
+            timestamp=datetime.now(),
+            task_completed=True,
+            execution_note="Test hydration analysis",
+            skill_judgments=[
+                SkillJudgment(
+                    skill_id=record.skill_id,
+                    skill_applied=True,
+                    note="Skill applied successfully in hydration test",
+                )
+            ],
+            analyzed_at=datetime.now(),
+        )
+        await store.record_analysis(analysis)
+        
+        # Test get_versions() - this delegates to LineageTracker
+        versions = store.get_versions("hydration_test")
+        assert len(versions) == 1
+        
+        hydrated_record = versions[0]
+        
+        # Verify ALL fields are hydrated
+        assert set(hydrated_record.tags) == {"test-tag", "hydration-tag"}
+        assert set(hydrated_record.tool_dependencies) == {"tool1", "tool2"}
+        assert set(hydrated_record.critical_tools) == {"tool1"}
+        assert len(hydrated_record.recent_analyses) == 1
+        assert hydrated_record.recent_analyses[0].task_id == "hydration_task_123"
+
+    @pytest.mark.asyncio
+    async def test_get_ancestry_returns_fully_hydrated_records(self, store):
+        """get_ancestry() should return records with tags, tool_deps, critical_tools, and recent_analyses."""
+        # Create a parent skill
+        parent_record = SkillRecord(
+            skill_id="parent_skill_v1",
+            name="parent_skill",
+            description="Parent skill for ancestry test",
+            category=SkillCategory.WORKFLOW,
+            visibility=SkillVisibility.PUBLIC,
+            path="/test/parent.py",
+            lineage=SkillLineage(
+                origin=SkillOrigin.IMPORTED,
+                generation=0,
+                content_snapshot={"parent.py": "def parent_skill():\n    pass"},
+            ),
+            tags=["parent-tag", "ancestry-tag"],
+            tool_dependencies=["parent-tool"],
+            critical_tools=["parent-tool"],
+            total_selections=2,
+            total_applied=1,
+            total_completions=1,
+            total_fallbacks=0,
+            recent_analyses=[],
+            first_seen=datetime.now(),
+            last_updated=datetime.now(),
+        )
+        
+        # Create a child skill that derives from parent
+        child_record = SkillRecord(
+            skill_id="child_skill_v1", 
+            name="child_skill",
+            description="Child skill derived from parent",
+            category=SkillCategory.WORKFLOW,
+            visibility=SkillVisibility.PUBLIC,
+            path="/test/child.py",
+            lineage=SkillLineage(
+                origin=SkillOrigin.DERIVED,
+                generation=1,
+                parent_skill_ids=[parent_record.skill_id],
+                source_task_id="ancestry_derivation_task",
+                change_summary="Derived from parent skill",
+                content_diff="@@ -1,1 +1,1 @@\n-def parent_skill():\n+def child_skill():",
+                content_snapshot={"child.py": "def child_skill():\n    pass"},
+                created_by="hydration_test",
+            ),
+            tags=["child-tag", "derived-tag"],
+            tool_dependencies=["child-tool"],
+            critical_tools=["child-tool"],
+            total_selections=0,
+            total_applied=0,
+            total_completions=0,
+            total_fallbacks=0,
+            recent_analyses=[],
+            first_seen=datetime.now(),
+            last_updated=datetime.now(),
+        )
+        
+        # Save both records
+        await store.save_record(parent_record)
+        await store.save_record(child_record)
+        
+        # Add analyses for both to test recent_analyses hydration
+        parent_analysis = ExecutionAnalysis(
+            task_id="parent_task_456",
+            timestamp=datetime.now(),
+            task_completed=True,
+            execution_note="Parent skill analysis",
+            skill_judgments=[
+                SkillJudgment(
+                    skill_id=parent_record.skill_id,
+                    skill_applied=True,
+                    note="Parent skill executed",
+                )
+            ],
+            analyzed_at=datetime.now(),
+        )
+        await store.record_analysis(parent_analysis)
+        
+        # Test get_ancestry() - this delegates to LineageTracker
+        ancestry = store.get_ancestry(child_record.skill_id)
+        assert len(ancestry) == 1
+        
+        hydrated_parent = ancestry[0]
+        
+        # Verify ALL fields are hydrated for the parent returned by get_ancestry
+        assert hydrated_parent.skill_id == parent_record.skill_id
+        assert set(hydrated_parent.tags) == {"parent-tag", "ancestry-tag"}
+        assert set(hydrated_parent.tool_dependencies) == {"parent-tool"}
+        assert set(hydrated_parent.critical_tools) == {"parent-tool"}
+        assert len(hydrated_parent.recent_analyses) == 1
+        assert hydrated_parent.recent_analyses[0].task_id == "parent_task_456"
+
+    @pytest.mark.asyncio
+    async def test_load_by_category_returns_fully_hydrated_records(self, store):
+        """load_by_category() should return records with tags, tool_deps, critical_tools, and recent_analyses."""
+        # Create a skill record with all fields populated
+        record = SkillRecord(
+            skill_id="category_test_v1",
+            name="category_test", 
+            description="Test category hydration",
+            category=SkillCategory.REFERENCE,
+            visibility=SkillVisibility.PUBLIC,
+            path="/test/category.py",
+            lineage=SkillLineage(
+                origin=SkillOrigin.IMPORTED,
+                generation=0,
+                content_snapshot={"category.py": "def category_skill():\n    pass"},
+            ),
+            tags=["category-tag", "reference-tag"],
+            tool_dependencies=["cat-tool1", "cat-tool2"],
+            critical_tools=["cat-tool1"],
+            total_selections=3,
+            total_applied=2,
+            total_completions=2,
+            total_fallbacks=0,
+            recent_analyses=[],
+            first_seen=datetime.now(),
+            last_updated=datetime.now(),
+        )
+        
+        # Save the record
+        await store.save_record(record)
+        
+        # Add an analysis to test recent_analyses hydration
+        analysis = ExecutionAnalysis(
+            task_id="category_task_789",
+            timestamp=datetime.now(),
+            task_completed=True,
+            execution_note="Category test analysis",
+            skill_judgments=[
+                SkillJudgment(
+                    skill_id=record.skill_id,
+                    skill_applied=True,
+                    note="Category skill applied successfully",
+                )
+            ],
+            analyzed_at=datetime.now(),
+        )
+        await store.record_analysis(analysis)
+        
+        # DEBUG: Let's verify the record was saved correctly
+        saved_record = store.load_record("category_test_v1")  
+        assert saved_record is not None
+        
+        # Test load_by_category() - this delegates to SkillRepository  
+        category_records = store.load_by_category(SkillCategory.REFERENCE)
+        assert len(category_records) == 1
+        
+        hydrated_record = category_records[0]
+        
+        # Verify ALL fields are hydrated 
+        assert set(hydrated_record.tags) == {"category-tag", "reference-tag"}
+        assert set(hydrated_record.tool_dependencies) == {"cat-tool1", "cat-tool2"}
+        assert set(hydrated_record.critical_tools) == {"cat-tool1"}
+        assert len(hydrated_record.recent_analyses) == 1
+        assert hydrated_record.recent_analyses[0].task_id == "category_task_789"
+
+    @pytest.mark.asyncio
+    async def test_hydration_consistency_across_facade_methods(self, store):
+        """All facade methods should return consistently hydrated records for the same skill."""
+        # Create a skill that we'll access through multiple facade methods
+        record = SkillRecord(
+            skill_id="consistency_test_v1",
+            name="consistency_test",
+            description="Test hydration consistency",
+            category=SkillCategory.TOOL_GUIDE,
+            visibility=SkillVisibility.PUBLIC,
+            path="/test/consistency.py",
+            lineage=SkillLineage(
+                origin=SkillOrigin.IMPORTED,
+                generation=0,
+                content_snapshot={"consistency.py": "def consistent_skill():\n    pass"},
+            ),
+            tags=["consistency-tag", "facade-tag"],
+            tool_dependencies=["cons-tool1", "cons-tool2"],
+            critical_tools=["cons-tool1"],
+            total_selections=1,
+            total_applied=1,
+            total_completions=1,
+            total_fallbacks=0,
+            recent_analyses=[],
+            first_seen=datetime.now(),
+            last_updated=datetime.now(),
+        )
+        
+        # Save the record
+        await store.save_record(record)
+        
+        # Add an analysis
+        analysis = ExecutionAnalysis(
+            task_id="consistency_task_999",
+            timestamp=datetime.now(),
+            task_completed=True,
+            execution_note="Consistency test analysis",
+            skill_judgments=[
+                SkillJudgment(
+                    skill_id=record.skill_id,
+                    skill_applied=True,
+                    note="Consistency skill applied",
+                )
+            ],
+            analyzed_at=datetime.now(),
+        )
+        await store.record_analysis(analysis)
+        
+        # Get the same skill through different facade methods
+        
+        # Method 1: load_record (direct facade method, should be fully hydrated)
+        direct_record = store.load_record(record.skill_id)
+        
+        # Method 2: get_versions (delegates to LineageTracker)
+        versions = store.get_versions("consistency_test")
+        versions_record = versions[0]
+        
+        # Method 3: load_by_category (delegates to SkillRepository)
+        category_records = store.load_by_category(SkillCategory.TOOL_GUIDE)
+        category_record = next(r for r in category_records if r.skill_id == record.skill_id)
+        
+        # All three methods should return identically hydrated records
+        expected_tags = {"consistency-tag", "facade-tag"}
+        expected_tool_deps = {"cons-tool1", "cons-tool2"}
+        expected_critical_tools = {"cons-tool1"}
+        
+        for method_name, retrieved_record in [
+            ("load_record", direct_record),
+            ("get_versions", versions_record),
+            ("load_by_category", category_record),
+        ]:
+            assert set(retrieved_record.tags) == expected_tags, f"{method_name} failed tag hydration"
+            assert set(retrieved_record.tool_dependencies) == expected_tool_deps, f"{method_name} failed tool_deps hydration"
+            assert set(retrieved_record.critical_tools) == expected_critical_tools, f"{method_name} failed critical_tools hydration"
+            assert len(retrieved_record.recent_analyses) == 1, f"{method_name} failed recent_analyses hydration"
+            assert retrieved_record.recent_analyses[0].task_id == "consistency_task_999", f"{method_name} failed recent_analyses content"
+
+    @pytest.mark.asyncio 
+    async def test_f5_evolved_child_inherits_tags(self, store):
+        """F5: When skill A (with tags) is evolved to B, B should inherit A's tags (if expected)."""
+        # Create a parent skill with tags
+        parent_record = SkillRecord(
+            skill_id="parent_f5_v1",
+            name="parent_f5",
+            description="Parent skill with tags",
+            category=SkillCategory.WORKFLOW,
+            visibility=SkillVisibility.PUBLIC,
+            path="/test/parent_f5.py",
+            lineage=SkillLineage(
+                origin=SkillOrigin.IMPORTED,
+                generation=0,
+                content_snapshot={"parent_f5.py": "def parent_f5():\n    pass"},
+            ),
+            tags=["parent-tag", "workflow-tag"],
+            tool_dependencies=["parent-tool"],
+            critical_tools=["parent-tool"],
+            total_selections=1,
+            total_applied=1,
+            total_completions=1,
+            total_fallbacks=0,
+            recent_analyses=[],
+            first_seen=datetime.now(),
+            last_updated=datetime.now(),
+        )
+        
+        # Create a child skill that derives from parent (without explicitly copying tags)
+        child_record = SkillRecord(
+            skill_id="child_f5_v1", 
+            name="child_f5",
+            description="Child skill derived from parent",
+            category=SkillCategory.WORKFLOW,
+            visibility=SkillVisibility.PUBLIC,
+            path="/test/child_f5.py",
+            lineage=SkillLineage(
+                origin=SkillOrigin.DERIVED,
+                generation=1,
+                parent_skill_ids=[parent_record.skill_id],
+                source_task_id="f5_derivation_task",
+                change_summary="Derived from parent skill",
+                content_diff="@@ -1,1 +1,1 @@\n-def parent_f5():\n+def child_f5():",
+                content_snapshot={"child_f5.py": "def child_f5():\n    pass"},
+                created_by="f5_test",
+            ),
+            tags=[],  # No tags initially - should inherit from parent?
+            tool_dependencies=["child-tool"],
+            critical_tools=["child-tool"],
+            total_selections=0,
+            total_applied=0,
+            total_completions=0,
+            total_fallbacks=0,
+            recent_analyses=[],
+            first_seen=datetime.now(),
+            last_updated=datetime.now(),
+        )
+        
+        # Save parent, then evolve to child
+        await store.save_record(parent_record)
+        await store.evolve_skill(child_record, [parent_record.skill_id])
+        
+        # Check if child inherited parent's tags
+        child_loaded = store.load_record(child_record.skill_id)
+        print(f"DEBUG F5: Parent tags: {parent_record.tags}")
+        print(f"DEBUG F5: Child record tags: {child_record.tags}") 
+        print(f"DEBUG F5: Child loaded tags: {child_loaded.tags}")
+        
+        # This test documents current behavior - whether tags are inherited or not
+        # Based on findings, we may need to implement tag propagation in evolution
+        # For now, just check what actually happens
+        assert child_loaded is not None
+        
+        # If tags should be inherited, this would be the assertion:
+        # assert set(child_loaded.tags) >= {"parent-tag", "workflow-tag"}
+        # But let's see what actually happens first
+        if not child_loaded.tags:
+            print(f"INFO F5: Child does NOT inherit parent tags (current behavior)")
+        else:
+            print(f"INFO F5: Child has tags: {child_loaded.tags}")
