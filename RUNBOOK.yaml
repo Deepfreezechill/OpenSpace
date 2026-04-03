@@ -46,29 +46,43 @@ completed_phases:
     epics: 8
     pr_range: "#451–#459"
 
+  - id: P2
+    name: "Phase 2 — Smart Sandbox"
+    epics: 6
+    pr_range: "#1"
+
+  - id: P3
+    name: "Phase 3 — Skill Store Decomposition"
+    epics: 7
+    pr_range: "#12–#28"
+    notes: >
+      Monolithic store.py (1,345 lines) decomposed into 5 focused modules
+      (SkillRepository, LineageTracker, AnalysisStore, TagSearch, MigrationManager)
+      plus types.py. 7 epics + 3 validation/cleanup PRs. 1,356 tests passing.
+
 # ---------------------------------------------------------------------
 # In-Progress Phase
 # ---------------------------------------------------------------------
 active_phase:
-  id: P2
-  name: "Phase 2 — Smart Sandbox"
+  id: P4
+  name: "Phase 4 — Tool Layer + MCP Decomposition"
   status: in_progress          # pending | in_progress | complete
-  epics_total: 6
-  epics_merged: 5
+  epics_total: 10
+  epics_merged: 0
 
 # ---------------------------------------------------------------------
 # Remaining Epics
 # ---------------------------------------------------------------------
 epics:
 
-  # === Phase 2 (finishing) ===
+  # === Phase 2 (COMPLETE) ===
   - id: "2.6"
     phase: P2
     title: "Secret Broker"
-    status: in_review           # pending | claimed | building | in_review | merged
+    status: merged
     branch: "epic/2.6-secret-broker"
-    pr: 473
-    review_round: 5             # NOTE: predates max_rounds policy; grandfathered
+    pr: 1
+    review_round: 5
     description: >
       Scoped storage, encryption at rest, capability-based access with owner
       isolation. 64 tests, 1028 suite passing.
@@ -78,14 +92,14 @@ epics:
       - "Full suite 1028+ green"
       - "/8eyes + /collab buyoff"
 
-  # === Phase 3 — Extract store.py (1172 lines → 7 modules) ===
+  # === Phase 3 — Extract store.py (COMPLETE — 1,345 lines → 5 modules + types + facade) ===
   - id: "3.1"
     phase: P3
     title: "Extract SkillSchema + SkillVersion models"
-    status: pending
-    branch: null
-    pr: null
-    review_round: 0
+    status: merged
+    branch: "epic/3.1-skill-schema"
+    pr: 12
+    review_round: 2
     source_file: "openspace/skill_engine/store.py"
     target_module: "openspace/skill_engine/skill_schema.py"
     description: >
@@ -99,10 +113,10 @@ epics:
   - id: "3.2"
     phase: P3
     title: "Extract SkillRepository (CRUD)"
-    status: pending
-    branch: null
-    pr: null
-    review_round: 0
+    status: merged
+    branch: "epic/3.2-skill-repository"
+    pr: 15
+    review_round: 2
     source_file: "openspace/skill_engine/store.py"
     target_module: "openspace/skill_engine/skill_repository.py"
     description: >
@@ -116,10 +130,10 @@ epics:
   - id: "3.3"
     phase: P3
     title: "Extract LineageTracker"
-    status: pending
-    branch: null
-    pr: null
-    review_round: 0
+    status: merged
+    branch: "epic/3.3-lineage-tracker"
+    pr: 17
+    review_round: 2
     source_file: "openspace/skill_engine/store.py"
     target_module: "openspace/skill_engine/lineage_tracker.py"
     description: >
@@ -132,10 +146,10 @@ epics:
   - id: "3.4"
     phase: P3
     title: "Extract AnalysisStore"
-    status: pending
-    branch: null
-    pr: null
-    review_round: 0
+    status: merged
+    branch: "epic/3.4-analysis-store"
+    pr: 19
+    review_round: 2
     source_file: "openspace/skill_engine/store.py"
     target_module: "openspace/skill_engine/analysis_store.py"
     description: >
@@ -149,10 +163,10 @@ epics:
   - id: "3.5"
     phase: P3
     title: "Extract TagIndex + SearchEngine"
-    status: pending
-    branch: null
-    pr: null
-    review_round: 0
+    status: merged
+    branch: "epic/3.5-tag-search"
+    pr: 21
+    review_round: 2
     source_file: "openspace/skill_engine/store.py"
     target_module: "openspace/skill_engine/tag_index_search.py"
     description: >
@@ -165,10 +179,10 @@ epics:
   - id: "3.6"
     phase: P3
     title: "Extract MigrationManager"
-    status: pending
-    branch: null
-    pr: null
-    review_round: 0
+    status: merged
+    branch: "epic/3.6-migration-manager"
+    pr: 23
+    review_round: 2
     source_file: "openspace/skill_engine/store.py"
     target_module: "openspace/skill_engine/migration_manager.py"
     description: >
@@ -180,11 +194,14 @@ epics:
 
   - id: "3.7"
     phase: P3
-    title: "P3 integration tests + store.py deletion"
-    status: pending
-    branch: null
-    pr: null
-    review_round: 0
+    title: "P3 integration tests + store.py cleanup"
+    status: merged
+    branch: "epic/3.7-integration-cleanup"
+    pr: 25
+    review_round: 4
+    notes: >
+      Additional PRs: #26 (E2E validation, 7 blockers fixed), #27 (warning cleanup),
+      #28 (batch hydration + mypy fixes). All merged. 1,356 tests passing.
     source_file: "openspace/skill_engine/store.py"
     target_module: null
     description: >
