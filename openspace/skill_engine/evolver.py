@@ -29,7 +29,6 @@ from openspace.prompts import SkillEnginePrompts
 from openspace.utils.logging import Logger
 
 from .evolution.models import (
-    _MAX_SKILL_NAME_LENGTH,
     EvolutionContext,
     EvolutionTrigger,
     _sanitize_skill_name,
