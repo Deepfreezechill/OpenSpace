@@ -17,6 +17,7 @@ Environment variables: see ``openspace/host_detection/`` and ``openspace/cloud/a
 from __future__ import annotations
 
 import asyncio
+import atexit
 import inspect
 import json
 import logging
@@ -88,18 +89,35 @@ _real_stdout = sys.stdout
 # drain stderr. Heavy log/print output during execute_task fills the stderr
 # pipe buffer, blocking this process on write() → deadlock → timeout.
 # Redirect stderr to a log file on Windows to prevent this.
+_stderr_file = None
 if os.name == "nt":
     _stderr_file = open(_LOG_DIR / "mcp_stderr.log", "a", encoding="utf-8", buffering=1)
     sys.stderr = _stderr_file
 
 sys.stdout = _MCPSafeStdout(_real_stdout, sys.stderr)
 
+# Set up file handler for logging
+_log_file_handler = logging.FileHandler(_LOG_DIR / "mcp_server.log")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler(_LOG_DIR / "mcp_server.log")],
+    handlers=[_log_file_handler],
 )
 logger = logging.getLogger("openspace.mcp_server")
+
+
+def _cleanup_file_handles():
+    """Clean up file handles on exit."""
+    global _stderr_file, _log_file_handler
+    if _stderr_file:
+        _stderr_file.close()
+        _stderr_file = None
+    if _log_file_handler:
+        _log_file_handler.close()
+
+
+# Register cleanup handler
+atexit.register(_cleanup_file_handles)
 
 from mcp.server.fastmcp import FastMCP
 

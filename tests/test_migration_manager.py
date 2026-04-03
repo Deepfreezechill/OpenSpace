@@ -189,25 +189,29 @@ class TestSchemaVersioning:
 
     def test_set_and_get_schema_version(self, migration_manager):
         """Test setting and retrieving schema versions."""
-        migration_manager.set_schema_version(5)
+        with pytest.deprecated_call():
+            migration_manager.set_schema_version(5)
         version = migration_manager.get_schema_version()
         assert version == 5
         
-        migration_manager.set_schema_version(10)
+        with pytest.deprecated_call():
+            migration_manager.set_schema_version(10)
         version = migration_manager.get_schema_version()
         assert version == 10
 
     def test_set_negative_version_fails(self, migration_manager):
         """Test that setting negative version raises error."""
         with pytest.raises(ValueError, match="version must be non-negative"):
-            migration_manager.set_schema_version(-1)
+            with pytest.deprecated_call():
+                migration_manager.set_schema_version(-1)
 
     def test_version_persists_across_connections(self, temp_db_path):
         """Test that schema version persists when reopening database."""
         # Set version in first instance
         manager1 = MigrationManager(db_path=temp_db_path)
         manager1.initialize_schema()  # Create tables first
-        manager1.set_schema_version(7)
+        with pytest.deprecated_call():
+            manager1.set_schema_version(7)
         manager1.close()
         
         # Verify version persists in second instance
@@ -240,7 +244,8 @@ class TestSchemaMigration:
 
     def test_migrate_same_version_is_noop(self, migration_manager):
         """Test that migrating to current version is no-op."""
-        migration_manager.set_schema_version(3)
+        with pytest.deprecated_call():
+            migration_manager.set_schema_version(3)
         
         # Should not raise error and version should remain unchanged
         migration_manager.migrate_to_version(3)
@@ -248,14 +253,16 @@ class TestSchemaMigration:
 
     def test_migrate_to_lower_version_fails(self, migration_manager):
         """Test that downgrading version is not allowed."""
-        migration_manager.set_schema_version(5)
+        with pytest.deprecated_call():
+            migration_manager.set_schema_version(5)
         
         with pytest.raises(ValueError, match="Cannot downgrade from version 5 to 3"):
             migration_manager.migrate_to_version(3)
 
     def test_unsupported_migration_path_fails(self, migration_manager):
         """Test that unsupported migration paths raise errors."""
-        migration_manager.set_schema_version(2)
+        with pytest.deprecated_call():
+            migration_manager.set_schema_version(2)
         
         with pytest.raises(RuntimeError, match="Migration from version 2 to 5 not supported"):
             migration_manager.migrate_to_version(5)
@@ -272,7 +279,8 @@ class TestSchemaMigration:
 
     def test_ensure_current_schema_handles_newer_version(self, migration_manager):
         """Test warning when database is newer than expected."""
-        migration_manager.set_schema_version(5)
+        with pytest.deprecated_call():
+            migration_manager.set_schema_version(5)
         
         # Should log warning but not fail
         with patch('openspace.skill_engine.migration_manager.logger') as mock_logger:
@@ -340,17 +348,22 @@ class TestErrorHandling:
         """Test that operations fail after manager is closed."""
         migration_manager.close()
         
-        operations = [
-            lambda: migration_manager.initialize_schema(),
-            lambda: migration_manager.get_schema_version(),
-            lambda: migration_manager.set_schema_version(1),
-            lambda: migration_manager.migrate_to_version(1),
-            lambda: migration_manager.ensure_current_schema(1),
-        ]
-        
-        for operation in operations:
-            with pytest.raises(RuntimeError, match="MigrationManager is closed"):
-                operation()
+        # Test each operation individually
+        with pytest.raises(RuntimeError, match="MigrationManager is closed"):
+            migration_manager.initialize_schema()
+            
+        with pytest.raises(RuntimeError, match="MigrationManager is closed"):
+            migration_manager.get_schema_version()
+            
+        with pytest.raises(RuntimeError, match="MigrationManager is closed"):
+            with pytest.deprecated_call():
+                migration_manager.set_schema_version(1)
+                
+        with pytest.raises(RuntimeError, match="MigrationManager is closed"):
+            migration_manager.migrate_to_version(1)
+            
+        with pytest.raises(RuntimeError, match="MigrationManager is closed"):
+            migration_manager.ensure_current_schema(1)
 
 
 class TestSkillStoreFacadeIntegration:
