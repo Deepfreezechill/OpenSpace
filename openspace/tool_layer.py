@@ -13,6 +13,7 @@ from openspace.config.loader import get_agent_config
 from openspace.grounding.core.grounding_client import GroundingClient
 from openspace.execution_engine import ExecutionEngine
 from openspace.llm import LLMClient
+from openspace.llm_factory import LLMFactory
 from openspace.recording_service import RecordingService
 from openspace.skill_engine import ExecutionAnalyzer, SkillRegistry, SkillStore
 from openspace.skill_engine.evolver import SkillEvolver
@@ -125,6 +126,7 @@ class OpenSpace:
         self._container = container or AppContainer()
 
         self._llm_client: Optional[LLMClient] = None
+        self._llm_factory: Optional[LLMFactory] = None
         self._grounding_client: Optional[GroundingClient] = None
         self._grounding_config = None  # GroundingConfig reference for skill settings
         self._grounding_agent: Optional[GroundingAgent] = None
@@ -205,14 +207,8 @@ class OpenSpace:
         logger.info("Initializing OpenSpace...")
 
         try:
-            self._llm_client = LLMClient(
-                model=self.config.llm_model,
-                enable_thinking=self.config.llm_enable_thinking,
-                rate_limit_delay=self.config.llm_rate_limit_delay,
-                max_retries=self.config.llm_max_retries,
-                timeout=self.config.llm_timeout,
-                **self.config.llm_kwargs,
-            )
+            self._llm_factory = LLMFactory(config=self.config)
+            self._llm_client = self._llm_factory.create_main()
             logger.info(f"✓ LLM Client: {self.config.llm_model}")
 
             # Load grounding config
@@ -300,16 +296,8 @@ class OpenSpace:
                 logger.info(f"✓ Recording enabled: {len(self._recording_manager.backends or [])} backends")
 
             # Create separate LLM client for tool retrieval if configured
-            # Inherits llm_kwargs (api_key, api_base, etc.) so credentials
-            # from the host agent are shared across all internal LLM clients.
-            tool_retrieval_llm = None
-            if self.config.tool_retrieval_model:
-                tool_retrieval_llm = LLMClient(
-                    model=self.config.tool_retrieval_model,
-                    timeout=self.config.llm_timeout,
-                    max_retries=self.config.llm_max_retries,
-                    **self.config.llm_kwargs,
-                )
+            tool_retrieval_llm = self._llm_factory.create_tool_retrieval()
+            if tool_retrieval_llm:
                 logger.info(f"✓ Tool retrieval LLM: {self.config.tool_retrieval_model}")
 
             self._grounding_agent = GroundingAgent(
