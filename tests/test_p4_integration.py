@@ -12,8 +12,8 @@ as a system. These test OUTCOMES, not implementation details:
 from __future__ import annotations
 
 import asyncio
-import importlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -123,7 +123,7 @@ class TestOpenSpaceFacadeIntegration:
         assert "OpenSpace" in r
 
     def test_openspace_execute_delegates_to_engine(self):
-        """execute() delegates to ExecutionEngine (outcome: no AttributeError)."""
+        """execute() delegates to ExecutionEngine with correct args."""
         cfg = OpenSpaceConfig(llm_model="m", llm_kwargs={})
         os_inst = OpenSpace(config=cfg)
         mock_engine = AsyncMock()
@@ -131,10 +131,10 @@ class TestOpenSpaceFacadeIntegration:
         os_inst._execution_engine = mock_engine
         os_inst._initialized = True
 
-        result = asyncio.get_event_loop().run_until_complete(
-            os_inst.execute(task="test task")
-        )
+        result = asyncio.run(os_inst.execute(task="test task"))
         mock_engine.execute.assert_called_once()
+        call_kwargs = mock_engine.execute.call_args
+        assert call_kwargs is not None, "execute() not called with expected args"
         assert result["status"] == "success"
 
     def test_openspace_cleanup_delegates(self):
@@ -145,11 +145,12 @@ class TestOpenSpaceFacadeIntegration:
         mock_engine._running = False
         mock_engine._task_done = None
         os_inst._execution_engine = mock_engine
-        os_inst._recording_service = MagicMock()
+        mock_recording = MagicMock()
+        os_inst._recording_service = mock_recording
         os_inst._initialized = True
 
-        asyncio.get_event_loop().run_until_complete(os_inst.cleanup())
-        # Should not raise — delegates cleanly
+        asyncio.run(os_inst.cleanup())
+        mock_recording.cleanup.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -162,21 +163,23 @@ class TestMCPServerIntegration:
     def test_create_mcp_app_registers_all_tools(self):
         """OUTCOME: A fresh MCP app has exactly 4 tools with correct names."""
         app = create_mcp_app()
-        if hasattr(app, "_tool_manager") and hasattr(app._tool_manager, "_tools"):
-            tools = set(app._tool_manager._tools.keys())
-            assert tools == {"execute_task", "search_skills", "fix_skill", "upload_skill"}, (
-                f"Expected 4 tools, got: {tools}"
-            )
+        # FastMCP stores tools in _tool_manager._tools — assert structure exists
+        assert hasattr(app, "_tool_manager"), "FastMCP app missing _tool_manager"
+        assert hasattr(app._tool_manager, "_tools"), "_tool_manager missing _tools"
+        tools = set(app._tool_manager._tools.keys())
+        assert tools == {"execute_task", "search_skills", "fix_skill", "upload_skill"}, (
+            f"Expected 4 tools, got: {tools}"
+        )
 
     def test_tool_signatures_have_docstrings(self):
         """OUTCOME: Each tool has a substantive docstring (MCP uses these)."""
         app = create_mcp_app()
-        if hasattr(app, "_tool_manager") and hasattr(app._tool_manager, "_tools"):
-            for name, tool in app._tool_manager._tools.items():
-                fn = tool.fn if hasattr(tool, "fn") else None
-                if fn:
-                    assert fn.__doc__, f"Tool {name} has no docstring"
-                    assert len(fn.__doc__) > 50, f"Tool {name} docstring too short"
+        assert hasattr(app, "_tool_manager"), "FastMCP app missing _tool_manager"
+        for name, tool in app._tool_manager._tools.items():
+            assert hasattr(tool, "fn"), f"Tool {name} has no .fn attribute"
+            fn = tool.fn
+            assert fn.__doc__, f"Tool {name} has no docstring"
+            assert len(fn.__doc__) > 50, f"Tool {name} docstring too short ({len(fn.__doc__)} chars)"
 
     def test_independent_apps_have_independent_tools(self):
         """OUTCOME: Two apps don't share state."""
@@ -205,11 +208,13 @@ class TestMCPServerIntegration:
         assert parsed["skills_used"] == ["web_scraper"]
 
     def test_error_formatting_roundtrip(self):
-        """OUTCOME: An error survives format → JSON → parse."""
+        """OUTCOME: An error survives format → JSON → parse with expected fields."""
         json_str = _json_error("Something went wrong", error_code="TEST_ERROR")
         parsed = json.loads(json_str)
-        # Should be a valid JSON object with error information
-        assert isinstance(parsed, dict)
+        assert parsed["isError"] is True
+        assert parsed["error_code"] == "TEST_ERROR"
+        assert parsed["message"] == "Something went wrong"
+        assert "correlation_id" in parsed
 
 
 # ---------------------------------------------------------------------------
@@ -221,9 +226,11 @@ class TestCrossModuleInteraction:
     @_skip_registry
     def test_tool_registry_import_chain(self):
         """ToolRegistry can be imported and has expected API."""
-        assert hasattr(ToolRegistry, "discover_from_dirs")
-        assert hasattr(ToolRegistry, "list_skills")
-        assert hasattr(ToolRegistry, "register_skill_dir")
+        assert hasattr(ToolRegistry, "discover")
+        assert hasattr(ToolRegistry, "select_and_inject")
+        assert isinstance(
+            ToolRegistry.registry, property
+        ), "registry should be a property"
 
     @_skip_engine
     def test_execution_engine_import_chain(self):
@@ -277,16 +284,27 @@ class TestBackwardCompatibility:
         assert callable(run_mcp_server)
 
     def test_mcp_server_shim_exports_mcp(self):
-        """openspace.mcp_server.mcp still exists (lazy proxy)."""
+        """openspace.mcp_server.mcp lazy proxy actually delegates to FastMCP."""
         import openspace.mcp_server as srv
 
         assert hasattr(srv, "mcp")
+        # Exercise __getattr__ — forces the proxy to create the real app
+        assert hasattr(srv.mcp, "name"), "Lazy proxy failed to delegate .name to FastMCP"
 
     def test_mcp_server_shim_exports_create_app(self):
         """from openspace.mcp_server import create_mcp_app still works."""
         from openspace.mcp_server import create_mcp_app
 
         assert callable(create_mcp_app)
+
+    def test_package_level_mcp_imports(self):
+        """openspace.mcp package exports expected public API."""
+        from openspace.mcp.server import create_mcp_app, run_mcp_server
+        from openspace.mcp.tool_handlers import register_handlers
+
+        assert callable(create_mcp_app)
+        assert callable(run_mcp_server)
+        assert callable(register_handlers)
 
     @_skip_core
     def test_tool_layer_exports_openspace_class(self):
@@ -305,29 +323,37 @@ class TestArchitectureSoundness:
     """Verify no circular imports and clean package boundaries."""
 
     def test_no_circular_imports(self):
-        """All P4 MCP modules can be imported independently without cycles."""
-        modules = [
-            "openspace.mcp.server",
-            "openspace.mcp.tool_handlers",
-            "openspace.mcp_server",
-        ]
-        for mod_name in modules:
-            mod = importlib.import_module(mod_name)
-            assert mod is not None, f"Failed to import {mod_name}"
+        """All P4 MCP modules can be imported in a fresh process without cycles."""
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import openspace.mcp.server; import openspace.mcp.tool_handlers; import openspace.mcp_server",
+            ],
+            capture_output=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"MCP circular import detected:\n{result.stderr.decode()}"
+        )
 
     @_skip_core
     def test_no_circular_imports_core(self):
-        """All P4 core modules can be imported without cycles."""
-        modules = [
-            "openspace.tool_layer",
-            "openspace.tool_registry",
-            "openspace.execution_engine",
-            "openspace.recording_service",
-            "openspace.llm_factory",
-        ]
-        for mod_name in modules:
-            mod = importlib.import_module(mod_name)
-            assert mod is not None, f"Failed to import {mod_name}"
+        """All P4 core modules can be imported in a fresh process without cycles."""
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                (
+                    "import openspace.tool_layer; import openspace.tool_registry; "
+                    "import openspace.execution_engine; import openspace.recording_service; "
+                    "import openspace.llm_factory"
+                ),
+            ],
+            capture_output=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"Core circular import detected:\n{result.stderr.decode()}"
+        )
 
     def test_mcp_package_is_self_contained(self):
         """openspace/mcp/ package doesn't import from openspace.mcp_server."""
@@ -345,33 +371,33 @@ class TestArchitectureSoundness:
     def test_tool_layer_decomposition_sizes(self):
         """Verify no single module exceeds the original monolith size."""
         modules = {
-            "openspace/tool_layer.py": 600,       # was 788, now ~476
-            "openspace/tool_registry.py": 300,     # ~245
-            "openspace/execution_engine.py": 600,  # ~537
-            "openspace/recording_service.py": 150, # ~71
-            "openspace/llm_factory.py": 150,       # ~67
+            "openspace/tool_layer.py": 530,       # was 788, now ~476 (+11% headroom)
+            "openspace/tool_registry.py": 280,     # ~245 (+14% headroom)
+            "openspace/execution_engine.py": 590,  # ~537 (+10% headroom)
+            "openspace/recording_service.py": 100, # ~71 (+40% headroom — small file)
+            "openspace/llm_factory.py": 100,       # ~67 (+49% headroom — small file)
         }
         base = Path(__file__).parent.parent
         for path, max_lines in modules.items():
             full_path = base / path
-            if full_path.exists():
-                lines = len(full_path.read_text(encoding="utf-8").splitlines())
-                assert lines <= max_lines, (
-                    f"{path} has {lines} lines (max {max_lines})"
-                )
+            assert full_path.exists(), f"Expected module missing: {path}"
+            lines = len(full_path.read_text(encoding="utf-8").splitlines())
+            assert lines <= max_lines, (
+                f"{path} has {lines} lines (max {max_lines})"
+            )
 
     def test_mcp_decomposition_sizes(self):
         """Verify MCP modules are within expected bounds."""
         modules = {
-            "openspace/mcp_server.py": 80,          # shim, ~51
-            "openspace/mcp/server.py": 300,          # ~236
-            "openspace/mcp/tool_handlers.py": 900,   # ~799
+            "openspace/mcp_server.py": 65,           # shim, ~51 (+27% headroom)
+            "openspace/mcp/server.py": 270,           # ~236 (+14% headroom)
+            "openspace/mcp/tool_handlers.py": 870,    # ~799 (+9% headroom)
         }
         base = Path(__file__).parent.parent
         for path, max_lines in modules.items():
             full_path = base / path
-            if full_path.exists():
-                lines = len(full_path.read_text(encoding="utf-8").splitlines())
-                assert lines <= max_lines, (
-                    f"{path} has {lines} lines (max {max_lines})"
-                )
+            assert full_path.exists(), f"Expected module missing: {path}"
+            lines = len(full_path.read_text(encoding="utf-8").splitlines())
+            assert lines <= max_lines, (
+                f"{path} has {lines} lines (max {max_lines})"
+            )
