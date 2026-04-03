@@ -110,6 +110,20 @@ class TestRecordingServiceCreate:
             svc.create(llm_client=mock_llm_client)
             mock_instance.register_to_llm.assert_called_once_with(mock_llm_client)
 
+    def test_create_twice_replaces_manager(self, config, mock_llm_client):
+        """Second create() silently replaces manager."""
+        with patch("openspace.recording_service.RecordingManager") as MockRM:
+            first = MagicMock()
+            second = MagicMock()
+            MockRM.side_effect = [first, second]
+
+            svc = RecordingService(config=config)
+            svc.create(llm_client=mock_llm_client)
+            assert svc.manager is first
+            svc.create(llm_client=mock_llm_client)
+            assert svc.manager is second
+            assert MockRM.call_count == 2
+
 
 # ---------------------------------------------------------------------------
 # RecordingService.wire()
@@ -133,6 +147,12 @@ class TestRecordingServiceWire:
         svc.wire(grounding_client=mock_grounding_client)
         assert mock_grounding_client.recording_manager is None
 
+    def test_wire_without_create_is_noop(self, config, mock_grounding_client):
+        """wire() before create() is a safe noop."""
+        svc = RecordingService(config=config)
+        svc.wire(grounding_client=mock_grounding_client)
+        assert mock_grounding_client.recording_manager is None
+
 
 # ---------------------------------------------------------------------------
 # RecordingService.cleanup()
@@ -141,7 +161,7 @@ class TestRecordingServiceWire:
 class TestRecordingServiceCleanup:
 
     @pytest.mark.asyncio
-    async def test_stops_active_recording(self, config, mock_llm_client):
+    async def test_stops_active_recording_and_nulls_manager(self, config, mock_llm_client):
         with patch("openspace.recording_service.RecordingManager") as MockRM:
             mock_instance = MagicMock()
             mock_instance.recording_status = True
@@ -152,6 +172,7 @@ class TestRecordingServiceCleanup:
             svc.create(llm_client=mock_llm_client)
             await svc.cleanup()
             mock_instance.stop.assert_awaited_once()
+            assert svc.manager is None
 
     @pytest.mark.asyncio
     async def test_noop_when_not_recording(self, config, mock_llm_client):
@@ -169,11 +190,13 @@ class TestRecordingServiceCleanup:
     @pytest.mark.asyncio
     async def test_noop_when_no_manager(self, disabled_config):
         svc = RecordingService(config=disabled_config)
-        await svc.cleanup()  # No raise
+        await svc.cleanup()
+        assert svc.manager is None
 
     @pytest.mark.asyncio
     async def test_stop_exception_swallowed_and_logged(self, config, mock_llm_client):
-        with patch("openspace.recording_service.RecordingManager") as MockRM:
+        with patch("openspace.recording_service.RecordingManager") as MockRM, \
+             patch("openspace.recording_service.logger") as mock_logger:
             mock_instance = MagicMock()
             mock_instance.recording_status = True
             mock_instance.stop = AsyncMock(side_effect=RuntimeError("stop boom"))
@@ -181,7 +204,24 @@ class TestRecordingServiceCleanup:
 
             svc = RecordingService(config=config)
             svc.create(llm_client=mock_llm_client)
-            await svc.cleanup()  # No raise — exception logged
+            await svc.cleanup()
+            mock_logger.warning.assert_called_once()
+            assert "stop boom" in str(mock_logger.warning.call_args)
+
+    @pytest.mark.asyncio
+    async def test_cleanup_twice_only_stops_once(self, config, mock_llm_client):
+        """Double cleanup is safe — second call is noop after manager nulled."""
+        with patch("openspace.recording_service.RecordingManager") as MockRM:
+            mock_instance = MagicMock()
+            mock_instance.recording_status = True
+            mock_instance.stop = AsyncMock()
+            MockRM.return_value = mock_instance
+
+            svc = RecordingService(config=config)
+            svc.create(llm_client=mock_llm_client)
+            await svc.cleanup()
+            await svc.cleanup()  # second call — manager already None
+            mock_instance.stop.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

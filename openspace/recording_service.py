@@ -8,6 +8,7 @@ Extracted from OpenSpace.initialize() in Epic 4.4.  Owns:
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Optional
 
 from openspace.recording import RecordingManager
@@ -62,5 +63,9 @@ class RecordingService:
         if self._manager.recording_status:
             try:
                 await self._manager.stop()
+                logger.debug("Recording stopped")
+            except asyncio.CancelledError:
+                raise
             except Exception as e:
                 logger.warning("Failed to stop recording: %s", e)
+        self._manager = None

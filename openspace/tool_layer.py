@@ -4,7 +4,7 @@ import asyncio
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from openspace.agents import GroundingAgent
 from openspace.app.container import AppContainer
@@ -13,12 +13,14 @@ from openspace.config.loader import get_agent_config
 from openspace.grounding.core.grounding_client import GroundingClient
 from openspace.execution_engine import ExecutionEngine
 from openspace.llm import LLMClient
-from openspace.recording import RecordingManager
 from openspace.recording_service import RecordingService
 from openspace.skill_engine import ExecutionAnalyzer, SkillRegistry, SkillStore
 from openspace.skill_engine.evolver import SkillEvolver
 from openspace.tool_registry import ToolRegistry
 from openspace.utils.logging import Logger
+
+if TYPE_CHECKING:
+    from openspace.recording import RecordingManager
 
 logger = Logger.get_logger(__name__)
 
