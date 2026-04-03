@@ -336,8 +336,7 @@ class ExecutionEngine:
         execution_context_p2["max_iterations"] = max_iterations
 
         result = await self._grounding_agent.process(execution_context_p2)
-        result["active_skills"] = []
-        result["attempted_skills"] = injected_skill_ids
+        result["active_skills"] = injected_skill_ids
         logger.info(
             f"[Phase 2 — Fallback] {result.get('status', 'unknown')} "
             f"({result.get('iterations', 0)} iterations)"

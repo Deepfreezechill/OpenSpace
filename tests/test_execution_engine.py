@@ -245,6 +245,8 @@ class TestTwoPhaseExecution:
         result = await engine.execute("test task")
         assert mock_grounding_agent.process.call_count == 2
         mock_grounding_agent.clear_skill_context.assert_called_once()
+        # Backward compat: skills_used reflects attempted skills even on fallback
+        assert result["skills_used"] == ["failing-skill"]
 
 
 # ---------------------------------------------------------------------------
