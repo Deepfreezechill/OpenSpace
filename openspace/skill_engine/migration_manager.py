@@ -171,7 +171,7 @@ class MigrationManager:
 
         # SkillStore creates us internally:
         # store._migrations = MigrationManager(conn=store._conn, lock=store._mu)
-        # SkillStore calls manager.initialize_schema() during __init__
+        # SkillStore calls manager.ensure_current_schema() during __init__
     """
 
     def __init__(

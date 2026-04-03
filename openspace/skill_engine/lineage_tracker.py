@@ -116,10 +116,7 @@ class LineageTracker:
             if db_path is None:
                 raise ValueError("Either db_path or conn must be provided")
             self._db_path = Path(db_path)
-            self._conn = sqlite3.connect(str(db_path), timeout=30)
-            self._conn.row_factory = sqlite3.Row
-            self._conn.execute("PRAGMA journal_mode=WAL")
-            self._conn.execute("PRAGMA busy_timeout=30000")
+            self._conn = self._make_connection(read_only=False)
             # Standalone mode: ensure schema exists
             mm = MigrationManager(conn=self._conn, lock=self._mu)
             mm.initialize_schema()
@@ -480,6 +477,7 @@ class LineageTracker:
             List of ancestor :class:`SkillRecord` objects, sorted by
             generation (nearest first).
         """
+        max_depth = min(max_depth, 50)  # Safety clamp to prevent DoS
         with self._reader() as conn:
             visited: set[str] = {skill_id}  # Fix 1: Seed with starting skill_id to prevent cycles
             ancestors: List[SkillRecord] = []
@@ -551,6 +549,7 @@ class LineageTracker:
         Returns:
             Nested dict representing the lineage tree.
         """
+        max_depth = min(max_depth, 50)  # Safety clamp to prevent DoS
         with self._reader() as conn:
             return self._subtree(conn, skill_id, max_depth, set())
 

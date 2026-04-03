@@ -29,6 +29,7 @@ The SkillStore class serves as a unified facade that:
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import sqlite3
 import threading
@@ -681,14 +682,15 @@ class SkillStore:
 
         Delegates to :class:`LineageTracker` (Epic 3.3).
         """
-        # Fix 5: Hydrate recent_analyses after delegation
+        # Fix: Fully hydrate records after delegation (tags, tool_deps, critical_tools, recent_analyses)
         records = self._lineage.get_evolution_chain(name)
-        return [self._hydrate_recent_analyses(record) for record in records]
+        return self._hydrate_records(records)
 
     @_db_retry()
     def load_by_category(self, category: SkillCategory, *, active_only: bool = True) -> List[SkillRecord]:
         """Delegate to SkillRepository for category queries."""
-        return self._repo.load_by_category(category, active_only=active_only)
+        records = self._repo.load_by_category(category, active_only=active_only)
+        return self._hydrate_records(records)
 
     @_db_retry()
     def load_analyses(
@@ -826,9 +828,9 @@ class SkillStore:
 
         Delegates to :class:`LineageTracker` (Epic 3.3).
         """
-        # Fix 5: Hydrate recent_analyses after delegation
+        # Fix: Fully hydrate records after delegation (tags, tool_deps, critical_tools, recent_analyses)
         records = self._lineage.get_ancestors(skill_id, max_depth=max_depth)
-        return [self._hydrate_recent_analyses(record) for record in records]
+        return self._hydrate_records(records)
 
     @_db_retry()
     def get_lineage_tree(self, skill_id: str, max_depth: int = 5) -> Dict[str, Any]:
@@ -992,6 +994,82 @@ class SkillStore:
         """Hydrate recent_analyses for a SkillRecord from AnalysisStore delegation."""
         return self._analyses.hydrate_recent_analyses(record)
 
+    def _hydrate_record(self, record: SkillRecord) -> SkillRecord:
+        """Fully hydrate a SkillRecord with tags, tool_deps, critical_tools, and recent_analyses.
+        
+        Used by facade methods that delegate to modules returning partially hydrated records.
+        """
+        with self._reader() as conn:
+            # Hydrate tool dependencies and critical tools
+            dep_rows = conn.execute(
+                "SELECT tool_key, critical FROM skill_tool_deps WHERE skill_id=?",
+                (record.skill_id,),
+            ).fetchall()
+            
+            tool_dependencies = [r["tool_key"] for r in dep_rows]
+            critical_tools = [r["tool_key"] for r in dep_rows if r["critical"]]
+            
+        # Hydrate tags using TagSearch
+        tags = self._tag_search.get_tags(record.skill_id)
+        
+        # Hydrate recent_analyses using AnalysisStore
+        hydrated_record = self._analyses.hydrate_recent_analyses(record)
+        
+        # Return a new record with all fields hydrated
+        return dataclasses.replace(
+            hydrated_record,
+            tags=tags,
+            tool_dependencies=tool_dependencies,
+            critical_tools=critical_tools,
+        )
+        
+    def _hydrate_records(self, records: List[SkillRecord]) -> List[SkillRecord]:
+        """Batch hydrate multiple SkillRecords — O(1) queries instead of O(N).
+
+        Batches tag, tool_dep, and analysis queries across all records.
+        """
+        if not records:
+            return records
+
+        skill_ids = [r.skill_id for r in records]
+        placeholders = ",".join("?" * len(skill_ids))
+
+        with self._reader() as conn:
+            # Batch 1: tool_deps — 1 query
+            dep_rows = conn.execute(
+                f"SELECT skill_id, tool_key, critical FROM skill_tool_deps "
+                f"WHERE skill_id IN ({placeholders})",
+                skill_ids,
+            ).fetchall()
+
+        deps_by_skill: Dict[str, List[str]] = {}
+        critical_by_skill: Dict[str, List[str]] = {}
+        for row in dep_rows:
+            sid = row["skill_id"]
+            deps_by_skill.setdefault(sid, []).append(row["tool_key"])
+            if row["critical"]:
+                critical_by_skill.setdefault(sid, []).append(row["tool_key"])
+
+        # Batch 2: tags — 1 query (via TagSearch)
+        tags_by_skill = self._tag_search.get_tags_batch(skill_ids)
+
+        # Batch 3: analyses — 2 queries (via AnalysisStore)
+        analyses_by_skill = self._analyses.batch_load_recent_analyses(
+            skill_ids, SkillRecord.MAX_RECENT
+        )
+
+        # Assemble
+        return [
+            dataclasses.replace(
+                record,
+                tags=tags_by_skill.get(record.skill_id, []),
+                tool_dependencies=deps_by_skill.get(record.skill_id, []),
+                critical_tools=critical_by_skill.get(record.skill_id, []),
+                recent_analyses=analyses_by_skill.get(record.skill_id, []),
+            )
+            for record in records
+        ]
+
     # Deserialization
     def _to_record(self, conn: sqlite3.Connection, row: sqlite3.Row) -> SkillRecord:
         """Deserialize a skill_records row + related rows → SkillRecord."""
@@ -1100,6 +1178,10 @@ class SkillStore:
     def get_tags(self, skill_id: str) -> List[str]:
         """Get all tags for a skill (facade to TagSearch)."""
         return self._tag_search.get_tags(skill_id)
+
+    def get_tags_batch(self, skill_ids: List[str]) -> Dict[str, List[str]]:
+        """Batch-get tags for multiple skills (facade to TagSearch)."""
+        return self._tag_search.get_tags_batch(skill_ids)
 
     def get_all_tags(self) -> List[Dict[str, Any]]:
         """Get all tags with usage counts (facade to TagSearch)."""

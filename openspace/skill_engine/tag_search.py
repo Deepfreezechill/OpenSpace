@@ -18,7 +18,7 @@ import time
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Callable, Dict, Generator, List, Optional
 
 from openspace.utils.logging import Logger
 
@@ -32,12 +32,12 @@ def _db_retry(
     max_retries: int = 5,
     initial_delay: float = 0.1,
     backoff: float = 2.0,
-):
+) -> Callable:
     """Retry on transient SQLite errors with exponential backoff."""
 
-    def decorator(func):
+    def decorator(func: Callable) -> Callable:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             delay = initial_delay
             for attempt in range(max_retries):
                 try:
@@ -220,6 +220,23 @@ class TagSearch:
                 (skill_id,),
             ).fetchall()
             return [r["tag"] for r in rows]
+
+    @_db_retry()
+    def get_tags_batch(self, skill_ids: List[str]) -> Dict[str, List[str]]:
+        """Batch-get tags for multiple skills. Returns {skill_id: [sorted tags]}."""
+        if not skill_ids:
+            return {}
+        placeholders = ",".join("?" * len(skill_ids))
+        with self._reader() as conn:
+            rows = conn.execute(
+                f"SELECT skill_id, tag FROM skill_tags "
+                f"WHERE skill_id IN ({placeholders}) ORDER BY skill_id, tag",
+                skill_ids,
+            ).fetchall()
+        result: Dict[str, List[str]] = {}
+        for row in rows:
+            result.setdefault(row["skill_id"], []).append(row["tag"])
+        return result
 
     @_db_retry()
     def find_skills_by_tags(
@@ -448,8 +465,8 @@ class TagSearch:
             List of skill records matching the criteria.
         """
         with self._reader() as conn:
-            conditions = []
-            params = []
+            conditions: List[str] = []
+            params: List[Any] = []
 
             # Active filter
             if active_only:

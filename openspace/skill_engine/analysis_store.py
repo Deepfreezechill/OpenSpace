@@ -22,7 +22,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Callable, Dict, Generator, List, Optional
 
 from openspace.utils.logging import Logger
 
@@ -43,12 +43,12 @@ def _db_retry(
     max_retries: int = 5,
     initial_delay: float = 0.1,
     backoff: float = 2.0,
-):
+) -> Callable:
     """Retry on transient SQLite errors with exponential backoff."""
 
-    def decorator(func):
+    def decorator(func: Callable) -> Callable:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             delay = initial_delay
             for attempt in range(max_retries):
                 try:
@@ -78,7 +78,7 @@ class AnalysisStore:
     Usage (standalone)::
 
         store = AnalysisStore(db_path=Path("analyses.db"))
-        store.record_execution_analysis(analysis)
+        store.record_execution_analysis_sync(analysis)
         recent = store.load_analyses(skill_id="some_skill")
         store.close()
 
@@ -314,8 +314,69 @@ class AnalysisStore:
             last_updated=record.last_updated,
             recent_analyses=recent_analyses,  # This is what we're hydrating
             tool_dependencies=record.tool_dependencies,
+            critical_tools=record.critical_tools,  # Fix: preserve critical_tools
             tags=record.tags,
         )
+
+    def batch_load_recent_analyses(
+        self, skill_ids: List[str], limit: int = 5
+    ) -> Dict[str, List[ExecutionAnalysis]]:
+        """Batch-load recent analyses for multiple skills.
+
+        Uses window functions to get top-N per skill in 2 queries total
+        (analyses + judgments), avoiding O(N*M) fan-out.
+        """
+        if not skill_ids:
+            return {}
+        placeholders = ",".join("?" * len(skill_ids))
+        with self._reader() as conn:
+            # 1 query: ranked analyses per skill (DISTINCT via window over unique ea.id per skill)
+            rows = conn.execute(
+                f"SELECT sub.* FROM ("
+                f"  SELECT ea.*, sj.skill_id AS source_skill_id, "
+                f"  ROW_NUMBER() OVER ("
+                f"    PARTITION BY sj.skill_id ORDER BY ea.timestamp DESC"
+                f"  ) AS rn "
+                f"  FROM execution_analyses ea "
+                f"  JOIN skill_judgments sj ON ea.id = sj.analysis_id "
+                f"  WHERE sj.skill_id IN ({placeholders})"
+                f") sub WHERE sub.rn <= ?",
+                [*skill_ids, limit],
+            ).fetchall()
+
+            # Collect analysis IDs and group by skill
+            filtered: Dict[str, list] = {}
+            analysis_ids: set = set()
+            for row in rows:
+                sid = row["source_skill_id"]
+                filtered.setdefault(sid, []).append(row)
+                analysis_ids.add(row["id"])
+
+            if not analysis_ids:
+                return {}
+
+            # 1 query: all judgments for matched analyses
+            aid_placeholders = ",".join("?" * len(analysis_ids))
+            judgment_rows = conn.execute(
+                f"SELECT analysis_id, skill_id, skill_applied, note "
+                f"FROM skill_judgments WHERE analysis_id IN ({aid_placeholders})",
+                list(analysis_ids),
+            ).fetchall()
+
+            judgments_by_analysis: Dict[str, list] = {}
+            for jr in judgment_rows:
+                judgments_by_analysis.setdefault(jr["analysis_id"], []).append(jr)
+
+            # Deserialize with preloaded judgments
+            result: Dict[str, List[ExecutionAnalysis]] = {}
+            for sid, ea_rows in filtered.items():
+                result[sid] = [
+                    self._to_analysis(
+                        conn, row, judgments_by_analysis.get(row["id"], [])
+                    )
+                    for row in ea_rows
+                ]
+            return result
 
     # ── Bulk Operations ────────────────────────────────────────────────
 
@@ -495,6 +556,7 @@ class AnalysisStore:
             ),
         )
         analysis_id = cur.lastrowid
+        assert analysis_id is not None, "INSERT must set lastrowid"
 
         for j in a.skill_judgments:
             self._conn.execute(
@@ -505,14 +567,21 @@ class AnalysisStore:
         return analysis_id
 
     @staticmethod
-    def _to_analysis(conn: sqlite3.Connection, row: sqlite3.Row) -> ExecutionAnalysis:
+    def _to_analysis(
+        conn: sqlite3.Connection,
+        row: sqlite3.Row,
+        preloaded_judgments: Optional[List[sqlite3.Row]] = None,
+    ) -> ExecutionAnalysis:
         """Deserialize an execution_analyses row + judgments → ExecutionAnalysis."""
         analysis_id = row["id"]
 
-        judgment_rows = conn.execute(
-            "SELECT skill_id, skill_applied, note FROM skill_judgments WHERE analysis_id=?",
-            (analysis_id,),
-        ).fetchall()
+        if preloaded_judgments is not None:
+            judgment_rows = preloaded_judgments
+        else:
+            judgment_rows = conn.execute(
+                "SELECT skill_id, skill_applied, note FROM skill_judgments WHERE analysis_id=?",
+                (analysis_id,),
+            ).fetchall()
 
         suggestions: list[EvolutionSuggestion] = []
         raw_suggestions = row["evolution_suggestions"]
