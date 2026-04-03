@@ -618,7 +618,7 @@ async def fix_skill(
                    "Add retry logic for HTTP 429 rate limit errors".
     """
     try:
-        from openspace.skill_engine.evolver import EvolutionContext, EvolutionTrigger
+        from openspace.skill_engine.evolution.models import EvolutionContext, EvolutionTrigger
         from openspace.skill_engine.types import EvolutionSuggestion, EvolutionType
 
         if not direction:

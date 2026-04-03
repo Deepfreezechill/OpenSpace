@@ -22,14 +22,17 @@ import json
 import re
 import shutil
 import uuid
-from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 from openspace.prompts import SkillEnginePrompts
 from openspace.utils.logging import Logger
 
+from .evolution.models import (
+    EvolutionContext,
+    EvolutionTrigger,
+    _sanitize_skill_name,
+)
 from .patch import (
     SKILL_FILENAME,
     PatchType,
@@ -82,30 +85,6 @@ EVOLUTION_COMPLETE = SkillEnginePrompts.EVOLUTION_COMPLETE
 EVOLUTION_FAILED = SkillEnginePrompts.EVOLUTION_FAILED
 
 _SKILL_CONTENT_MAX_CHARS = 12_000  # Max chars of SKILL.md in evolution prompt
-_MAX_SKILL_NAME_LENGTH = 50  # Max chars for a skill name (directory name)
-
-
-def _sanitize_skill_name(name: str) -> str:
-    """Enforce naming rules for skill names (used as directory names).
-
-    - Lowercase, hyphens only (no underscores or special chars)
-    - Truncate to ``_MAX_SKILL_NAME_LENGTH`` at a word boundary
-    - Remove trailing hyphens
-    """
-    # Normalize: lowercase, replace underscores and spaces with hyphens
-    clean = re.sub(r"[^a-z0-9\-]", "-", name.lower().strip())
-    # Collapse multiple hyphens
-    clean = re.sub(r"-{2,}", "-", clean).strip("-")
-
-    if len(clean) <= _MAX_SKILL_NAME_LENGTH:
-        return clean
-
-    # Truncate at a hyphen boundary to avoid cutting words
-    truncated = clean[:_MAX_SKILL_NAME_LENGTH]
-    last_hyphen = truncated.rfind("-")
-    if last_hyphen > _MAX_SKILL_NAME_LENGTH // 2:
-        truncated = truncated[:last_hyphen]
-    return truncated.strip("-")
 
 
 _ANALYSIS_CONTEXT_MAX = 5  # Max recent analyses to include in prompt
@@ -121,44 +100,6 @@ _LOW_COMPLETION_THRESHOLD = 0.35  # Relaxed from 0.3
 _HIGH_APPLIED_FOR_FIX = 0.4  # Relaxed from 0.5
 _MODERATE_EFFECTIVE_THRESHOLD = 0.55  # Relaxed from 0.5
 _MIN_APPLIED_FOR_DERIVED = 0.25  # Relaxed from 0.3
-
-
-class EvolutionTrigger(str, Enum):
-    """What initiated this evolution."""
-
-    ANALYSIS = "analysis"  # Post-execution analysis suggestion
-    TOOL_DEGRADATION = "tool_degradation"  # Tool quality degradation detected
-    METRIC_MONITOR = "metric_monitor"  # Periodic skill health check
-
-
-@dataclass
-class EvolutionContext:
-    """Unified context for all evolution triggers.
-
-    For trigger 1 (ANALYSIS): source_task_id is set, recent_analyses may be
-    just the single triggering analysis.
-    For triggers 2/3: source_task_id is None, recent_analyses are loaded
-    from the skill's historical records.
-    """
-
-    trigger: EvolutionTrigger
-    suggestion: EvolutionSuggestion
-
-    # Parent skill context
-    skill_records: List[SkillRecord] = field(default_factory=list)
-    skill_contents: List[str] = field(default_factory=list)
-    skill_dirs: List[Path] = field(default_factory=list)
-
-    # Task context
-    source_task_id: Optional[str] = None
-    recent_analyses: List[ExecutionAnalysis] = field(default_factory=list)
-
-    # Trigger-specific context
-    tool_issue_summary: str = ""  # For TOOL_DEGRADATION
-    metric_summary: str = ""  # For METRIC_MONITOR
-
-    # Available tools for agent loop (read_file, web_search, shell, MCP, etc.)
-    available_tools: List["BaseTool"] = field(default_factory=list)
 
 
 class SkillEvolver:

@@ -52,8 +52,8 @@ _EXPORTS = {
     "MigrationManager": (".migration_manager", "MigrationManager"),
     "ExecutionAnalyzer": (".analyzer", "ExecutionAnalyzer"),
     "SkillEvolver": (".evolver", "SkillEvolver"),
-    "EvolutionTrigger": (".evolver", "EvolutionTrigger"),
-    "EvolutionContext": (".evolver", "EvolutionContext"),
+    "EvolutionTrigger": (".evolution.models", "EvolutionTrigger"),
+    "EvolutionContext": (".evolution.models", "EvolutionContext"),
 }
 
 
