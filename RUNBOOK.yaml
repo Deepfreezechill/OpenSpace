@@ -60,14 +60,25 @@ completed_phases:
       (SkillRepository, LineageTracker, AnalysisStore, TagSearch, MigrationManager)
       plus types.py. 7 epics + 3 validation/cleanup PRs. 1,356 tests passing.
 
+  - id: P4
+    name: "Phase 4 — Tool Layer + MCP Decomposition"
+    epics: 10
+    pr_range: "#31–#38"
+    notes: >
+      tool_layer.py (788 lines) decomposed into 4 focused modules
+      (ToolRegistry, ExecutionEngine, RecordingService, LLMFactory) + facade cleanup.
+      mcp_server.py (992 lines) decomposed into openspace/mcp/ package
+      (server.py, tool_handlers.py) + backward-compat shim. 2 epics skipped
+      (4.2 covered by 4.1, 4.8 covered by P3). 62 new tests. 1,408 passing.
+
 # ---------------------------------------------------------------------
 # In-Progress Phase
 # ---------------------------------------------------------------------
 active_phase:
-  id: P4
-  name: "Phase 4 — Tool Layer + MCP Decomposition"
-  status: in_progress          # pending | in_progress | complete
-  epics_total: 10
+  id: P5
+  name: "Phase 5 — Skill Engine / Grounding Decomposition"
+  status: in_progress
+  epics_total: 11
   epics_merged: 0
 
 # ---------------------------------------------------------------------
@@ -218,10 +229,10 @@ epics:
   - id: "4.1"
     phase: P4
     title: "Extract ToolRegistry"
-    status: pending
-    branch: null
-    pr: null
-    review_round: 0
+    status: merged
+    branch: "epic/4.1-tool-registry"
+    pr: 31
+    review_round: 2
     source_file: "openspace/tool_layer.py"
     target_module: "openspace/tool_registry.py"
     description: >
@@ -233,7 +244,7 @@ epics:
   - id: "4.2"
     phase: P4
     title: "Extract SkillSelector"
-    status: pending
+    status: skipped
     branch: null
     pr: null
     review_round: 0
@@ -249,10 +260,10 @@ epics:
   - id: "4.3"
     phase: P4
     title: "Extract ExecutionEngine"
-    status: pending
-    branch: null
-    pr: null
-    review_round: 0
+    status: merged
+    branch: "epic/4.3-execution-engine"
+    pr: 32
+    review_round: 2
     source_file: "openspace/tool_layer.py"
     target_module: "openspace/execution_engine.py"
     description: >
@@ -264,10 +275,10 @@ epics:
   - id: "4.4"
     phase: P4
     title: "Extract RecordingService"
-    status: pending
-    branch: null
-    pr: null
-    review_round: 0
+    status: merged
+    branch: "epic/4.4-recording-service"
+    pr: 33
+    review_round: 1
     source_file: "openspace/tool_layer.py"
     target_module: "openspace/recording_service.py"
     description: >
@@ -280,10 +291,10 @@ epics:
   - id: "4.5"
     phase: P4
     title: "Extract LLMAdapter"
-    status: pending
-    branch: null
-    pr: null
-    review_round: 0
+    status: merged
+    branch: "epic/4.5-llm-factory"
+    pr: 34
+    review_round: 1
     source_file: "openspace/tool_layer.py"
     target_module: "openspace/llm_adapter.py"
     description: >
@@ -295,10 +306,10 @@ epics:
   - id: "4.6"
     phase: P4
     title: "Extract ToolLayerFacade"
-    status: pending
-    branch: null
-    pr: null
-    review_round: 0
+    status: merged
+    branch: "epic/4.6-facade-cleanup"
+    pr: 35
+    review_round: 2
     source_file: "openspace/tool_layer.py"
     target_module: "openspace/tool_layer_facade.py"
     description: >
@@ -312,10 +323,10 @@ epics:
   - id: "4.7"
     phase: P4
     title: "Extract MCPToolHandlers"
-    status: pending
-    branch: null
-    pr: null
-    review_round: 0
+    status: merged
+    branch: "epic/4.7-mcp-tool-handlers"
+    pr: 36
+    review_round: 2
     source_file: "openspace/mcp_server.py"
     target_module: "openspace/mcp/tool_handlers.py"
     description: >
@@ -328,7 +339,7 @@ epics:
   - id: "4.8"
     phase: P4
     title: "Extract MCPAuthMiddleware"
-    status: pending
+    status: skipped
     branch: null
     pr: null
     review_round: 0
@@ -344,10 +355,10 @@ epics:
   - id: "4.9"
     phase: P4
     title: "Extract MCPRouter + MCPServer"
-    status: pending
-    branch: null
-    pr: null
-    review_round: 0
+    status: merged
+    branch: "epic/4.9-mcp-server-extract"
+    pr: 37
+    review_round: 2
     source_file: "openspace/mcp_server.py"
     target_module: "openspace/mcp/server.py"
     description: >
@@ -361,10 +372,10 @@ epics:
   - id: "4.10"
     phase: P4
     title: "P4 integration tests + MCP conformance"
-    status: pending
-    branch: null
-    pr: null
-    review_round: 0
+    status: merged
+    branch: "epic/4.10-integration-tests"
+    pr: 38
+    review_round: 2
     source_file: null
     target_module: "tests/test_mcp_conformance.py"
     description: >

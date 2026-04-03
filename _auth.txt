@@ -1,0 +1,13 @@
+4:     For HTTP transports (SSE, streamable-http), bearer token auth is
+5:     REQUIRED.  Set OPENSPACE_MCP_BEARER_TOKEN in the environment.
+8:     For stdio transport, auth is not applicable (local process IPC).
+18:     from openspace.auth.bearer import (
+19:         BEARER_TOKEN_ENV,
+20:         BearerTokenMiddleware,
+21:         get_bearer_token,
+24:     from openspace.auth.rate_limit import RateLimitMiddleware
+43:     # --- HTTP transports: enforce bearer token auth (fail-closed) ---
+44:     token = get_bearer_token()
+48:             "without authentication. Set the environment variable or "
+50:             BEARER_TOKEN_ENV,
+57:         logger.critical("FAIL-CLOSED: %s — %s", BEARER_TOKEN_ENV, reason)
