@@ -39,6 +39,16 @@ from .evolution.orchestrator import (
     log_background_result as _log_background_result_impl,
     schedule_background as _schedule_background_impl,
 )
+from .evolution.triggers import (
+    _ANALYSIS_CONTEXT_MAX,
+    _ANALYSIS_NOTE_MAX_CHARS,
+    build_context_from_analysis as _build_context_from_analysis_impl,
+    diagnose_skill_health as _diagnose_skill_health_impl,
+    load_skill_content as _load_skill_content_impl,
+    process_analysis as _process_analysis_impl,
+    process_metric_check as _process_metric_check_impl,
+    process_tool_degradation as _process_tool_degradation_impl,
+)
 from .patch import (
     SKILL_FILENAME,
     PatchType,
@@ -92,20 +102,9 @@ EVOLUTION_FAILED = SkillEnginePrompts.EVOLUTION_FAILED
 
 _SKILL_CONTENT_MAX_CHARS = 12_000  # Max chars of SKILL.md in evolution prompt
 
-
-_ANALYSIS_CONTEXT_MAX = 5  # Max recent analyses to include in prompt
-_ANALYSIS_NOTE_MAX_CHARS = 500  # Per-analysis note truncation
-
 # Agent loop / retry constants
 _MAX_EVOLUTION_ITERATIONS = 5  # Max tool-calling rounds for evolution agent
 _MAX_EVOLUTION_ATTEMPTS = 3  # Max apply-retry attempts per evolution
-
-# Rule-based thresholds for candidate screening (relaxed — LLM confirms)
-_FALLBACK_THRESHOLD = 0.4  # Relaxed from 0.5 for wider screening
-_LOW_COMPLETION_THRESHOLD = 0.35  # Relaxed from 0.3
-_HIGH_APPLIED_FOR_FIX = 0.4  # Relaxed from 0.5
-_MODERATE_EFFECTIVE_THRESHOLD = 0.55  # Relaxed from 0.5
-_MIN_APPLIED_FOR_DERIVED = 0.25  # Relaxed from 0.3
 
 
 class SkillEvolver:
@@ -194,235 +193,24 @@ class SkillEvolver:
         self,
         analysis: ExecutionAnalysis,
     ) -> List[SkillRecord]:
-        """Process all evolution suggestions from a completed analysis.
-
-        Called immediately after ``ExecutionAnalyzer.analyze_execution()``.
-        Each suggestion becomes one evolution action, executed in parallel
-        (throttled by semaphore).
-        """
-        if not analysis.candidate_for_evolution:
-            return []
-
-        # Build contexts first (cheap, no LLM calls)
-        contexts: List[EvolutionContext] = []
-        for suggestion in analysis.evolution_suggestions:
-            ctx = self._build_context_from_analysis(analysis, suggestion)
-            if ctx is not None:
-                contexts.append(ctx)
-
-        if not contexts:
-            return []
-
-        results = await self._execute_contexts(contexts, "analysis")
-
-        if results:
-            names = [r.name for r in results]
-            logger.info(f"[Trigger:analysis] Evolved {len(results)} skill(s): {names} from task {analysis.task_id}")
-        return results
+        """Process all evolution suggestions from a completed analysis."""
+        return await _process_analysis_impl(self, analysis)
 
     # Trigger 2: tool quality degradation
     async def process_tool_degradation(
         self,
         problematic_tools: List["ToolQualityRecord"],
     ) -> List[SkillRecord]:
-        """Fix skills that depend on degraded tools.
-
-        Two-phase: rule-based candidate screening → LLM confirmation.
-
-        Anti-loop (state-driven):
-          ``_addressed_degradations[tool_key]`` records skill names that
-          have already been evolved for that tool's degradation.  They are
-          skipped on subsequent calls as long as the tool stays degraded.
-
-          At the start of each call, tools that **recovered** (no longer
-          in ``problematic_tools``) are pruned from the dict — so if the
-          tool degrades again later, all dependent skills are re-evaluated.
-        """
-        if not problematic_tools:
-            return []
-
-        # Prune recovered tools: if a tool_key used to be tracked but is
-        # no longer in the current problematic list, it recovered — clear
-        # its addressed set so future re-degradation gets a fresh pass.
-        current_tool_keys = {t.tool_key for t in problematic_tools}
-        recovered = [k for k in self._addressed_degradations if k not in current_tool_keys]
-        for k in recovered:
-            logger.debug(f"[Trigger:tool_degradation] Tool '{k}' recovered, clearing addressed set")
-            del self._addressed_degradations[k]
-
-        # Phase 1: screen & confirm candidates
-        confirmed_contexts: List[EvolutionContext] = []
-        seen_skills: set = set()  # de-dup by skill_id within this call
-
-        for tool_rec in problematic_tools:
-            addressed = self._addressed_degradations.get(tool_rec.tool_key, set())
-
-            skill_ids = self._store.find_skills_by_tool(tool_rec.tool_key)
-            for skill_id in skill_ids:
-                skill_record = self._store.load_record(skill_id)
-                if not skill_record or not skill_record.is_active:
-                    continue
-
-                # De-duplicate by skill_id within this call
-                if skill_record.skill_id in seen_skills:
-                    continue
-                seen_skills.add(skill_record.skill_id)
-
-                # Anti-loop: already evolved for this tool's degradation
-                if skill_record.skill_id in addressed:
-                    logger.debug(
-                        f"[Trigger:tool_degradation] Skipping '{skill_record.skill_id}' "
-                        f"(already addressed for tool '{tool_rec.tool_key}')"
-                    )
-                    continue
-
-                recent = self._store.load_analyses(skill_id=skill_record.skill_id, limit=_ANALYSIS_CONTEXT_MAX)
-                content = self._load_skill_content(skill_record)
-                if not content:
-                    continue
-
-                issue_summary = (
-                    f"Tool `{tool_rec.tool_key}` degraded — "
-                    f"recent success rate: {tool_rec.recent_success_rate:.0%}, "
-                    f"total calls: {tool_rec.total_calls}, "
-                    f"LLM flagged: {tool_rec.llm_flagged_count} time(s)."
-                )
-
-                direction = (
-                    f"Tool `{tool_rec.tool_key}` has degraded "
-                    f"(success_rate={tool_rec.recent_success_rate:.0%}). "
-                    f"Update skill instructions to handle this tool's "
-                    f"failures gracefully or suggest alternatives."
-                )
-
-                # LLM confirmation: ask whether this skill truly needs fixing
-                confirmed = await self._llm_confirm_evolution(
-                    skill_record=skill_record,
-                    skill_content=content,
-                    proposed_type=EvolutionType.FIX,
-                    proposed_direction=direction,
-                    trigger_context=f"Tool degradation: {issue_summary}",
-                    recent_analyses=recent,
-                )
-                if not confirmed:
-                    logger.debug(
-                        f"[Trigger:tool_degradation] LLM rejected evolution "
-                        f"for skill '{skill_record.skill_id}' (tool={tool_rec.tool_key})"
-                    )
-                    # Even if LLM rejected, mark as addressed to avoid
-                    # repeated LLM confirmation calls on every cycle.
-                    self._addressed_degradations.setdefault(tool_rec.tool_key, set()).add(skill_record.skill_id)
-                    continue
-
-                skill_dir = Path(skill_record.path).parent if skill_record.path else None
-                confirmed_contexts.append(
-                    EvolutionContext(
-                        trigger=EvolutionTrigger.TOOL_DEGRADATION,
-                        suggestion=EvolutionSuggestion(
-                            evolution_type=EvolutionType.FIX,
-                            target_skill_ids=[skill_record.skill_id],
-                            direction=direction,
-                        ),
-                        skill_records=[skill_record],
-                        skill_contents=[content],
-                        skill_dirs=[skill_dir] if skill_dir else [],
-                        recent_analyses=recent,
-                        tool_issue_summary=issue_summary,
-                        available_tools=self._available_tools,
-                    )
-                )
-
-                # Mark as addressed regardless of whether evolution succeeds
-                # (if it fails, Trigger 1/3 can pick it up on new data)
-                self._addressed_degradations.setdefault(tool_rec.tool_key, set()).add(skill_record.skill_id)
-
-        if not confirmed_contexts:
-            return []
-
-        # Phase 2: execute confirmed evolutions in parallel
-        results = await self._execute_contexts(confirmed_contexts, "tool_degradation")
-        return results
+        """Fix skills that depend on degraded tools."""
+        return await _process_tool_degradation_impl(self, problematic_tools)
 
     # Trigger 3: periodic metric check
     async def process_metric_check(
         self,
         min_selections: int = 5,
     ) -> List[SkillRecord]:
-        """Scan active skills and evolve those with poor health metrics.
-
-        Two-phase: rule-based candidate screening (relaxed thresholds) →
-        LLM confirmation.  Called periodically (e.g., every N executions).
-        Only considers skills with enough data (``min_selections``).
-
-        Anti-loop (data-driven): newly-evolved skills start with
-        ``total_selections=0``, so they naturally need ``min_selections``
-        fresh executions before being re-evaluated.  No time-based
-        cooldown is needed.
-        """
-        # Phase 1: screen & confirm candidates
-        confirmed_contexts: List[EvolutionContext] = []
-        all_active = self._store.load_active()
-
-        for skill_id, record in all_active.items():
-            if record.total_selections < min_selections:
-                continue
-
-            evo_type, direction = self._diagnose_skill_health(record)
-            if evo_type is None:
-                continue
-
-            content = self._load_skill_content(record)
-            if not content:
-                continue
-
-            recent = self._store.load_analyses(skill_id=record.skill_id, limit=_ANALYSIS_CONTEXT_MAX)
-            metric_summary = (
-                f"selections={record.total_selections}, "
-                f"applied_rate={record.applied_rate:.0%}, "
-                f"completion_rate={record.completion_rate:.0%}, "
-                f"effective_rate={record.effective_rate:.0%}, "
-                f"fallback_rate={record.fallback_rate:.0%}"
-            )
-
-            # LLM confirmation: ask whether this skill truly needs evolution
-            confirmed = await self._llm_confirm_evolution(
-                skill_record=record,
-                skill_content=content,
-                proposed_type=evo_type,
-                proposed_direction=direction,
-                trigger_context=f"Metric check: {metric_summary}",
-                recent_analyses=recent,
-            )
-            if not confirmed:
-                logger.debug(
-                    f"[Trigger:metric_monitor] LLM rejected evolution for skill '{record.name}' ({evo_type.value})"
-                )
-                continue
-
-            skill_dir = Path(record.path).parent if record.path else None
-            confirmed_contexts.append(
-                EvolutionContext(
-                    trigger=EvolutionTrigger.METRIC_MONITOR,
-                    suggestion=EvolutionSuggestion(
-                        evolution_type=evo_type,
-                        target_skill_ids=[record.skill_id],
-                        direction=direction,
-                    ),
-                    skill_records=[record],
-                    skill_contents=[content],
-                    skill_dirs=[skill_dir] if skill_dir else [],
-                    recent_analyses=recent,
-                    metric_summary=metric_summary,
-                    available_tools=self._available_tools,
-                )
-            )
-
-        if not confirmed_contexts:
-            return []
-
-        # Phase 2: execute confirmed evolutions in parallel
-        results = await self._execute_contexts(confirmed_contexts, "metric_monitor")
-        return results
+        """Scan active skills and evolve those with poor health metrics."""
+        return await _process_metric_check_impl(self, min_selections)
 
     async def _execute_contexts(
         self,
@@ -1230,69 +1018,12 @@ class SkillEvolver:
         analysis: ExecutionAnalysis,
         suggestion: EvolutionSuggestion,
     ) -> Optional[EvolutionContext]:
-        """Build EvolutionContext from a single analysis suggestion.
-
-        Loads all target skills referenced by ``suggestion.target_skill_ids``.
-        For FIX: exactly 1 parent required.
-        For DERIVED: 1+ parents (multi-parent = merge).
-        For CAPTURED: parents list is empty.
-        """
-        records: List[SkillRecord] = []
-        contents: List[str] = []
-        dirs: List[Path] = []
-
-        if suggestion.evolution_type in (EvolutionType.FIX, EvolutionType.DERIVED):
-            if not suggestion.target_skill_ids:
-                logger.warning("FIX/DERIVED suggestion missing target_skill_ids")
-                return None
-
-            for target_id in suggestion.target_skill_ids:
-                rec = self._store.load_record(target_id)
-                if not rec:
-                    logger.warning(f"Target skill not found: {target_id}")
-                    return None
-                content = self._load_skill_content(rec)
-                if not content:
-                    logger.warning(f"Cannot load content for skill: {target_id}")
-                    return None
-                skill_dir = Path(rec.path).parent if rec.path else None
-
-                records.append(rec)
-                contents.append(content)
-                if skill_dir:
-                    dirs.append(skill_dir)
-
-            # FIX must target exactly one skill
-            if suggestion.evolution_type == EvolutionType.FIX and len(records) != 1:
-                logger.warning(f"FIX requires exactly 1 target, got {len(records)}: {suggestion.target_skill_ids}")
-                return None
-
-        return EvolutionContext(
-            trigger=EvolutionTrigger.ANALYSIS,
-            suggestion=suggestion,
-            skill_records=records,
-            skill_contents=contents,
-            skill_dirs=dirs,
-            source_task_id=analysis.task_id,
-            recent_analyses=[analysis],
-            available_tools=self._available_tools,
-        )
+        """Build EvolutionContext from a single analysis suggestion."""
+        return _build_context_from_analysis_impl(self, analysis, suggestion)
 
     def _load_skill_content(self, record: SkillRecord) -> str:
         """Load SKILL.md content from disk via registry or direct read."""
-        # Try registry first (uses cache, keyed by skill_id)
-        content = self._registry.load_skill_content(record.skill_id)
-        if content:
-            return content
-        # Fallback: read directly from path
-        if record.path:
-            p = Path(record.path)
-            if p.exists():
-                try:
-                    return p.read_text(encoding="utf-8")
-                except Exception:
-                    pass
-        return ""
+        return _load_skill_content_impl(self, record)
 
     @staticmethod
     def _format_skill_dir_content(skill_dir: Path) -> str:
@@ -1356,38 +1087,4 @@ class SkillEvolver:
 
         return "\n".join(parts)
 
-    @staticmethod
-    def _diagnose_skill_health(
-        record: SkillRecord,
-    ) -> tuple[Optional[EvolutionType], str]:
-        """Diagnose what type of evolution a skill needs based on metrics.
-
-        Returns (None, "") if the skill appears healthy.
-        Thresholds are intentionally relaxed — the LLM confirmation step
-        filters out false positives.
-        """
-        # High fallback rate → skill frequently selected but not used → FIX candidate
-        if record.fallback_rate > _FALLBACK_THRESHOLD:
-            return EvolutionType.FIX, (
-                f"High fallback rate ({record.fallback_rate:.0%}): "
-                f"skill is frequently selected but not applied, "
-                f"suggesting instructions are unclear or outdated."
-            )
-
-        # Applied often but rarely completes → instructions are wrong → FIX candidate
-        if record.applied_rate > _HIGH_APPLIED_FOR_FIX and record.completion_rate < _LOW_COMPLETION_THRESHOLD:
-            return EvolutionType.FIX, (
-                f"Low completion rate ({record.completion_rate:.0%}) despite "
-                f"high applied rate ({record.applied_rate:.0%}): "
-                f"skill instructions may be incorrect or incomplete."
-            )
-
-        # Moderate effectiveness → could be better → DERIVED candidate
-        if record.effective_rate < _MODERATE_EFFECTIVE_THRESHOLD and record.applied_rate > _MIN_APPLIED_FOR_DERIVED:
-            return EvolutionType.DERIVED, (
-                f"Moderate effectiveness ({record.effective_rate:.0%}): "
-                f"skill works sometimes but could be enhanced with "
-                f"better error handling or alternative approaches."
-            )
-
-        return None, ""
+    _diagnose_skill_health = staticmethod(_diagnose_skill_health_impl)
