@@ -97,10 +97,10 @@ def seeded_tracker(tracker):
         change_summary="Added error handling",
     )
 
-    # Use the internal repo to persist records
-    lt._repo.save(root)
-    lt._repo.save(child)
-    lt._repo.save(grandchild)
+    # Use LineageTracker's own save to persist records
+    lt.save(root)
+    lt.save(child)
+    lt.save(grandchild)
 
     return lt
 
@@ -115,7 +115,7 @@ class TestRecordDerivation:
 
     def test_record_single_parent(self, tracker):
         parent = _make_record(skill_id="p1", name="parent_skill")
-        tracker._repo.save(parent)
+        tracker.save(parent)
 
         child = _make_record(
             skill_id="c1",
@@ -132,8 +132,8 @@ class TestRecordDerivation:
     def test_record_multiple_parents(self, tracker):
         p1 = _make_record(skill_id="p1", name="skill_a")
         p2 = _make_record(skill_id="p2", name="skill_b")
-        tracker._repo.save(p1)
-        tracker._repo.save(p2)
+        tracker.save(p1)
+        tracker.save(p2)
 
         derived = _make_record(
             skill_id="d1",
@@ -149,7 +149,7 @@ class TestRecordDerivation:
 
     def test_record_derivation_deactivates_parent_for_fixed(self, tracker):
         parent = _make_record(skill_id="p1", name="my_skill", is_active=True)
-        tracker._repo.save(parent)
+        tracker.save(parent)
 
         child = _make_record(
             skill_id="c1",
@@ -161,13 +161,13 @@ class TestRecordDerivation:
         tracker.record_derivation(child, parent_skill_ids=["p1"])
 
         # Parent should be deactivated for FIXED origin
-        loaded_parent = tracker._repo.get("p1")
+        loaded_parent = tracker.get("p1")
         assert loaded_parent is not None
         assert not loaded_parent.is_active
 
     def test_record_derivation_keeps_parent_active_for_derived(self, tracker):
         parent = _make_record(skill_id="p1", name="skill_a", is_active=True)
-        tracker._repo.save(parent)
+        tracker.save(parent)
 
         derived = _make_record(
             skill_id="d1",
@@ -178,7 +178,7 @@ class TestRecordDerivation:
         )
         tracker.record_derivation(derived, parent_skill_ids=["p1"])
 
-        loaded_parent = tracker._repo.get("p1")
+        loaded_parent = tracker.get("p1")
         assert loaded_parent is not None
         assert loaded_parent.is_active
 
@@ -193,12 +193,12 @@ class TestGetChildren:
 
     def test_no_children(self, tracker):
         orphan = _make_record(skill_id="orphan", name="lonely_skill")
-        tracker._repo.save(orphan)
+        tracker.save(orphan)
         assert tracker.get_children("orphan") == []
 
     def test_multiple_children(self, tracker):
         parent = _make_record(skill_id="p1", name="parent")
-        tracker._repo.save(parent)
+        tracker.save(parent)
 
         for i in range(3):
             child = _make_record(
@@ -227,7 +227,7 @@ class TestGetAncestors:
 
     def test_no_ancestors(self, tracker):
         root = _make_record(skill_id="root", name="root_skill")
-        tracker._repo.save(root)
+        tracker.save(root)
         assert tracker.get_ancestors("root") == []
 
     def test_single_parent(self, seeded_tracker):
@@ -239,7 +239,7 @@ class TestGetAncestors:
         ancestors = seeded_tracker.get_ancestors("skill__grandchild")
         assert len(ancestors) == 2
         ids = [a.skill_id for a in ancestors]
-        assert ids == ["skill__root", "skill__child"]
+        assert ids == ["skill__child", "skill__root"]  # nearest-first: child, then root
 
     def test_max_depth_limit(self, seeded_tracker):
         ancestors = seeded_tracker.get_ancestors("skill__grandchild", max_depth=1)
@@ -260,7 +260,7 @@ class TestGetEvolutionChain:
 
     def test_single_version(self, tracker):
         record = _make_record(skill_id="s1", name="unique_skill")
-        tracker._repo.save(record)
+        tracker.save(record)
 
         chain = tracker.get_evolution_chain("unique_skill")
         assert len(chain) == 1
@@ -333,7 +333,7 @@ class TestEdgeCases:
     def test_orphan_skill(self, tracker):
         """A skill with no parents and no children is handled gracefully."""
         orphan = _make_record(skill_id="orphan", name="orphan_skill")
-        tracker._repo.save(orphan)
+        tracker.save(orphan)
 
         assert tracker.get_children("orphan") == []
         assert tracker.get_ancestors("orphan") == []
@@ -343,7 +343,7 @@ class TestEdgeCases:
     def test_diamond_inheritance(self, tracker):
         """A → B, A → C, B+C → D (diamond pattern)."""
         a = _make_record(skill_id="a", name="skill_a")
-        tracker._repo.save(a)
+        tracker.save(a)
 
         b = _make_record(
             skill_id="b", name="skill_b", generation=1,
@@ -428,7 +428,7 @@ class TestCyclePrevention:
     def test_ancestors_with_cycle(self, tracker):
         """A←B←A: verify A is not in its own ancestors."""
         a = _make_record(skill_id="a", name="skill_a")
-        tracker._repo.save(a)
+        tracker.save(a)
 
         b = _make_record(
             skill_id="b", name="skill_b", generation=1,
@@ -457,7 +457,7 @@ class TestDiamondDAG:
     def test_lineage_tree_diamond_shows_all_paths(self, tracker):
         """A→B, A→C, B+C→D: verify D appears under both B and C."""
         a = _make_record(skill_id="a", name="skill_a")
-        tracker._repo.save(a)
+        tracker.save(a)
 
         b = _make_record(
             skill_id="b", name="skill_b", generation=1,

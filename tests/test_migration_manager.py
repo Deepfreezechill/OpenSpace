@@ -412,7 +412,7 @@ class TestSecurityAndRobustness:
         ]
         
         for invalid_input in invalid_inputs:
-            with pytest.raises(TypeError, match="version must be int"):
+            with pytest.raises(TypeError, match="schema version must be a non-negative int"):
                 migration_manager._set_schema_version(invalid_input)
 
     def test_set_schema_version_bounds_checking(self, migration_manager):

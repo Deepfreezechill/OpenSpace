@@ -25,7 +25,7 @@ from typing import Any, Dict, Generator, List, Optional
 from openspace.utils.logging import Logger
 
 from .migration_manager import MigrationManager
-
+from .patch import collect_skill_snapshot, compute_unified_diff
 from .types import (
     SkillCategory,
     SkillLineage,
@@ -544,3 +544,180 @@ class SkillRepository:
             first_seen=datetime.fromisoformat(row["first_seen"]),
             last_updated=datetime.fromisoformat(row["last_updated"]),
         )
+
+    # ── Batch Operations ──────────────────────────────────────────────
+
+    @_db_retry()
+    def sync_from_registry(
+        self,
+        discovered_skills: List[Any],
+    ) -> int:
+        """Ensure every discovered skill has an initial DB record.
+
+        For each skill in *discovered_skills* (``SkillMeta`` objects
+        from :meth:`SkillRegistry.discover`), if no record with the
+        same ``skill_id`` already exists, a new :class:`SkillRecord` is
+        created (``origin=IMPORTED``, ``generation=0``).
+
+        Existing records (including evolved ones) are left untouched.
+
+        Args:
+            discovered_skills: List of ``SkillMeta`` objects.
+
+        Returns:
+            Number of new records created.
+        """
+        self._ensure_open()
+        created = 0
+        refreshed = 0
+        with self._mu:
+            owns_txn = not self._conn.in_transaction
+            if owns_txn:
+                self._conn.execute("BEGIN")
+            else:
+                self._conn.execute("SAVEPOINT sp_sync_from_registry")
+            try:
+                # Fetch all existing records keyed by skill_id
+                rows = self._conn.execute(
+                    "SELECT skill_id, name, description, lineage_content_snapshot FROM skill_records"
+                ).fetchall()
+                existing: Dict[str, Any] = {r[0]: r for r in rows}
+
+                # Also fetch all paths with an active record.
+                # After FIX evolution the DB skill_id changes but the
+                # filesystem path stays the same.  Matching by path
+                # prevents creating a duplicate imported record on restart.
+                path_rows = self._conn.execute("SELECT path FROM skill_records WHERE is_active=1").fetchall()
+                existing_active_paths: set = {r[0] for r in path_rows}
+
+                for meta in discovered_skills:
+                    path_str = str(meta.path)
+                    skill_dir = meta.path.parent
+
+                    if meta.skill_id in existing:
+                        # Refresh name/description if frontmatter changed,
+                        # and backfill empty content_snapshot
+                        row = existing[meta.skill_id]
+                        updates: List[str] = []
+                        params: list = []
+
+                        if row["name"] != meta.name:
+                            updates.append("name=?")
+                            params.append(meta.name)
+                        if row["description"] != meta.description:
+                            updates.append("description=?")
+                            params.append(meta.description)
+
+                        raw_snap = row["lineage_content_snapshot"] or ""
+                        if raw_snap in ("", "{}"):
+                            try:
+                                snap = collect_skill_snapshot(skill_dir)
+                                if snap:
+                                    updates.append("lineage_content_snapshot=?")
+                                    params.append(json.dumps(snap, ensure_ascii=False))
+                                    diff = "\n".join(
+                                        compute_unified_diff("", text, filename=name)
+                                        for name, text in sorted(snap.items())
+                                        if compute_unified_diff("", text, filename=name)
+                                    )
+                                    if diff:
+                                        updates.append("lineage_content_diff=?")
+                                        params.append(diff)
+                            except Exception as e:
+                                logger.warning(f"sync_from_registry: snapshot backfill failed for {meta.skill_id}: {e}")
+
+                        if updates:
+                            params.append(meta.skill_id)
+                            self._conn.execute(
+                                f"UPDATE skill_records SET {', '.join(updates)} WHERE skill_id=?",
+                                params,
+                            )
+                            refreshed += 1
+                        continue
+
+                    # Path already covered by an evolved record
+                    if path_str in existing_active_paths:
+                        continue
+
+                    # Snapshot the directory so this version can be restored later
+                    snapshot: Dict[str, str] = {}
+                    content_diff = ""
+                    try:
+                        snapshot = collect_skill_snapshot(skill_dir)
+                        content_diff = "\n".join(
+                            compute_unified_diff("", text, filename=name)
+                            for name, text in sorted(snapshot.items())
+                            if compute_unified_diff("", text, filename=name)
+                        )
+                    except Exception as e:
+                        logger.warning(f"sync_from_registry: failed to snapshot {skill_dir}: {e}")
+
+                    record = SkillRecord(
+                        skill_id=meta.skill_id,
+                        name=meta.name,
+                        description=meta.description,
+                        path=path_str,
+                        is_active=True,
+                        lineage=SkillLineage(
+                            origin=SkillOrigin.IMPORTED,
+                            generation=0,
+                            content_snapshot=snapshot,
+                            content_diff=content_diff,
+                        ),
+                    )
+                    self._upsert(record)
+                    created += 1
+                    logger.debug(f"sync_from_registry: created {meta.name} [{meta.skill_id}]")
+
+                if owns_txn:
+                    self._conn.commit()
+                else:
+                    self._conn.execute("RELEASE sp_sync_from_registry")
+            except Exception:
+                if owns_txn:
+                    self._conn.rollback()
+                else:
+                    self._conn.execute("ROLLBACK TO sp_sync_from_registry")
+                raise
+
+        if created or refreshed:
+            logger.info(
+                f"sync_from_registry: {created} new record(s) created, "
+                f"{refreshed} refreshed"
+            )
+        return created
+
+    def load_by_category(self, category: SkillCategory, *, active_only: bool = True) -> List[SkillRecord]:
+        """Load skill records filtered by category.
+
+        Args:
+            category: The skill category to filter by.
+            active_only: If True (default), only return active records.
+
+        Returns:
+            List of matching skill records.
+        """
+        with self._reader() as conn:
+            if active_only:
+                rows = conn.execute(
+                    "SELECT * FROM skill_records WHERE category=? AND is_active=1",
+                    (category.value,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM skill_records WHERE category=?",
+                    (category.value,),
+                ).fetchall()
+            return [self.to_record(conn, r) for r in rows]
+
+    def clear(self) -> None:
+        """Delete all skill records (CASCADE will clean up related tables).
+        
+        Note: Must be called within an existing transaction holding self._mu.
+        This is designed to be called from SkillStore.clear().
+        """
+        self._ensure_open()
+        # Don't acquire mutex here - caller (SkillStore) already holds it
+        # CASCADE on skill_records cleans up: lineage_parents, tool_deps, tags
+        self._conn.execute("DELETE FROM skill_records")
+        logger.debug("SkillRepository cleared")

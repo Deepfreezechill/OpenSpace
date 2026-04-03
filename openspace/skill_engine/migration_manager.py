@@ -11,6 +11,13 @@ Architecture:
     - Manages PRAGMA settings for optimal SQLite configuration
     - Idempotent: safe to run multiple times via IF NOT EXISTS
     - Future: schema versioning and upgrade paths
+
+SAVEPOINT Usage:
+    MigrationManager intentionally does NOT use SAVEPOINTs in its DDL operations.
+    SQLite DDL statements (CREATE TABLE, PRAGMA user_version) have complex 
+    interactions with nested transactions and SAVEPOINTs. Using explicit 
+    transaction boundaries (BEGIN/COMMIT/ROLLBACK) provides cleaner, more 
+    predictable behavior for schema operations.
 """
 
 from __future__ import annotations
@@ -18,9 +25,10 @@ from __future__ import annotations
 import sqlite3
 import threading
 import time
+from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
-from typing import Optional
+from typing import Generator, Optional
 
 from openspace.utils.logging import Logger
 
@@ -169,6 +177,7 @@ class MigrationManager:
     def __init__(
         self,
         db_path: Optional[Path] = None,
+        *,
         conn: Optional[sqlite3.Connection] = None,
         lock: Optional[threading.Lock] = None,
     ) -> None:
@@ -229,6 +238,24 @@ class MigrationManager:
 
         logger.debug("MigrationManager closed")
 
+    @contextmanager
+    def _reader(self) -> Generator[sqlite3.Connection, None, None]:
+        """Open a temporary read-only connection (WAL parallel reads)."""
+        self._ensure_open()
+        if not self._owns_conn:
+            # When sharing a connection, acquire lock to prevent dirty reads
+            with self._mu:
+                yield self._conn
+            return
+        conn = self._make_connection(read_only=True)
+        try:
+            yield conn
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
     # ── Schema Management ───────────────────────────────────────────────
 
     @_db_retry()
@@ -279,7 +306,7 @@ class MigrationManager:
         
         # Security: Explicit type check to prevent f-string injection
         if not isinstance(version, int):
-            raise TypeError(f"version must be int, got {type(version).__name__}")
+            raise TypeError(f"schema version must be a non-negative int, got {type(version).__name__}: {version!r}")
         if version < 0:
             raise ValueError(f"version must be non-negative, got {version}")
         # Allow test versions higher than CURRENT_VERSION for testing purposes
@@ -328,6 +355,11 @@ class MigrationManager:
             ValueError: If target version is lower than current version.
             RuntimeError: If migration path is not supported.
         """
+        if not isinstance(target_version, int):
+            raise TypeError(f"schema version must be a non-negative int, got {type(target_version).__name__}: {target_version!r}")
+        if target_version < 0:
+            raise ValueError(f"schema version must be a non-negative int, got {type(target_version).__name__}: {target_version!r}")
+        
         self._ensure_open()
         
         current_version = self.get_schema_version()
@@ -389,3 +421,7 @@ class MigrationManager:
             logger.warning(
                 f"Database schema version {current_version} is newer than expected {expected_version}"
             )
+
+    def clear(self) -> None:
+        """No data to clear - MigrationManager only manages schema."""
+        pass

@@ -217,7 +217,8 @@ class SkillStore:
         """
         if self._closed:
             return
-        self._closed = True
+        with self._mu:
+            self._closed = True
         try:
             self._repo.close()
         except Exception:
@@ -295,126 +296,8 @@ class SkillStore:
         self,
         discovered_skills: List[Any],
     ) -> int:
-        self._ensure_open()
-        created = 0
-        refreshed = 0
-        with self._mu:
-            owns_txn = not self._conn.in_transaction
-            if owns_txn:
-                self._conn.execute("BEGIN")
-            else:
-                self._conn.execute("SAVEPOINT sp_sync_from_registry")
-            try:
-                # Fetch all existing records keyed by skill_id
-                rows = self._conn.execute(
-                    "SELECT skill_id, name, description, lineage_content_snapshot FROM skill_records"
-                ).fetchall()
-                existing: Dict[str, Any] = {r[0]: r for r in rows}
-
-                # Also fetch all paths with an active record.
-                # After FIX evolution the DB skill_id changes but the
-                # filesystem path stays the same.  Matching by path
-                # prevents creating a duplicate imported record on restart.
-                path_rows = self._conn.execute("SELECT path FROM skill_records WHERE is_active=1").fetchall()
-                existing_active_paths: set = {r[0] for r in path_rows}
-
-                for meta in discovered_skills:
-                    path_str = str(meta.path)
-                    skill_dir = meta.path.parent
-
-                    if meta.skill_id in existing:
-                        # Refresh name/description if frontmatter changed,
-                        # and backfill empty content_snapshot
-                        row = existing[meta.skill_id]
-                        updates: List[str] = []
-                        params: list = []
-
-                        if row["name"] != meta.name:
-                            updates.append("name=?")
-                            params.append(meta.name)
-                        if row["description"] != meta.description:
-                            updates.append("description=?")
-                            params.append(meta.description)
-
-                        raw_snap = row["lineage_content_snapshot"] or ""
-                        if raw_snap in ("", "{}"):
-                            try:
-                                snap = collect_skill_snapshot(skill_dir)
-                                if snap:
-                                    updates.append("lineage_content_snapshot=?")
-                                    params.append(json.dumps(snap, ensure_ascii=False))
-                                    diff = "\n".join(
-                                        compute_unified_diff("", text, filename=name)
-                                        for name, text in sorted(snap.items())
-                                        if compute_unified_diff("", text, filename=name)
-                                    )
-                                    if diff:
-                                        updates.append("lineage_content_diff=?")
-                                        params.append(diff)
-                            except Exception as e:
-                                logger.warning(f"sync_from_registry: snapshot backfill failed for {meta.skill_id}: {e}")
-
-                        if updates:
-                            params.append(meta.skill_id)
-                            self._conn.execute(
-                                f"UPDATE skill_records SET {', '.join(updates)} WHERE skill_id=?",
-                                params,
-                            )
-                            refreshed += 1
-                        continue
-
-                    # Path already covered by an evolved record
-                    if path_str in existing_active_paths:
-                        continue
-
-                    # Snapshot the directory so this version can be restored later
-                    snapshot: Dict[str, str] = {}
-                    content_diff = ""
-                    try:
-                        snapshot = collect_skill_snapshot(skill_dir)
-                        content_diff = "\n".join(
-                            compute_unified_diff("", text, filename=name)
-                            for name, text in sorted(snapshot.items())
-                            if compute_unified_diff("", text, filename=name)
-                        )
-                    except Exception as e:
-                        logger.warning(f"sync_from_registry: failed to snapshot {skill_dir}: {e}")
-
-                    record = SkillRecord(
-                        skill_id=meta.skill_id,
-                        name=meta.name,
-                        description=meta.description,
-                        path=path_str,
-                        is_active=True,
-                        lineage=SkillLineage(
-                            origin=SkillOrigin.IMPORTED,
-                            generation=0,
-                            content_snapshot=snapshot,
-                            content_diff=content_diff,
-                        ),
-                    )
-                    self._upsert(record)
-                    created += 1
-                    logger.debug(f"sync_from_registry: created {meta.name} [{meta.skill_id}]")
-
-                if owns_txn:
-                    self._conn.commit()
-                else:
-                    self._conn.execute("RELEASE sp_sync_from_registry")
-            except Exception:
-                if owns_txn:
-                    self._conn.rollback()
-                else:
-                    self._conn.execute("ROLLBACK TO sp_sync_from_registry")
-                raise
-
-        if created or refreshed:
-            logger.info(
-                f"sync_from_registry: {created} new record(s) created, "
-                f"{refreshed} refreshed, "
-                f"{len(discovered_skills) - created - refreshed} unchanged"
-            )
-        return created
+        """Delegate to SkillRepository for sync logic."""
+        return self._repo.sync_from_registry(discovered_skills)
 
     async def record_analysis(self, analysis: ExecutionAnalysis) -> None:
         """Atomic observation: insert analysis + judgments + increment counters.
@@ -674,9 +557,39 @@ class SkillStore:
             else:
                 self._conn.execute("SAVEPOINT sp_delete_record")
             try:
-                # Handle deletion directly rather than delegating to avoid double-commit
+                # Clean up dependent tables BEFORE deleting skill_records to prevent ghost data
+                # Order: judgments (references analyses) → analyses → tags → lineage_parents → tool_deps → skill_records
+                
+                # Step 1: Get analysis_ids for skill_judgments that reference this skill_id
+                analysis_ids = self._conn.execute(
+                    "SELECT DISTINCT analysis_id FROM skill_judgments WHERE skill_id=?",
+                    (skill_id,)
+                ).fetchall()
+                analysis_ids = [row["analysis_id"] for row in analysis_ids]
+                
+                # Step 2: Delete skill_judgments that reference this skill_id
+                self._conn.execute("DELETE FROM skill_judgments WHERE skill_id=?", (skill_id,))
+                
+                # Step 3: Delete execution_analyses that have no more judgments referencing them
+                for analysis_id in analysis_ids:
+                    remaining_judgments = self._conn.execute(
+                        "SELECT COUNT(*) as count FROM skill_judgments WHERE analysis_id=?",
+                        (analysis_id,)
+                    ).fetchone()
+                    if remaining_judgments["count"] == 0:
+                        self._conn.execute("DELETE FROM execution_analyses WHERE id=?", (analysis_id,))
+                
+                # Step 4: Delete from other tables (these have CASCADE but be explicit for clarity)
+                self._conn.execute("DELETE FROM skill_tags WHERE skill_id=?", (skill_id,))
+                self._conn.execute("DELETE FROM skill_lineage_parents WHERE skill_id=?", (skill_id,))
+                # Also clean reverse lineage refs: children pointing TO this skill as parent
+                self._conn.execute("DELETE FROM skill_lineage_parents WHERE parent_skill_id=?", (skill_id,))
+                self._conn.execute("DELETE FROM skill_tool_deps WHERE skill_id=?", (skill_id,))
+                
+                # Step 5: Finally delete from skill_records
                 cur = self._conn.execute("DELETE FROM skill_records WHERE skill_id=?", (skill_id,))
                 result = cur.rowcount > 0
+                
                 if owns_txn:
                     self._conn.commit()
                 else:
@@ -774,23 +687,8 @@ class SkillStore:
 
     @_db_retry()
     def load_by_category(self, category: SkillCategory, *, active_only: bool = True) -> List[SkillRecord]:
-        """Load skill records filtered by category.
-
-        Args:
-            active_only: If True (default), only return active records.
-        """
-        with self._reader() as conn:
-            if active_only:
-                rows = conn.execute(
-                    "SELECT * FROM skill_records WHERE category=? AND is_active=1",
-                    (category.value,),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT * FROM skill_records WHERE category=?",
-                    (category.value,),
-                ).fetchall()
-            return [self._to_record(conn, r) for r in rows]
+        """Delegate to SkillRepository for category queries."""
+        return self._repo.load_by_category(category, active_only=active_only)
 
     @_db_retry()
     def load_analyses(
@@ -924,7 +822,7 @@ class SkillStore:
     # Lineage / Ancestry
     @_db_retry()
     def get_ancestry(self, skill_id: str, max_depth: int = 10) -> List[SkillRecord]:
-        """Walk up the lineage tree; returns ancestors oldest-first.
+        """Walk up the lineage tree; returns ancestors nearest-first.
 
         Delegates to :class:`LineageTracker` (Epic 3.3).
         """
@@ -942,7 +840,11 @@ class SkillStore:
 
     # Maintenance
     def clear(self) -> None:
-        """Delete all data (keeps schema)."""
+        """Delete all data (keeps schema).
+        
+        Orchestrates clearing across all modules - each module clears 
+        its own data in a coordinated transaction.
+        """
         self._ensure_open()
         with self._mu:
             owns_txn = not self._conn.in_transaction
@@ -951,10 +853,13 @@ class SkillStore:
             else:
                 self._conn.execute("SAVEPOINT sp_clear")
             try:
-                # CASCADE on skill_records cleans up: lineage_parents, tool_deps, tags
-                self._conn.execute("DELETE FROM skill_records")
-                # Delegate analysis clearing to AnalysisStore (Epic 3.4)
-                self._analyses.clear_all_analyses()
+                # Clear each module's data
+                self._repo.clear()           # Clears skill_records + CASCADE
+                self._analyses.clear_all_analyses()  # Clears execution_analyses + skill_judgments
+                self._lineage.clear()        # No-op (data is in skill_records)
+                self._tag_search.clear()     # No-op (data is in skill_tags, CASCADE)
+                self._migrations.clear()     # No-op (schema only)
+                
                 if owns_txn:
                     self._conn.commit()
                 else:
@@ -968,7 +873,11 @@ class SkillStore:
                 raise
 
     def vacuum(self) -> None:
-        """Compact the database file."""
+        """Compact the database file.
+        
+        DB-level maintenance, not module-specific - operates on the entire
+        SQLite database file to reclaim space and optimize performance.
+        """
         self._ensure_open()
         with self._mu:
             self._conn.execute("VACUUM")

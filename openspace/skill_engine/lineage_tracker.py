@@ -14,6 +14,7 @@ Architecture:
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 import time
@@ -25,11 +26,14 @@ from typing import Any, Dict, Generator, List, Optional
 
 from openspace.utils.logging import Logger
 
-from .skill_repository import SkillRepository
+from .migration_manager import MigrationManager
 from .types import (
     SkillLineage,
     SkillOrigin,
     SkillRecord,
+    SkillCategory,
+    SkillVisibility,
+    ValidationError,
 )
 
 logger = Logger.get_logger(__name__)
@@ -96,6 +100,7 @@ class LineageTracker:
     def __init__(
         self,
         db_path: Optional[Path] = None,
+        *,
         conn: Optional[sqlite3.Connection] = None,
         lock: Optional[threading.Lock] = None,
     ) -> None:
@@ -106,15 +111,18 @@ class LineageTracker:
         if conn is not None:
             self._conn = conn
             self._db_path = Path(":shared:")
-            # When sharing a connection, the caller owns DDL and the repo
-            self._repo = SkillRepository(conn=conn, lock=self._mu)
+            # When sharing a connection, the caller owns DDL
         else:
             if db_path is None:
                 raise ValueError("Either db_path or conn must be provided")
             self._db_path = Path(db_path)
-            self._repo = SkillRepository(db_path=db_path)
-            self._conn = self._repo._conn
-            self._mu = self._repo._mu
+            self._conn = sqlite3.connect(str(db_path), timeout=30)
+            self._conn.row_factory = sqlite3.Row
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA busy_timeout=30000")
+            # Standalone mode: ensure schema exists
+            mm = MigrationManager(conn=self._conn, lock=self._mu)
+            mm.initialize_schema()
 
         logger.debug(f"LineageTracker ready at {self._db_path}")
 
@@ -164,7 +172,7 @@ class LineageTracker:
         self._closed = True
         if self._owns_conn:
             try:
-                self._repo.close()
+                self._conn.close()
             except Exception:
                 pass
         logger.debug("LineageTracker closed")
@@ -172,6 +180,194 @@ class LineageTracker:
     @property
     def db_path(self) -> Path:
         return self._db_path
+
+    # ── Internal: Record persistence ─────────────────────────────────
+    
+    def _upsert_skill_record(self, record: SkillRecord) -> None:
+        """Insert/update skill_records row + sync lineage_parents.
+        
+        LineageTracker-specific upsert that only handles skill_records
+        and skill_lineage_parents tables. Does not handle tool deps or tags.
+        
+        Must be called within a transaction holding self._mu.
+        """
+        try:
+            record.validate()
+        except ValidationError as exc:
+            raise ValidationError(
+                f"Cannot persist invalid SkillRecord '{record.skill_id}': {exc}"
+            ) from exc
+
+        lin = record.lineage
+        snapshot_json = json.dumps(lin.content_snapshot, ensure_ascii=False)
+
+        # Insert or update skill_records
+        self._conn.execute(
+            """
+            INSERT INTO skill_records (
+                skill_id, name, description, path, is_active, category,
+                visibility, creator_id,
+                lineage_origin, lineage_generation,
+                lineage_source_task_id, lineage_change_summary,
+                lineage_content_diff, lineage_content_snapshot,
+                lineage_created_at, lineage_created_by,
+                total_selections, total_applied,
+                total_completions, total_fallbacks,
+                first_seen, last_updated
+            ) VALUES (?,?,?,?,?,?, ?,?, ?,?, ?,?, ?,?, ?,?, ?,?,?,?, ?,?)
+            ON CONFLICT(skill_id) DO UPDATE SET
+                name=excluded.name,
+                description=excluded.description,
+                path=excluded.path,
+                is_active=excluded.is_active,
+                category=excluded.category,
+                visibility=excluded.visibility,
+                creator_id=excluded.creator_id,
+                lineage_origin=excluded.lineage_origin,
+                lineage_generation=excluded.lineage_generation,
+                lineage_source_task_id=excluded.lineage_source_task_id,
+                lineage_change_summary=excluded.lineage_change_summary,
+                lineage_content_diff=excluded.lineage_content_diff,
+                lineage_content_snapshot=excluded.lineage_content_snapshot,
+                lineage_created_at=excluded.lineage_created_at,
+                lineage_created_by=excluded.lineage_created_by,
+                total_selections=excluded.total_selections,
+                total_applied=excluded.total_applied,
+                total_completions=excluded.total_completions,
+                total_fallbacks=excluded.total_fallbacks,
+                last_updated=excluded.last_updated
+            """,
+            (
+                record.skill_id, record.name, record.description, record.path,
+                int(record.is_active), record.category.value, record.visibility.value,
+                record.creator_id, lin.origin.value, lin.generation,
+                lin.source_task_id, lin.change_summary,
+                lin.content_diff, snapshot_json,
+                lin.created_at.isoformat(), lin.created_by,
+                record.total_selections, record.total_applied,
+                record.total_completions, record.total_fallbacks,
+                record.first_seen.isoformat(), record.last_updated.isoformat(),
+            ),
+        )
+
+        # Sync lineage parents
+        self._conn.execute(
+            "DELETE FROM skill_lineage_parents WHERE skill_id=?",
+            (record.skill_id,),
+        )
+        for pid in lin.parent_skill_ids:
+            self._conn.execute(
+                "INSERT INTO skill_lineage_parents(skill_id, parent_skill_id) VALUES(?,?)",
+                (record.skill_id, pid),
+            )
+
+    def _to_record(self, conn: sqlite3.Connection, row: sqlite3.Row) -> SkillRecord:
+        """Deserialize a skill_records row + related rows → SkillRecord.
+        
+        LineageTracker-specific deserialization that includes lineage parents
+        but omits tool dependencies and tags.
+        """
+        sid = row["skill_id"]
+
+        parents = [
+            r["parent_skill_id"]
+            for r in conn.execute(
+                "SELECT parent_skill_id FROM skill_lineage_parents WHERE skill_id=?",
+                (sid,),
+            ).fetchall()
+        ]
+
+        # Parse lineage content snapshot 
+        snapshot_raw = row["lineage_content_snapshot"] or "{}"
+        try:
+            snapshot = json.loads(snapshot_raw)
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(f"Invalid JSON in lineage_content_snapshot for {sid}: {snapshot_raw!r}")
+            snapshot = {}
+
+        # Parse dates
+        created_at = datetime.fromisoformat(row["lineage_created_at"])
+        first_seen = datetime.fromisoformat(row["first_seen"])
+        last_updated = datetime.fromisoformat(row["last_updated"])
+
+        lineage = SkillLineage(
+            origin=SkillOrigin(row["lineage_origin"]),
+            generation=row["lineage_generation"],
+            source_task_id=row["lineage_source_task_id"],
+            change_summary=row["lineage_change_summary"],
+            content_diff=row["lineage_content_diff"],
+            content_snapshot=snapshot,
+            created_at=created_at,
+            created_by=row["lineage_created_by"],
+            parent_skill_ids=parents,
+        )
+
+        return SkillRecord(
+            skill_id=sid,
+            name=row["name"],
+            description=row["description"],
+            path=row["path"],
+            is_active=bool(row["is_active"]),
+            category=SkillCategory(row["category"]),
+            visibility=SkillVisibility(row["visibility"]),
+            creator_id=row["creator_id"],
+            lineage=lineage,
+            tool_dependencies=[],  # Not loaded by LineageTracker
+            critical_tools=[],    # Not loaded by LineageTracker  
+            tags=[],              # Not loaded by LineageTracker
+            total_selections=row["total_selections"],
+            total_applied=row["total_applied"],
+            total_completions=row["total_completions"],
+            total_fallbacks=row["total_fallbacks"],
+            first_seen=first_seen,
+            last_updated=last_updated,
+        )
+
+    # ── Public API: Save ──────────────────────────────────────────────
+    
+    @_db_retry()
+    def save(self, record: SkillRecord) -> None:
+        """Upsert a single :class:`SkillRecord`.
+        
+        Calls ``record.validate()`` before writing to enforce data integrity.
+        Raises :class:`ValidationError` if the record is invalid.
+        
+        Note: This only syncs skill_records and skill_lineage_parents.
+        Tool dependencies and tags are not managed by LineageTracker.
+        """
+        self._ensure_open()
+        with self._mu:
+            owns_txn = not self._conn.in_transaction
+            if owns_txn:
+                self._conn.execute("BEGIN")
+            try:
+                self._upsert_skill_record(record)
+                if owns_txn:
+                    self._conn.commit()
+            except Exception:
+                if owns_txn:
+                    self._conn.rollback()
+                raise
+
+    @_db_retry()
+    def get(self, skill_id: str) -> Optional[SkillRecord]:
+        """Retrieve a single :class:`SkillRecord` by skill_id.
+        
+        Args:
+            skill_id: The skill_id to look up.
+        
+        Returns:
+            The SkillRecord if found, None otherwise.
+        
+        Note: Tool dependencies and tags are not loaded by LineageTracker.
+        """
+        with self._reader() as conn:
+            row = conn.execute(
+                "SELECT * FROM skill_records WHERE skill_id=?", (skill_id,)
+            ).fetchone()
+            if not row:
+                return None
+            return self._to_record(conn, row)
 
     # ── Lineage recording ─────────────────────────────────────────────
 
@@ -210,7 +406,7 @@ class LineageTracker:
                 new_record.lineage.parent_skill_ids = list(parent_skill_ids)
                 new_record.is_active = True
 
-                self._repo._upsert(new_record)
+                self._upsert_skill_record(new_record)
                 if owns_txn:
                     self._conn.commit()
                 else:
@@ -241,8 +437,14 @@ class LineageTracker:
         Returns:
             The lineage metadata, or ``None`` if the skill doesn't exist.
         """
-        record = self._repo.get(skill_id)
-        return record.lineage if record else None
+        with self._reader() as conn:
+            row = conn.execute(
+                "SELECT * FROM skill_records WHERE skill_id=?", (skill_id,)
+            ).fetchone()
+            if not row:
+                return None
+            record = self._to_record(conn, row)
+            return record.lineage
 
     @_db_retry()
     def get_children(self, parent_skill_id: str) -> List[str]:
@@ -265,7 +467,7 @@ class LineageTracker:
     def get_ancestors(
         self, skill_id: str, max_depth: int = 10
     ) -> List[SkillRecord]:
-        """Walk up the lineage tree; returns ancestors oldest-first.
+        """Walk up the lineage tree; returns ancestors nearest-first.
 
         Uses BFS to traverse parent links, respecting ``max_depth`` to
         prevent runaway traversal on deep or cyclic graphs.
@@ -276,7 +478,7 @@ class LineageTracker:
 
         Returns:
             List of ancestor :class:`SkillRecord` objects, sorted by
-            generation (oldest first).
+            generation (nearest first).
         """
         with self._reader() as conn:
             visited: set[str] = {skill_id}  # Fix 1: Seed with starting skill_id to prevent cycles
@@ -301,14 +503,15 @@ class LineageTracker:
                         ).fetchone()
                         if row:
                             ancestors.append(
-                                SkillRepository.to_record(conn, row)
+                                self._to_record(conn, row)
                             )
                             next_frontier.append(pid)
                 frontier = next_frontier
                 if not frontier:
                     break
 
-            ancestors.sort(key=lambda r: r.lineage.generation)
+            # Sort by generation descending (nearest first)
+            ancestors.sort(key=lambda r: r.lineage.generation, reverse=True)
             return ancestors
 
     @_db_retry()
@@ -330,7 +533,7 @@ class LineageTracker:
                 "ORDER BY lineage_generation ASC",
                 (name,),
             ).fetchall()
-            return [SkillRepository.to_record(conn, r) for r in rows]
+            return [self._to_record(conn, r) for r in rows]
 
     @_db_retry()
     def get_lineage_tree(
@@ -387,3 +590,7 @@ class LineageTracker:
                     self._subtree(conn, cid, depth - 1, visited.copy())
                 )
         return node
+
+    def clear(self) -> None:
+        """No independent data to clear - all lineage data is in skill_records."""
+        pass
