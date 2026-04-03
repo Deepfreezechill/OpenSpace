@@ -228,7 +228,7 @@ def _make_openspace_mock():
 @pytest.fixture(autouse=True)
 def _patch_openspace_init(monkeypatch):
     """Prevent real OpenSpace initialization in every test."""
-    import openspace.mcp_server as srv
+    import openspace.mcp.tool_handlers as srv
 
     mock = _make_openspace_mock()
     monkeypatch.setattr(srv, "_openspace_instance", mock)
@@ -240,7 +240,7 @@ def _patch_openspace_init(monkeypatch):
 @pytest.mark.asyncio
 async def test_execute_task_error_no_traceback():
     """execute_task: exception → structured error, no traceback leak."""
-    import openspace.mcp_server as srv
+    import openspace.mcp.tool_handlers as srv
 
     with patch.object(
         srv,
@@ -258,7 +258,7 @@ async def test_execute_task_error_no_traceback():
 @pytest.mark.asyncio
 async def test_execute_task_deep_traceback_not_leaked():
     """execute_task: real traceback chain → nothing leaks."""
-    import openspace.mcp_server as srv
+    import openspace.mcp.tool_handlers as srv
 
     def _blow_up():
         raise KeyError("secret_key")
@@ -282,10 +282,10 @@ async def test_execute_task_deep_traceback_not_leaked():
 @pytest.mark.asyncio
 async def test_search_skills_error_no_traceback():
     """search_skills: exception → structured error, no traceback leak."""
-    import openspace.mcp_server as srv
+    import openspace.mcp.tool_handlers as srv
 
     with patch(
-        "openspace.mcp_server.hybrid_search_skills",
+        "openspace.mcp.tool_handlers.hybrid_search_skills",
         create=True,
         side_effect=ImportError("No module named 'openspace.cloud.search'"),
     ):
@@ -303,7 +303,7 @@ async def test_search_skills_error_no_traceback():
 @pytest.mark.asyncio
 async def test_fix_skill_missing_skill_md():
     """fix_skill: missing SKILL.md → SKILL_NOT_FOUND, no path leak."""
-    import openspace.mcp_server as srv
+    import openspace.mcp.tool_handlers as srv
 
     result = await srv.fix_skill(
         skill_dir="/secret/internal/path/my-skill",
@@ -323,7 +323,7 @@ async def test_fix_skill_exception_no_traceback():
     """fix_skill: runtime exception → structured error."""
     import os
 
-    import openspace.mcp_server as srv
+    import openspace.mcp.tool_handlers as srv
 
     # Create a temporary directory with SKILL.md so we pass validation
     tmpdir = os.path.join(os.path.dirname(__file__), "_test_skill_tmp")
@@ -356,7 +356,7 @@ async def test_fix_skill_exception_no_traceback():
 @pytest.mark.asyncio
 async def test_upload_skill_missing_skill_md():
     """upload_skill: missing SKILL.md → SKILL_NOT_FOUND, no path leak."""
-    import openspace.mcp_server as srv
+    import openspace.mcp.tool_handlers as srv
 
     result = await srv.upload_skill(skill_dir="/opt/secret/skills/broken")
 
@@ -372,7 +372,7 @@ async def test_upload_skill_exception_no_traceback():
     """upload_skill: cloud auth failure → structured error, no traceback."""
     import os
 
-    import openspace.mcp_server as srv
+    import openspace.mcp.tool_handlers as srv
 
     tmpdir = os.path.join(os.path.dirname(__file__), "_test_upload_tmp")
     os.makedirs(tmpdir, exist_ok=True)
@@ -403,7 +403,7 @@ async def test_upload_skill_exception_no_traceback():
 @pytest.mark.asyncio
 async def test_server_logs_full_exception():
     """Verify that full exception details are logged server-side."""
-    import openspace.mcp_server as srv
+    import openspace.mcp.tool_handlers as srv
 
     with patch("openspace.errors.logger") as mock_logger:
         with patch.object(
@@ -439,7 +439,7 @@ async def test_server_logs_full_exception():
 )
 async def test_all_tools_structured_error_on_failure(tool_name, call):
     """Every MCP tool returns structured error JSON on failure — never raw tracebacks."""
-    import openspace.mcp_server as srv
+    import openspace.mcp.tool_handlers as srv
 
     # Sabotage everything to force errors
     with patch.object(
