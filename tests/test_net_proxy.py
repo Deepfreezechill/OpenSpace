@@ -13,8 +13,8 @@ import asyncio
 
 import pytest
 
-from openspace.sandbox.leases import NetworkCapability
-from openspace.sandbox.net_proxy import (
+from scion.sandbox.leases import NetworkCapability
+from scion.sandbox.net_proxy import (
     ConnectionLimitError,
     ConnectionNotFoundError,
     ConnectionTracker,
@@ -496,7 +496,7 @@ class TestSecurityRegressions:
         """LeaseSchema must reject T0 with non-empty allowed_domains."""
         from pydantic import ValidationError
 
-        from openspace.sandbox.leases import LeaseSchema, TrustTier
+        from scion.sandbox.leases import LeaseSchema, TrustTier
 
         with pytest.raises(ValidationError, match="allowed_domains"):
             LeaseSchema(
@@ -513,7 +513,7 @@ class TestSecurityRegressions:
         """LeaseSchema must reject T1 with non-empty allowed_domains."""
         from pydantic import ValidationError
 
-        from openspace.sandbox.leases import LeaseSchema, TrustTier
+        from scion.sandbox.leases import LeaseSchema, TrustTier
 
         with pytest.raises(ValidationError, match="allowed_domains"):
             LeaseSchema(

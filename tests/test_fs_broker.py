@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from openspace.sandbox.fs_broker import (
+from scion.sandbox.fs_broker import (
     DeniedPathError,
     FileSizeLimitError,
     FilesystemBroker,
@@ -36,7 +36,7 @@ from openspace.sandbox.fs_broker import (
     safe_open_read,
     safe_open_write,
 )
-from openspace.sandbox.leases import FilesystemCapability
+from scion.sandbox.leases import FilesystemCapability
 
 _IS_WINDOWS = platform.system() == "Windows"
 _SUPPORTS_SYMLINKS = not _IS_WINDOWS  # Conservative; some Windows configs allow them

@@ -1,4 +1,4 @@
-"""Tests for openspace.secret.broker — EPIC 2.6.
+"""Tests for scion.secret.broker — EPIC 2.6.
 
 Covers:
 - #52: SecretBrokerPort concrete implementation
@@ -16,8 +16,8 @@ import time
 
 import pytest
 
-from openspace.sandbox.leases import SecretCapability
-from openspace.secret.broker import (
+from scion.sandbox.leases import SecretCapability
+from scion.secret.broker import (
     SecretAccessDenied,
     SecretBroker,
     SecretBrokerError,

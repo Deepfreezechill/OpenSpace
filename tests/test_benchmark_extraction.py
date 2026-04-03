@@ -17,7 +17,7 @@ from typing import List, Set
 import pytest
 
 # Production package root
-_OPENSPACE_ROOT = Path(__file__).resolve().parent.parent / "openspace"
+_OPENSPACE_ROOT = Path(__file__).resolve().parent.parent / "scion"
 
 # Files that are explicitly allowed to reference gdpval_bench
 # (dashboard is not part of the MCP server)
@@ -79,11 +79,11 @@ class TestNoBenchmarkImports:
     @pytest.mark.parametrize(
         "module_path",
         [
-            "openspace.llm.client",
-            "openspace.skill_engine.registry",
-            "openspace.skill_engine.evolver",
-            "openspace.skill_engine.analyzer",
-            "openspace.grounding.core.quality.manager",
+            "scion.llm.client",
+            "scion.skill_engine.registry",
+            "scion.skill_engine.evolver",
+            "scion.skill_engine.analyzer",
+            "scion.grounding.core.quality.manager",
         ],
     )
     def test_previously_coupled_modules_clean(self, module_path):
@@ -98,7 +98,7 @@ class TestNoBenchmarkImports:
 
 
 class TestBenchmarkIsolation:
-    """gdpval_bench must be completely separate from openspace runtime."""
+    """gdpval_bench must be completely separate from scion runtime."""
 
     def test_gdpval_bench_not_in_sys_modules_after_openspace_import(self):
         """Importing openspace modules must not pull in gdpval_bench."""
@@ -109,9 +109,9 @@ class TestBenchmarkIsolation:
         try:
             # Force reimport of the previously-coupled modules
             for mod_name in [
-                "openspace.skill_engine.registry",
-                "openspace.skill_engine.evolver",
-                "openspace.skill_engine.analyzer",
+                "scion.skill_engine.registry",
+                "scion.skill_engine.evolver",
+                "scion.skill_engine.analyzer",
             ]:
                 try:
                     if mod_name in sys.modules:

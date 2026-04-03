@@ -100,8 +100,8 @@ epics:
     branch: "epic/3.1-skill-schema"
     pr: 12
     review_round: 2
-    source_file: "openspace/skill_engine/store.py"
-    target_module: "openspace/skill_engine/skill_schema.py"
+    source_file: "scion/skill_engine/store.py"
+    target_module: "scion/skill_engine/skill_schema.py"
     description: >
       Extract SkillSchema and SkillVersion frozen dataclasses/models from store.py.
       These are the core domain types for the skill persistence layer.
@@ -117,8 +117,8 @@ epics:
     branch: "epic/3.2-skill-repository"
     pr: 15
     review_round: 2
-    source_file: "openspace/skill_engine/store.py"
-    target_module: "openspace/skill_engine/skill_repository.py"
+    source_file: "scion/skill_engine/store.py"
+    target_module: "scion/skill_engine/skill_repository.py"
     description: >
       Extract save_record, load_record, load_all, load_active, delete_record,
       deactivate/reactivate and all sync variants into a focused repository class.
@@ -134,8 +134,8 @@ epics:
     branch: "epic/3.3-lineage-tracker"
     pr: 17
     review_round: 2
-    source_file: "openspace/skill_engine/store.py"
-    target_module: "openspace/skill_engine/lineage_tracker.py"
+    source_file: "scion/skill_engine/store.py"
+    target_module: "scion/skill_engine/lineage_tracker.py"
     description: >
       Extract get_ancestry, get_lineage_tree, _subtree, find_children,
       evolve_skill into a focused lineage/derivation graph module.
@@ -150,8 +150,8 @@ epics:
     branch: "epic/3.4-analysis-store"
     pr: 19
     review_round: 2
-    source_file: "openspace/skill_engine/store.py"
-    target_module: "openspace/skill_engine/analysis_store.py"
+    source_file: "scion/skill_engine/store.py"
+    target_module: "scion/skill_engine/analysis_store.py"
     description: >
       Extract record_analysis, load_analyses, load_analyses_for_task,
       load_all_analyses, load_evolution_candidates, _insert_analysis
@@ -167,8 +167,8 @@ epics:
     branch: "epic/3.5-tag-search"
     pr: 21
     review_round: 2
-    source_file: "openspace/skill_engine/store.py"
-    target_module: "openspace/skill_engine/tag_index_search.py"
+    source_file: "scion/skill_engine/store.py"
+    target_module: "scion/skill_engine/tag_index_search.py"
     description: >
       Extract find_skills_by_tool, load_by_category, get_summary, get_stats,
       get_top_skills, get_task_skill_summary, count into search/analytics module.
@@ -183,8 +183,8 @@ epics:
     branch: "epic/3.6-migration-manager"
     pr: 23
     review_round: 2
-    source_file: "openspace/skill_engine/store.py"
-    target_module: "openspace/skill_engine/migration_manager.py"
+    source_file: "scion/skill_engine/store.py"
+    target_module: "scion/skill_engine/migration_manager.py"
     description: >
       Extract _init_db, _make_connection, _cleanup_wal_on_startup, _ensure_open,
       _db_retry, vacuum, clear into a DB lifecycle and schema migration module.
@@ -202,7 +202,7 @@ epics:
     notes: >
       Additional PRs: #26 (E2E validation, 7 blockers fixed), #27 (warning cleanup),
       #28 (batch hydration + mypy fixes). All merged. 1,356 tests passing.
-    source_file: "openspace/skill_engine/store.py"
+    source_file: "scion/skill_engine/store.py"
     target_module: null
     description: >
       Final integration epic: verify all 7 modules work together, add backward
@@ -222,8 +222,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/tool_layer.py"
-    target_module: "openspace/tool_registry.py"
+    source_file: "scion/tool_layer.py"
+    target_module: "scion/tool_registry.py"
     description: >
       Extract tool registration, discovery, and backend listing from OpenSpace class.
     acceptance:
@@ -237,8 +237,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/tool_layer.py"
-    target_module: "openspace/skill_selector.py"
+    source_file: "scion/tool_layer.py"
+    target_module: "scion/skill_selector.py"
     description: >
       Extract _select_and_inject_skills, _get_skill_selection_llm into focused
       skill-first routing module.
@@ -253,8 +253,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/tool_layer.py"
-    target_module: "openspace/execution_engine.py"
+    source_file: "scion/tool_layer.py"
+    target_module: "scion/execution_engine.py"
     description: >
       Extract execute method and fallback orchestration logic.
     acceptance:
@@ -268,8 +268,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/tool_layer.py"
-    target_module: "openspace/recording_service.py"
+    source_file: "scion/tool_layer.py"
+    target_module: "scion/recording_service.py"
     description: >
       Extract _maybe_analyze_execution, _maybe_evolve_quality and all
       trace capture/recording logic.
@@ -284,8 +284,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/tool_layer.py"
-    target_module: "openspace/llm_adapter.py"
+    source_file: "scion/tool_layer.py"
+    target_module: "scion/llm_adapter.py"
     description: >
       Extract LLM client initialization and provider abstraction.
     acceptance:
@@ -299,8 +299,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/tool_layer.py"
-    target_module: "openspace/tool_layer_facade.py"
+    source_file: "scion/tool_layer.py"
+    target_module: "scion/tool_layer_facade.py"
     description: >
       Reduce tool_layer.py to thin facade that composes the 5 extracted modules.
       Preserve public API (OpenSpace class, OpenSpaceConfig).
@@ -316,8 +316,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/mcp_server.py"
-    target_module: "openspace/mcp/tool_handlers.py"
+    source_file: "scion/mcp_server.py"
+    target_module: "scion/mcp/tool_handlers.py"
     description: >
       Extract execute_task, search_skills, fix_skill, upload_skill handlers
       and their helpers into focused handler module.
@@ -332,8 +332,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/mcp_server.py"
-    target_module: "openspace/mcp/auth_middleware.py"
+    source_file: "scion/mcp_server.py"
+    target_module: "scion/mcp/auth_middleware.py"
     description: >
       Extract RateLimitMiddleware, BearerTokenMiddleware, and HMAC auth
       into dedicated auth middleware module.
@@ -348,13 +348,13 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/mcp_server.py"
-    target_module: "openspace/mcp/server.py"
+    source_file: "scion/mcp_server.py"
+    target_module: "scion/mcp/server.py"
     description: >
       Extract endpoint wiring (MCPRouter) and server lifecycle (run_mcp_server)
-      into clean server module. Create openspace/mcp/ package.
+      into clean server module. Create scion/mcp/ package.
     acceptance:
-      - "openspace/mcp/ package exists with clean separation"
+      - "scion/mcp/ package exists with clean separation"
       - "mcp_server.py is thin facade or deleted"
       - "All existing tests pass unchanged"
 
@@ -383,8 +383,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/skill_engine/evolver.py"
-    target_module: "openspace/skill_engine/evolution/models.py"
+    source_file: "scion/skill_engine/evolver.py"
+    target_module: "scion/skill_engine/evolution/models.py"
     description: >
       Extract EvolutionTrigger, EvolutionContext, _sanitize_skill_name
       into domain models module.
@@ -399,8 +399,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/skill_engine/evolver.py"
-    target_module: "openspace/skill_engine/evolution/orchestrator.py"
+    source_file: "scion/skill_engine/evolver.py"
+    target_module: "scion/skill_engine/evolution/orchestrator.py"
     description: >
       Extract evolve, _execute_contexts, schedule_background,
       _log_background_result into orchestration module.
@@ -415,8 +415,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/skill_engine/evolver.py"
-    target_module: "openspace/skill_engine/evolution/triggers/"
+    source_file: "scion/skill_engine/evolver.py"
+    target_module: "scion/skill_engine/evolution/triggers/"
     description: >
       Extract process_analysis, process_tool_degradation, process_metric_check
       into three focused trigger modules.
@@ -431,8 +431,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/skill_engine/evolver.py"
-    target_module: "openspace/skill_engine/evolution/confirmation.py"
+    source_file: "scion/skill_engine/evolver.py"
+    target_module: "scion/skill_engine/evolution/confirmation.py"
     description: >
       Extract _llm_confirm_evolution, _parse_confirmation into LLM
       confirmation/approval module.
@@ -447,8 +447,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/skill_engine/evolver.py"
-    target_module: "openspace/skill_engine/evolution/engines/"
+    source_file: "scion/skill_engine/evolver.py"
+    target_module: "scion/skill_engine/evolution/engines/"
     description: >
       Extract _evolve_fix, _evolve_derived, _evolve_captured,
       _run_evolution_loop, _parse_evolution_output, _apply_with_retry
@@ -464,14 +464,14 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/skill_engine/evolver.py"
+    source_file: "scion/skill_engine/evolver.py"
     target_module: null
     description: >
       Replace evolver.py with thin facade or delete. Verify all 9 evolution
       modules integrate correctly.
     acceptance:
       - "evolver.py is facade or deleted"
-      - "openspace/skill_engine/evolution/ package complete"
+      - "scion/skill_engine/evolution/ package complete"
       - "All existing tests pass"
 
   - id: "5.7"
@@ -481,8 +481,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/agents/grounding_agent.py"
-    target_module: "openspace/agents/grounding/"
+    source_file: "scion/agents/grounding_agent.py"
+    target_module: "scion/agents/grounding/"
     description: >
       Extract set_skill_context, clear_skill_context, _cap_message_content,
       _truncate_messages into focused modules.
@@ -497,8 +497,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/agents/grounding_agent.py"
-    target_module: "openspace/agents/grounding/"
+    source_file: "scion/agents/grounding_agent.py"
+    target_module: "scion/agents/grounding/"
     description: >
       Extract process (core loop), construct_messages, _default_system_prompt
       into execution loop and prompt builder modules.
@@ -513,8 +513,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/agents/grounding_agent.py"
-    target_module: "openspace/agents/grounding/"
+    source_file: "scion/agents/grounding_agent.py"
+    target_module: "scion/agents/grounding/"
     description: >
       Extract _get_available_tools, _load_all_tools, _visual_analysis_callback,
       _scan_workspace_files, _check_workspace_artifacts into focused modules.
@@ -529,8 +529,8 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/agents/grounding_agent.py"
-    target_module: "openspace/agents/grounding/result_telemetry.py"
+    source_file: "scion/agents/grounding_agent.py"
+    target_module: "scion/agents/grounding/result_telemetry.py"
     description: >
       Extract _build_final_result, _format_tool_executions, _generate_final_summary,
       _record_agent_execution into result formatting and telemetry module.
@@ -545,14 +545,14 @@ epics:
     branch: null
     pr: null
     review_round: 0
-    source_file: "openspace/agents/grounding_agent.py"
+    source_file: "scion/agents/grounding_agent.py"
     target_module: null
     description: >
       Replace grounding_agent.py with thin facade or delete. Verify all 8
       grounding modules integrate correctly. Full /8eyes + /collab on P5.
     acceptance:
       - "grounding_agent.py is facade or deleted"
-      - "openspace/agents/grounding/ package complete"
+      - "scion/agents/grounding/ package complete"
       - "Full suite passes (1028+ tests)"
       - "/8eyes + /collab buyoff on complete P5"
 

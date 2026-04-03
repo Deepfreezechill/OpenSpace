@@ -16,7 +16,7 @@ from datetime import datetime
 
 import pytest
 
-from openspace.skill_engine.types import (
+from scion.skill_engine.types import (
     EvolutionSuggestion,
     EvolutionType,
     ExecutionAnalysis,

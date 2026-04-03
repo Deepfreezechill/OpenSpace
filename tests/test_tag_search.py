@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from openspace.skill_engine.types import (
+from scion.skill_engine.types import (
     SkillCategory,
     SkillLineage,
     SkillOrigin,
@@ -61,7 +61,7 @@ def _make_record(
 @pytest.fixture
 def tag_search(tmp_path: Path):
     """Create a TagSearch backed by a temp SQLite database."""
-    from openspace.skill_engine.tag_search import TagSearch
+    from scion.skill_engine.tag_search import TagSearch
 
     db_path = tmp_path / "test_tagsearch.db"
     ts = TagSearch(db_path=db_path)
@@ -72,7 +72,7 @@ def tag_search(tmp_path: Path):
 @pytest.fixture
 def populated_tag_search(tag_search):
     """TagSearch with some test data."""
-    from openspace.skill_engine.skill_repository import SkillRepository
+    from scion.skill_engine.skill_repository import SkillRepository
 
     # We need to use SkillRepository to populate records, then TagSearch for tags
     repo = SkillRepository(db_path=tag_search._db_path)
@@ -439,7 +439,7 @@ class TestSharedConnection:
 
     def test_shared_connection_and_lock(self, tmp_path: Path):
         """TagSearch should work when sharing connection with another component."""
-        from openspace.skill_engine.tag_search import TagSearch
+        from scion.skill_engine.tag_search import TagSearch
         
         # Create a shared connection and lock
         db_path = tmp_path / "shared.db"
@@ -493,7 +493,7 @@ class TestSharedConnection:
 
     def test_reader_with_shared_connection_acquires_lock(self, tmp_path: Path):
         """When using shared connection, _reader() should acquire lock."""
-        from openspace.skill_engine.tag_search import TagSearch
+        from scion.skill_engine.tag_search import TagSearch
         
         db_path = tmp_path / "shared.db"
         conn = sqlite3.connect(str(db_path), check_same_thread=False)
@@ -525,14 +525,14 @@ class TestErrorHandling:
             tag_search.get_tags("skill1")
 
     def test_neither_db_path_nor_conn_raises(self):
-        from openspace.skill_engine.tag_search import TagSearch
+        from scion.skill_engine.tag_search import TagSearch
         
         with pytest.raises(ValueError, match="Either db_path or conn must be provided"):
             TagSearch()
 
     def test_db_retry_on_operational_error(self, tmp_path: Path):
         """_db_retry should handle transient SQLite errors."""
-        from openspace.skill_engine.tag_search import TagSearch
+        from scion.skill_engine.tag_search import TagSearch
         
         # Create a TagSearch with actual database
         db_path = tmp_path / "test.db"
@@ -563,7 +563,7 @@ class TestSkillStoreFacadeIntegration:
 
     def test_skill_store_delegates_to_tag_search(self, tmp_path: Path):
         """SkillStore should delegate tag/search operations to TagSearch."""
-        from openspace.skill_engine.store import SkillStore
+        from scion.skill_engine.store import SkillStore
         
         # Create SkillStore (which should initialize TagSearch internally)
         store = SkillStore(db_path=tmp_path / "integration.db")
@@ -582,7 +582,7 @@ class TestSkillStoreFacadeIntegration:
     def test_skill_store_tag_sync_delegation(self, tmp_path: Path):
         """SkillStore should delegate tag sync during record saving."""
         import asyncio
-        from openspace.skill_engine.store import SkillStore
+        from scion.skill_engine.store import SkillStore
         
         store = SkillStore(db_path=tmp_path / "integration.db")
         
@@ -671,8 +671,8 @@ class TestSkillStoreFacadeCompleteness:
 
     def test_skill_store_facade_completeness(self, tmp_path: Path):
         """Verify ALL TagSearch public methods are accessible through SkillStore."""
-        from openspace.skill_engine.store import SkillStore
-        from openspace.skill_engine.tag_search import TagSearch
+        from scion.skill_engine.store import SkillStore
+        from scion.skill_engine.tag_search import TagSearch
         
         store = SkillStore(db_path=tmp_path / "facade_test.db")
         
@@ -698,7 +698,7 @@ class TestSkillStoreFacadeCompleteness:
 
     def test_facade_method_delegation(self, tmp_path: Path):
         """Verify facade methods actually delegate to TagSearch."""
-        from openspace.skill_engine.store import SkillStore
+        from scion.skill_engine.store import SkillStore
         
         store = SkillStore(db_path=tmp_path / "delegation_test.db")
         
@@ -736,7 +736,7 @@ class TestBackwardCompatibility:
 
     def test_skill_store_get_stats_field_names(self, tmp_path: Path):
         """Verify get_stats returns backward-compatible field names."""
-        from openspace.skill_engine.store import SkillStore
+        from scion.skill_engine.store import SkillStore
         
         store = SkillStore(db_path=tmp_path / "compat_test.db")
         
@@ -759,7 +759,7 @@ class TestBackwardCompatibility:
 
     def test_tag_search_direct_call_uses_original_field(self, tmp_path: Path):
         """Verify TagSearch.get_stats() returns the corrected field name."""
-        from openspace.skill_engine.tag_search import TagSearch
+        from scion.skill_engine.tag_search import TagSearch
         
         tag_search = TagSearch(db_path=tmp_path / "direct_test.db")
         

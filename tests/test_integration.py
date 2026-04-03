@@ -83,8 +83,8 @@ async def asgi_request(app, method="GET", path="/", headers=None, body=None):
 
 def make_protected_app(inner_app=None, token=TEST_TOKEN):
     """Build the full middleware stack matching production wiring."""
-    from openspace.auth.bearer import BearerTokenMiddleware
-    from openspace.auth.rate_limit import RateLimitMiddleware
+    from scion.auth.bearer import BearerTokenMiddleware
+    from scion.auth.rate_limit import RateLimitMiddleware
 
     if inner_app is None:
         # Simple echo app
@@ -197,7 +197,7 @@ class TestSkillExecutionIntegration:
     @pytest.mark.asyncio
     async def test_execute_task_returns_formatted_result(self):
         """execute_task produces MCP-formatted result when engine succeeds."""
-        from openspace.mcp_server import execute_task
+        from scion.mcp_server import execute_task
 
         mock_os = MagicMock()
         mock_os.is_initialized.return_value = True
@@ -210,11 +210,11 @@ class TestSkillExecutionIntegration:
         )
 
         with (
-            patch("openspace.mcp_server._get_openspace", new_callable=AsyncMock, return_value=mock_os),
-            patch("openspace.mcp_server._auto_register_skill_dirs", new_callable=AsyncMock),
-            patch("openspace.mcp_server._cloud_search_and_import", new_callable=AsyncMock, return_value=[]),
-            patch("openspace.mcp_server._format_task_result", return_value={"result": "formatted"}),
-            patch("openspace.mcp_server._write_upload_meta"),
+            patch("scion.mcp_server._get_openspace", new_callable=AsyncMock, return_value=mock_os),
+            patch("scion.mcp_server._auto_register_skill_dirs", new_callable=AsyncMock),
+            patch("scion.mcp_server._cloud_search_and_import", new_callable=AsyncMock, return_value=[]),
+            patch("scion.mcp_server._format_task_result", return_value={"result": "formatted"}),
+            patch("scion.mcp_server._write_upload_meta"),
         ):
             result = await execute_task(task="test task")
             mock_os.execute.assert_called_once()
@@ -222,7 +222,7 @@ class TestSkillExecutionIntegration:
     @pytest.mark.asyncio
     async def test_execute_task_auto_registers_skill_dirs(self):
         """execute_task calls _auto_register_skill_dirs when skill_dirs provided."""
-        from openspace.mcp_server import execute_task
+        from scion.mcp_server import execute_task
 
         mock_os = MagicMock()
         mock_os.is_initialized.return_value = True
@@ -235,11 +235,11 @@ class TestSkillExecutionIntegration:
         )
 
         with (
-            patch("openspace.mcp_server._get_openspace", new_callable=AsyncMock, return_value=mock_os),
-            patch("openspace.mcp_server._auto_register_skill_dirs", new_callable=AsyncMock) as mock_register,
-            patch("openspace.mcp_server._cloud_search_and_import", new_callable=AsyncMock, return_value=[]),
-            patch("openspace.mcp_server._format_task_result", return_value={"result": "ok"}),
-            patch("openspace.mcp_server._write_upload_meta"),
+            patch("scion.mcp_server._get_openspace", new_callable=AsyncMock, return_value=mock_os),
+            patch("scion.mcp_server._auto_register_skill_dirs", new_callable=AsyncMock) as mock_register,
+            patch("scion.mcp_server._cloud_search_and_import", new_callable=AsyncMock, return_value=[]),
+            patch("scion.mcp_server._format_task_result", return_value={"result": "ok"}),
+            patch("scion.mcp_server._write_upload_meta"),
         ):
             await execute_task(task="test", skill_dirs=["/tmp/skills"])
             mock_register.assert_called()
@@ -247,7 +247,7 @@ class TestSkillExecutionIntegration:
     @pytest.mark.asyncio
     async def test_execute_task_respects_search_scope_local(self):
         """execute_task skips cloud import when search_scope='local'."""
-        from openspace.mcp_server import execute_task
+        from scion.mcp_server import execute_task
 
         mock_os = MagicMock()
         mock_os.is_initialized.return_value = True
@@ -260,11 +260,11 @@ class TestSkillExecutionIntegration:
         )
 
         with (
-            patch("openspace.mcp_server._get_openspace", new_callable=AsyncMock, return_value=mock_os),
-            patch("openspace.mcp_server._auto_register_skill_dirs", new_callable=AsyncMock),
-            patch("openspace.mcp_server._cloud_search_and_import", new_callable=AsyncMock) as mock_import,
-            patch("openspace.mcp_server._format_task_result", return_value={"result": "ok"}),
-            patch("openspace.mcp_server._write_upload_meta"),
+            patch("scion.mcp_server._get_openspace", new_callable=AsyncMock, return_value=mock_os),
+            patch("scion.mcp_server._auto_register_skill_dirs", new_callable=AsyncMock),
+            patch("scion.mcp_server._cloud_search_and_import", new_callable=AsyncMock) as mock_import,
+            patch("scion.mcp_server._format_task_result", return_value={"result": "ok"}),
+            patch("scion.mcp_server._write_upload_meta"),
         ):
             await execute_task(task="test", search_scope="local")
             mock_import.assert_not_called()
@@ -357,16 +357,16 @@ class TestErrorPathIntegration:
     @pytest.mark.asyncio
     async def test_execute_task_exception_returns_safe_error(self):
         """Internal exception in execute_task returns safe error, no traceback."""
-        from openspace.mcp_server import execute_task
+        from scion.mcp_server import execute_task
 
         mock_os = MagicMock()
         mock_os.is_initialized.return_value = True
         mock_os.execute = AsyncMock(side_effect=RuntimeError("internal boom"))
 
         with (
-            patch("openspace.mcp_server._get_openspace", new_callable=AsyncMock, return_value=mock_os),
-            patch("openspace.mcp_server._auto_register_skill_dirs", new_callable=AsyncMock),
-            patch("openspace.mcp_server._cloud_search_and_import", new_callable=AsyncMock),
+            patch("scion.mcp_server._get_openspace", new_callable=AsyncMock, return_value=mock_os),
+            patch("scion.mcp_server._auto_register_skill_dirs", new_callable=AsyncMock),
+            patch("scion.mcp_server._cloud_search_and_import", new_callable=AsyncMock),
         ):
             result = await execute_task(task="crash test")
             result_str = str(result)

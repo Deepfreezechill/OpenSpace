@@ -25,17 +25,17 @@ class TestContextVariables:
     """bind_context / clear_context / get_context work correctly."""
 
     def setup_method(self):
-        from openspace.domain.logging import clear_context
+        from scion.domain.logging import clear_context
 
         clear_context()
 
     def teardown_method(self):
-        from openspace.domain.logging import clear_context
+        from scion.domain.logging import clear_context
 
         clear_context()
 
     def test_bind_and_get_context(self):
-        from openspace.domain.logging import bind_context, get_context
+        from scion.domain.logging import bind_context, get_context
 
         bind_context(task_id="t-42", correlation_id="abc123")
         ctx = get_context()
@@ -44,28 +44,28 @@ class TestContextVariables:
         assert "session_id" not in ctx  # Empty values excluded
 
     def test_clear_context(self):
-        from openspace.domain.logging import bind_context, clear_context, get_context
+        from scion.domain.logging import bind_context, clear_context, get_context
 
         bind_context(task_id="t-1", session_id="s-1")
         clear_context()
         assert get_context() == {}
 
     def test_bind_unknown_key_ignored(self):
-        from openspace.domain.logging import bind_context, get_context
+        from scion.domain.logging import bind_context, get_context
 
         bind_context(task_id="t-1", unknown_field="ignored")
         ctx = get_context()
         assert ctx == {"task_id": "t-1"}
 
     def test_bind_overwrites_previous(self):
-        from openspace.domain.logging import bind_context, get_context
+        from scion.domain.logging import bind_context, get_context
 
         bind_context(task_id="t-1")
         bind_context(task_id="t-2")
         assert get_context()["task_id"] == "t-2"
 
     def test_all_four_context_vars(self):
-        from openspace.domain.logging import bind_context, get_context
+        from scion.domain.logging import bind_context, get_context
 
         bind_context(
             task_id="t-1",
@@ -85,18 +85,18 @@ class TestContextIsolation:
     """Context vars are isolated across async tasks."""
 
     def setup_method(self):
-        from openspace.domain.logging import clear_context
+        from scion.domain.logging import clear_context
 
         clear_context()
 
     def teardown_method(self):
-        from openspace.domain.logging import clear_context
+        from scion.domain.logging import clear_context
 
         clear_context()
 
     @pytest.mark.asyncio
     async def test_async_task_isolation(self):
-        from openspace.domain.logging import bind_context, get_context
+        from scion.domain.logging import bind_context, get_context
 
         results = {}
 
@@ -124,28 +124,28 @@ class TestRedaction:
     """Sensitive data is redacted in log events."""
 
     def test_redacts_api_key(self):
-        from openspace.domain.logging import _redact_sensitive
+        from scion.domain.logging import _redact_sensitive
 
         event = {"event": "test", "api_key": "sk-secret-123"}
         result = _redact_sensitive(None, "info", event)
         assert result["api_key"] == "***REDACTED***"
 
     def test_redacts_token_field(self):
-        from openspace.domain.logging import _redact_sensitive
+        from scion.domain.logging import _redact_sensitive
 
         event = {"event": "test", "bearer_token": "eyJ..."}
         result = _redact_sensitive(None, "info", event)
         assert result["bearer_token"] == "***REDACTED***"
 
     def test_redacts_password(self):
-        from openspace.domain.logging import _redact_sensitive
+        from scion.domain.logging import _redact_sensitive
 
         event = {"event": "test", "password": "hunter2"}
         result = _redact_sensitive(None, "info", event)
         assert result["password"] == "***REDACTED***"
 
     def test_redacts_key_suffix_match(self):
-        from openspace.domain.logging import _redact_sensitive
+        from scion.domain.logging import _redact_sensitive
 
         event = {"event": "test", "my_api_key": "secret", "client_secret": "s3cret"}
         result = _redact_sensitive(None, "info", event)
@@ -153,7 +153,7 @@ class TestRedaction:
         assert result["client_secret"] == "***REDACTED***"
 
     def test_no_false_positive_on_non_sensitive(self):
-        from openspace.domain.logging import _redact_sensitive
+        from scion.domain.logging import _redact_sensitive
 
         # These should NOT be redacted despite containing "key"/"token" substrings
         event = {
@@ -168,7 +168,7 @@ class TestRedaction:
         assert result["monkey_patch"] is True
 
     def test_redacts_nested_dict_sensitive_keys(self):
-        from openspace.domain.logging import _redact_sensitive
+        from scion.domain.logging import _redact_sensitive
 
         event = {
             "event": "api_call",
@@ -179,7 +179,7 @@ class TestRedaction:
         assert result["payload"]["user_id"] == "u-42"
 
     def test_redacts_deeply_nested(self):
-        from openspace.domain.logging import _redact_sensitive
+        from scion.domain.logging import _redact_sensitive
 
         event = {
             "event": "test",
@@ -190,7 +190,7 @@ class TestRedaction:
 
     def test_redacts_top_level_list_with_sensitive_dicts(self):
         """Top-level list/tuple fields containing dicts with sensitive keys."""
-        from openspace.domain.logging import _redact_sensitive
+        from scion.domain.logging import _redact_sensitive
 
         event = {
             "event": "test",
@@ -202,7 +202,7 @@ class TestRedaction:
 
     def test_redacts_top_level_tuple_with_sensitive_dicts(self):
         """Tuple variant of top-level list redaction."""
-        from openspace.domain.logging import _redact_sensitive
+        from scion.domain.logging import _redact_sensitive
 
         event = {
             "event": "test",
@@ -213,7 +213,7 @@ class TestRedaction:
 
     def test_redacts_camel_case_keys(self):
         """camelCase keys like apiKey, accessToken are normalized and redacted."""
-        from openspace.domain.logging import _redact_sensitive
+        from scion.domain.logging import _redact_sensitive
 
         event = {
             "event": "test",
@@ -230,7 +230,7 @@ class TestRedaction:
 
     def test_redacts_pascal_case_keys(self):
         """PascalCase keys are also normalized and redacted."""
-        from openspace.domain.logging import _redact_sensitive
+        from scion.domain.logging import _redact_sensitive
 
         event = {"event": "test", "ApiKey": "key1", "AuthToken": "tok1"}
         result = _redact_sensitive(None, "info", event)
@@ -239,7 +239,7 @@ class TestRedaction:
 
     def test_camel_case_not_false_positive(self):
         """camelCase keys that aren't sensitive should NOT be redacted."""
-        from openspace.domain.logging import _redact_sensitive
+        from scion.domain.logging import _redact_sensitive
 
         event = {"event": "test", "tokenCount": 42, "keyboardLayout": "us"}
         result = _redact_sensitive(None, "info", event)
@@ -248,7 +248,7 @@ class TestRedaction:
 
     def test_recursion_depth_limit(self):
         """Deeply nested payloads stop redacting at _MAX_REDACT_DEPTH, no RecursionError."""
-        from openspace.domain.logging import _MAX_REDACT_DEPTH, _redact_value
+        from scion.domain.logging import _MAX_REDACT_DEPTH, _redact_value
 
         # Build a structure deeper than the limit
         nested: dict = {"api_key": "leak-at-depth"}
@@ -269,7 +269,7 @@ class TestRedaction:
         assert result2["wrapper"]["api_key"] == "***REDACTED***"
 
     def test_preserves_non_sensitive(self):
-        from openspace.domain.logging import _redact_sensitive
+        from scion.domain.logging import _redact_sensitive
 
         event = {"event": "test", "task_id": "t-42", "status": "ok"}
         result = _redact_sensitive(None, "info", event)
@@ -277,7 +277,7 @@ class TestRedaction:
         assert result["status"] == "ok"
 
     def test_truncates_long_values(self):
-        from openspace.domain.logging import _redact_sensitive
+        from scion.domain.logging import _redact_sensitive
 
         long_value = "x" * 2000
         event = {"event": "test", "output": long_value}
@@ -295,17 +295,17 @@ class TestLoggerCreation:
     """get_logger and configure_logging work correctly."""
 
     def setup_method(self):
-        from openspace.domain.logging import reset_logging
+        from scion.domain.logging import reset_logging
 
         reset_logging()
 
     def teardown_method(self):
-        from openspace.domain.logging import reset_logging
+        from scion.domain.logging import reset_logging
 
         reset_logging()
 
     def test_get_logger_returns_bound_logger(self):
-        from openspace.domain.logging import get_logger
+        from scion.domain.logging import get_logger
 
         log = get_logger("test.module")
         assert log is not None
@@ -315,27 +315,27 @@ class TestLoggerCreation:
         assert hasattr(log, "debug")
 
     def test_get_logger_default_name(self):
-        from openspace.domain.logging import get_logger
+        from scion.domain.logging import get_logger
 
         log = get_logger()
         assert log is not None
 
     def test_configure_idempotent(self):
-        from openspace.domain.logging import configure_logging
+        from scion.domain.logging import configure_logging
 
         configure_logging(level=logging.DEBUG)
         configure_logging(level=logging.WARNING)  # Should be no-op
         # No exception = pass
 
     def test_configure_json_output(self):
-        from openspace.domain.logging import configure_logging, reset_logging
+        from scion.domain.logging import configure_logging, reset_logging
 
         reset_logging()
         configure_logging(json_output=True)
         # No exception = pass
 
     def test_configure_no_colors(self):
-        from openspace.domain.logging import configure_logging, reset_logging
+        from scion.domain.logging import configure_logging, reset_logging
 
         reset_logging()
         configure_logging(colors=False)
@@ -351,19 +351,19 @@ class TestIntegration:
     """Structured logging integrates with existing code patterns."""
 
     def setup_method(self):
-        from openspace.domain.logging import clear_context, reset_logging
+        from scion.domain.logging import clear_context, reset_logging
 
         reset_logging()
         clear_context()
 
     def teardown_method(self):
-        from openspace.domain.logging import clear_context, reset_logging
+        from scion.domain.logging import clear_context, reset_logging
 
         reset_logging()
         clear_context()
 
     def test_structlog_event_includes_context(self, capsys):
-        from openspace.domain.logging import (
+        from scion.domain.logging import (
             bind_context,
             configure_logging,
             get_logger,
@@ -380,12 +380,12 @@ class TestIntegration:
 
     def test_stdlib_logger_still_works(self):
         """stdlib loggers produce output and go through shared processors."""
-        from openspace.domain.logging import bind_context, configure_logging
+        from scion.domain.logging import bind_context, configure_logging
 
         configure_logging(level=logging.DEBUG, colors=False)
         bind_context(task_id="stdlib-t1")
 
-        stdlib_logger = logging.getLogger("openspace.test_stdlib_bridge")
+        stdlib_logger = logging.getLogger("scion.test_stdlib_bridge")
         # Capture output from the root handler
         import io
 
@@ -406,7 +406,7 @@ class TestIntegration:
             root.removeHandler(handler)
 
     def test_context_vars_processor_injects(self):
-        from openspace.domain.logging import _inject_context_vars, bind_context
+        from scion.domain.logging import _inject_context_vars, bind_context
 
         bind_context(task_id="t-1", correlation_id="c-1")
         event: dict = {"event": "test"}
@@ -415,7 +415,7 @@ class TestIntegration:
         assert result["correlation_id"] == "c-1"
 
     def test_context_vars_dont_overwrite_explicit(self):
-        from openspace.domain.logging import _inject_context_vars, bind_context
+        from scion.domain.logging import _inject_context_vars, bind_context
 
         bind_context(task_id="t-1")
         event: dict = {"event": "test", "task_id": "explicit-id"}
@@ -423,7 +423,7 @@ class TestIntegration:
         assert result["task_id"] == "explicit-id"  # Explicit wins
 
     def test_reset_allows_reconfigure(self):
-        from openspace.domain.logging import (
+        from scion.domain.logging import (
             configure_logging,
             reset_logging,
         )
