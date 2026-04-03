@@ -19,6 +19,7 @@
   work on something else). Never silently pick a different epic.
 - Read the latest handoff at `~/.copilot.working/sessions/` for this project
 - Run `git status` and `python -m pytest --tb=short -q` to verify clean state
+  (currently 1356+ tests passing)
 
 ## 2. Claim Epic
 - Update `RUNBOOK.yaml`:
