@@ -16,6 +16,7 @@ from openspace.llm import LLMClient
 from openspace.recording import RecordingManager
 from openspace.skill_engine import ExecutionAnalyzer, SkillRegistry, SkillStore
 from openspace.skill_engine.evolver import SkillEvolver
+from openspace.tool_registry import ToolRegistry
 from openspace.utils.logging import Logger
 
 logger = Logger.get_logger(__name__)
@@ -126,6 +127,7 @@ class OpenSpace:
         self._grounding_agent: Optional[GroundingAgent] = None
         self._recording_manager: Optional[RecordingManager] = None
         self._skill_registry: Optional[SkillRegistry] = None
+        self._tool_registry: Optional[ToolRegistry] = None
         self._skill_store: Optional[SkillStore] = None
         self._execution_analyzer: Optional[ExecutionAnalyzer] = None
         self._skill_evolver: Optional[SkillEvolver] = None
@@ -336,11 +338,18 @@ class OpenSpace:
 
             # Initialize SkillRegistry (settings from config_grounding.json → skills)
             if self._grounding_config and self._grounding_config.skills.enabled:
-                self._skill_registry = self._init_skill_registry()
-                if self._skill_registry:
+                self._tool_registry = ToolRegistry(
+                    config=self.config,
+                    grounding_config=self._grounding_config,
+                    llm_client=self._llm_client,
+                )
+                if self._tool_registry.discover():
+                    self._skill_registry = self._tool_registry.registry
                     skills = self._skill_registry.list_skills()
                     logger.info(f"✓ Skills: {len(skills)} discovered")
                     self._grounding_agent.set_skill_registry(self._skill_registry)
+                else:
+                    self._skill_registry = None
 
             # Initialize ExecutionAnalyzer (requires recording + skills)
             if self.config.enable_recording and self._skill_registry:
@@ -506,8 +515,13 @@ class OpenSpace:
             has_skills = False
 
             # Phase 1: Skill-guided execution
-            if self._skill_registry:
-                has_skills = await self._select_and_inject_skills(task)
+            if self._skill_registry and self._tool_registry:
+                has_skills = await self._tool_registry.select_and_inject(
+                    task,
+                    agent=self._grounding_agent,
+                    store=self._skill_store,
+                    recording_mgr=self._recording_manager,
+                )
 
             if has_skills:
                 logger.info(f"[Phase 1 — Skill] Executing with skill guidance (max {max_iterations} iterations)...")
@@ -665,160 +679,9 @@ class OpenSpace:
 
             return final_result
 
-    # Skills helpers
-    def _init_skill_registry(self) -> Optional[SkillRegistry]:
-        """Build and populate the SkillRegistry from configured directories.
-
-        Discovery order (earlier wins on name collision):
-          1. ``OPENSPACE_HOST_SKILL_DIRS`` env — host agent skill directories
-          2. ``config_grounding.json → skills.skill_dirs`` — user-specified
-          3. ``openspace/skills/``       — built-in skills (always present)
-
-        ``OPENSPACE_HOST_SKILL_DIRS`` is also handled by ``mcp_server.py``
-        for the MCP transport path, but we process it here too so that
-        standalone mode (``python -m openspace``) gets the same skills
-        discovered and synced to the DB for quality tracking / evolution.
-        """
-        skill_paths: List[Path] = []
-        skill_cfg = self._grounding_config.skills if self._grounding_config else None
-
-        # 1. Host agent skill directories from env (standalone mode support)
-        import os
-
-        host_dirs_raw = os.environ.get("OPENSPACE_HOST_SKILL_DIRS", "")
-        if host_dirs_raw:
-            for d in host_dirs_raw.split(","):
-                d = d.strip()
-                if not d:
-                    continue
-                p = Path(d)
-                if p.exists():
-                    skill_paths.append(p)
-                    logger.info(f"Host skill dir (from env): {p}")
-                else:
-                    logger.warning(f"Host skill dir does not exist: {d}")
-
-        # 2. User-specified skill directories from config_grounding.json
-        if skill_cfg and skill_cfg.skill_dirs:
-            for d in skill_cfg.skill_dirs:
-                p = Path(d)
-                if p in skill_paths:
-                    continue  # Already added via OPENSPACE_HOST_SKILL_DIRS
-                if p.exists():
-                    skill_paths.append(p)
-                else:
-                    logger.warning(f"Configured skill dir does not exist: {d}")
-
-        # 3. Built-in skills (openspace/skills/)
-        builtin_skills = Path(__file__).resolve().parent / "skills"
-        if builtin_skills.exists():
-            skill_paths.append(builtin_skills)
-
-        if not skill_paths:
-            logger.debug("No skill directories found, skills disabled")
-            return None
-
-        registry = SkillRegistry(skill_dirs=skill_paths)
-        registry.discover()
-        return registry
-
-    async def _select_and_inject_skills(
-        self,
-        task: str,
-    ) -> bool:
-        """Select skills for task via LLM, inject into GroundingAgent.
-
-        When the registry has many skills, a BM25 + embedding pre-filter
-        narrows the candidate set before LLM selection (see
-        ``SkillRegistry.select_skills_with_llm``).
-
-        Only selected skills are injected (full SKILL.md content).
-        Returns True if at least one active skill was injected.
-        """
-        if not self._skill_registry or not self._grounding_agent:
-            return False
-
-        selection_record = None
-
-        # LLM-based skill selection (preferred)
-        skill_cfg = self._grounding_config.skills if self._grounding_config else None
-        max_select = skill_cfg.max_select if skill_cfg else 2
-        skill_llm = self._get_skill_selection_llm()
-
-        # Fetch quality metrics so the selector can filter/annotate
-        skill_quality: Optional[Dict[str, Dict[str, Any]]] = None
-        if self._skill_store:
-            try:
-                rows = self._skill_store.get_summary(active_only=True)
-                skill_quality = {
-                    r["skill_id"]: {
-                        "total_selections": r.get("total_selections", 0),
-                        "total_applied": r.get("total_applied", 0),
-                        "total_completions": r.get("total_completions", 0),
-                        "total_fallbacks": r.get("total_fallbacks", 0),
-                    }
-                    for r in rows
-                }
-            except Exception as e:
-                logger.debug(f"Could not load skill quality metrics: {e}")
-
-        if skill_llm:
-            selected, selection_record = await self._skill_registry.select_skills_with_llm(
-                task,
-                llm_client=skill_llm,
-                max_skills=max_select,
-                skill_quality=skill_quality,
-            )
-        else:
-            # No LLM client — skip skill selection entirely
-            logger.info("No LLM client available for skill selection — proceeding without skills")
-            selected = []
-            selection_record = {
-                "method": "no_llm",
-                "task": task[:500],
-                "available_skills": [s.skill_id for s in self._skill_registry.list_skills()],
-                "selected": [],
-            }
-
-        # Record skill selection to metadata.json
-        if self._recording_manager and selection_record:
-            # Add model info to the record
-            selection_record["model"] = skill_llm.model if skill_llm else "keyword_only"
-            await RecordingManager.record_skill_selection(selection_record)
-
-        if not selected:
-            self._grounding_agent.clear_skill_context()
-            return False
-
-        # Inject active skills (full SKILL.md content, backend-aware)
-        agent_backends = self._grounding_agent.backend_scope if self._grounding_agent else None
-        context_text = self._skill_registry.build_context_injection(selected, backends=agent_backends)
-        skill_ids = [s.skill_id for s in selected]
-        self._grounding_agent.set_skill_context(context_text, skill_ids)
-        logger.info(f"Injected {len(selected)} active skill(s): {skill_ids}")
-
-        return True
-
-    def _get_skill_selection_llm(self) -> Optional[LLMClient]:
-        """Get the LLM client to use for skill selection.
-
-        Priority: config.skill_registry_model > tool_retrieval_model > llm_model.
-        """
-        # 1. Dedicated skill selection model (OpenSpaceConfig.skill_registry_model)
-        if self.config.skill_registry_model:
-            return LLMClient(
-                model=self.config.skill_registry_model,
-                timeout=30.0,  # skill selection should be fast
-                max_retries=2,
-                **self.config.llm_kwargs,
-            )
-
-        # 2. Tool retrieval model
-        if hasattr(self._grounding_agent, "_tool_retrieval_llm") and self._grounding_agent._tool_retrieval_llm:
-            return self._grounding_agent._tool_retrieval_llm
-
-        # 3. Main LLM client
-        return self._llm_client
+    # NOTE: _init_skill_registry, _select_and_inject_skills, and
+    # _get_skill_selection_llm have been extracted to ToolRegistry
+    # (openspace/tool_registry.py) in Epic 4.1.
 
     async def _maybe_analyze_execution(
         self,
