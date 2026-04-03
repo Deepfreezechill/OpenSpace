@@ -161,9 +161,44 @@ class TestCreateToolRetrieval:
             factory = LLMFactory(config=config)
             factory.create_tool_retrieval()
 
-            _, kwargs = MockLLM.call_args
+            kwargs = MockLLM.call_args.kwargs
             assert kwargs["api_key"] == "sk-shared"
             assert kwargs["api_base"] == "https://custom"
+
+    def test_returns_none_when_empty_string_model(self, config):
+        """Empty string model treated as unconfigured."""
+        config.tool_retrieval_model = ""
+        factory = LLMFactory(config=config)
+        result = factory.create_tool_retrieval()
+        assert result is None
+        assert factory.tool_retrieval_llm is None
+
+    def test_create_tool_retrieval_twice_replaces(self, config):
+        """Second call replaces the tool retrieval client."""
+        with patch("openspace.llm_factory.LLMClient") as MockLLM:
+            first, second = MagicMock(), MagicMock()
+            MockLLM.side_effect = [first, second]
+
+            factory = LLMFactory(config=config)
+            factory.create_tool_retrieval()
+            assert factory.tool_retrieval_llm is first
+            factory.create_tool_retrieval()
+            assert factory.tool_retrieval_llm is second
+
+
+# ---------------------------------------------------------------------------
+# Error handling
+# ---------------------------------------------------------------------------
+
+class TestErrorHandling:
+
+    def test_create_main_exception_propagates(self, config):
+        """LLMClient constructor failure propagates, client stays None."""
+        with patch("openspace.llm_factory.LLMClient", side_effect=RuntimeError("boom")):
+            factory = LLMFactory(config=config)
+            with pytest.raises(RuntimeError, match="boom"):
+                factory.create_main()
+            assert factory.llm_client is None
 
 
 # ---------------------------------------------------------------------------

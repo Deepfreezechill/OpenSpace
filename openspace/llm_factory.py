@@ -51,6 +51,9 @@ class LLMFactory:
 
         Inherits llm_kwargs (api_key, api_base, etc.) so credentials
         from the host agent are shared across all internal LLM clients.
+
+        Note: intentionally omits ``enable_thinking`` and ``rate_limit_delay``
+        since tool retrieval is a simple selection task, not a reasoning task.
         """
         if not self._config.tool_retrieval_model:
             return None
