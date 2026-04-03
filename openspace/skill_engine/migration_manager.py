@@ -226,15 +226,16 @@ class MigrationManager:
 
     def close(self) -> None:
         """Close the connection if we own it."""
-        if self._closed:
-            return
-
-        if self._owns_conn:
-            self._closed = True
-            try:
-                self._conn.close()
-            except Exception:
-                pass
+        with self._mu:
+            if self._closed:
+                return
+            # Only set _closed and close conn if we own the connection
+            if self._owns_conn:
+                self._closed = True
+                try:
+                    self._conn.close()
+                except Exception:
+                    pass
 
         logger.debug("MigrationManager closed")
 

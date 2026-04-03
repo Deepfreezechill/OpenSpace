@@ -268,15 +268,15 @@ class TestMCPHandlerBoundary:
     # public property accessors as delegation is fully wired in Phase 4).
     _KNOWN_PRIVATE_ACCESS: frozenset[tuple[str, int, str]] = frozenset(
         {
-            ("openspace/mcp_server.py", 185, "_skill_store"),
-            ("openspace/mcp_server.py", 203, "_grounding_config"),
-            ("openspace/mcp_server.py", 296, "_skill_registry"),
-            ("openspace/mcp_server.py", 430, "_skill_registry"),
-            ("openspace/mcp_server.py", 734, "_skill_registry"),
-            ("openspace/mcp_server.py", 635, "_skill_registry"),
-            ("openspace/mcp_server.py", 753, "_skill_evolver"),
-            ("openspace/mcp_server.py", 737, "_skill_evolver"),
-            ("openspace/mcp_server.py", 419, "_grounding_config"),
+            ("openspace/mcp_server.py", 203, "_skill_store"),
+            ("openspace/mcp_server.py", 221, "_grounding_config"),
+            ("openspace/mcp_server.py", 314, "_skill_registry"),
+            ("openspace/mcp_server.py", 448, "_skill_registry"),
+            ("openspace/mcp_server.py", 752, "_skill_registry"),
+            ("openspace/mcp_server.py", 653, "_skill_registry"),
+            ("openspace/mcp_server.py", 771, "_skill_evolver"),
+            ("openspace/mcp_server.py", 755, "_skill_evolver"),
+            ("openspace/mcp_server.py", 437, "_grounding_config"),
         }
     )
 

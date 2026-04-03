@@ -218,7 +218,7 @@ class TestHandleMcpException:
 
 def _make_openspace_mock():
     """Create a mock OpenSpace instance sufficient for mcp_server imports."""
-    mock = AsyncMock()
+    mock = MagicMock()
     mock.is_initialized.return_value = True
     mock._skill_registry = MagicMock()
     mock._skill_evolver = MagicMock()
