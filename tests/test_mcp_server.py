@@ -101,14 +101,15 @@ class TestCreateMcpApp:
 
     def test_tools_registered(self):
         app = create_mcp_app()
-        # FastMCP stores tools internally — verify our 4 are present
-        tools = None
-        if hasattr(app, "_tool_manager"):
-            tools = app._tool_manager
-        elif hasattr(app, 'list_tools'):
-            pass
-        # At minimum, the app was created without error
-        assert app is not None
+        # Verify all 4 MCP tools are actually wired
+        if hasattr(app, "_tool_manager") and hasattr(app._tool_manager, "_tools"):
+            tool_names = set(app._tool_manager._tools.keys())
+            assert tool_names == {"execute_task", "search_skills", "fix_skill", "upload_skill"}, (
+                f"Expected 4 tools, got: {tool_names}"
+            )
+        else:
+            # Fallback: at least verify create_mcp_app didn't silently fail
+            assert app is not None
 
     def test_idempotent_calls(self):
         """Multiple calls should each return independent instances."""

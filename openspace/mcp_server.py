@@ -25,10 +25,27 @@ from openspace.mcp.server import (  # noqa: F401
     run_mcp_server,
 )
 
-# Create the module-level mcp instance for backward compatibility.
-# Some code (e.g., test_mcp_auth.py) imports mcp_server and expects
-# the FastMCP `mcp` instance to exist at module level.
-mcp = create_mcp_app()
+# Lazy module-level mcp instance for backward compat.
+# Some code imports mcp_server.mcp directly. Created on first access
+# to avoid wasting a FastMCP instance when only run_mcp_server() is needed.
+_mcp = None
+
+
+def _get_mcp():
+    global _mcp
+    if _mcp is None:
+        _mcp = create_mcp_app()
+    return _mcp
+
+
+class _LazyMcpProxy:
+    """Proxy that creates the FastMCP instance on first attribute access."""
+
+    def __getattr__(self, name):
+        return getattr(_get_mcp(), name)
+
+
+mcp = _LazyMcpProxy()
 
 if __name__ == "__main__":
-    run_mcp_server(mcp)
+    run_mcp_server(_get_mcp())

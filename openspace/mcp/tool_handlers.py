@@ -791,7 +791,7 @@ async def upload_skill(
 def register_handlers(mcp) -> None:
     """Wire all tool handlers to the given FastMCP instance.
 
-    Called by ``mcp_server.py`` after creating the FastMCP app.
+    Called by ``create_mcp_app()`` in ``openspace.mcp.server``.
     """
     mcp.tool()(execute_task)
     mcp.tool()(search_skills)
