@@ -95,12 +95,12 @@ class TestToolRegistryDiscover:
         assert result is True
         assert tr.registry is not None
 
-    def test_discover_returns_false_when_no_skills(self, mock_config, mock_llm_client):
-        """discover() returns False when skills are disabled or no dirs found."""
+    def test_discover_returns_false_when_disabled(self, mock_config, mock_llm_client):
+        """discover() returns False when skills.enabled is False."""
 
         cfg = MagicMock()
-        cfg.skills.enabled = True
-        cfg.skills.skill_dirs = ["/nonexistent/path"]
+        cfg.skills.enabled = False
+        cfg.skills.skill_dirs = []
 
         tr = ToolRegistry(
             config=mock_config,
@@ -108,8 +108,19 @@ class TestToolRegistryDiscover:
             llm_client=mock_llm_client,
         )
         result = tr.discover()
-        # May return True (builtin skills exist) or False — depends on builtin dir
-        # The key check: registry may be None if no dirs resolve
+        assert result is False
+        assert tr.registry is None
+
+    def test_discover_with_no_grounding_config(self, mock_config, mock_llm_client):
+        """discover() handles grounding_config=None without AttributeError."""
+
+        tr = ToolRegistry(
+            config=mock_config,
+            grounding_config=None,
+            llm_client=mock_llm_client,
+        )
+        # Should not raise — skill_cfg will be None, falls through to builtin check
+        result = tr.discover()
         assert isinstance(result, bool)
 
     def test_discover_includes_env_skill_dirs(self, mock_config, mock_grounding_config, mock_llm_client, tmp_path):
@@ -274,6 +285,111 @@ class TestToolRegistrySelectAndInject:
             )
             MockRM.record_skill_selection.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_store_quality_metrics_forwarded(self, mock_config, mock_grounding_config, mock_llm_client, mock_grounding_agent):
+        """Quality metrics from store are passed to select_skills_with_llm."""
+
+        mock_store = MagicMock()
+        mock_store.get_summary.return_value = [
+            {"skill_id": "s1", "total_selections": 5, "total_applied": 3,
+             "total_completions": 2, "total_fallbacks": 1},
+        ]
+
+        mock_registry = MagicMock()
+        mock_registry.select_skills_with_llm = AsyncMock(return_value=([], {"method": "llm", "selected": []}))
+
+        tr = ToolRegistry(
+            config=mock_config,
+            grounding_config=mock_grounding_config,
+            llm_client=mock_llm_client,
+        )
+        tr._registry = mock_registry
+
+        await tr.select_and_inject(
+            task="test task",
+            agent=mock_grounding_agent,
+            store=mock_store,
+        )
+        _, kwargs = mock_registry.select_skills_with_llm.call_args
+        assert kwargs["skill_quality"]["s1"]["total_selections"] == 5
+
+    @pytest.mark.asyncio
+    async def test_store_exception_swallowed(self, mock_config, mock_grounding_config, mock_llm_client, mock_grounding_agent):
+        """Exception from store.get_summary is caught, not propagated."""
+
+        mock_store = MagicMock()
+        mock_store.get_summary.side_effect = RuntimeError("db locked")
+
+        mock_registry = MagicMock()
+        mock_registry.select_skills_with_llm = AsyncMock(return_value=([], {"method": "llm", "selected": []}))
+
+        tr = ToolRegistry(
+            config=mock_config,
+            grounding_config=mock_grounding_config,
+            llm_client=mock_llm_client,
+        )
+        tr._registry = mock_registry
+
+        # Should not raise
+        await tr.select_and_inject(
+            task="test task",
+            agent=mock_grounding_agent,
+            store=mock_store,
+        )
+        # Verify LLM selection still happened (with skill_quality=None)
+        _, kwargs = mock_registry.select_skills_with_llm.call_args
+        assert kwargs["skill_quality"] is None
+
+    @pytest.mark.asyncio
+    async def test_no_llm_client_skips_selection(self, mock_grounding_config, mock_grounding_agent):
+        """When no LLM is available, selection is skipped and context cleared."""
+
+        config = OpenSpaceConfig(skill_registry_model=None, llm_kwargs={})
+        mock_grounding_agent._tool_retrieval_llm = None
+
+        mock_registry = MagicMock()
+        mock_registry.list_skills.return_value = [MagicMock(skill_id="s1")]
+
+        tr = ToolRegistry(
+            config=config,
+            grounding_config=mock_grounding_config,
+            llm_client=None,
+        )
+        tr._registry = mock_registry
+
+        result = await tr.select_and_inject(
+            task="test task",
+            agent=mock_grounding_agent,
+        )
+        assert result is False
+        mock_grounding_agent.clear_skill_context.assert_called_once()
+        mock_registry.select_skills_with_llm.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_backend_scope_forwarded(self, mock_config, mock_grounding_config, mock_llm_client, mock_grounding_agent):
+        """Agent's backend_scope is forwarded to build_context_injection."""
+
+        mock_skill = MagicMock()
+        mock_skill.skill_id = "scope-skill"
+
+        mock_registry = MagicMock()
+        mock_registry.select_skills_with_llm = AsyncMock(
+            return_value=([mock_skill], {"method": "llm", "selected": ["scope-skill"]})
+        )
+        mock_registry.build_context_injection.return_value = "ctx"
+
+        tr = ToolRegistry(
+            config=mock_config,
+            grounding_config=mock_grounding_config,
+            llm_client=mock_llm_client,
+        )
+        tr._registry = mock_registry
+
+        await tr.select_and_inject(task="test", agent=mock_grounding_agent)
+        mock_registry.build_context_injection.assert_called_once_with(
+            [mock_skill], backends=["shell", "mcp"]
+        )
+
 
 # ---------------------------------------------------------------------------
 # ToolRegistry._get_selection_llm()
@@ -325,6 +441,51 @@ class TestGetSelectionLLM:
         result = tr._get_selection_llm(agent=mock_grounding_agent)
         assert result is main_llm
 
+    def test_returns_none_when_nothing_available(self, mock_grounding_config, mock_grounding_agent):
+        """Returns None when all three LLM options are unavailable."""
+
+        config = OpenSpaceConfig(skill_registry_model=None, llm_kwargs={})
+        mock_grounding_agent._tool_retrieval_llm = None
+
+        tr = ToolRegistry(
+            config=config,
+            grounding_config=mock_grounding_config,
+            llm_client=None,
+        )
+        assert tr._get_selection_llm(agent=mock_grounding_agent) is None
+
+    def test_agent_none_falls_back_to_llm_client(self, mock_config, mock_grounding_config):
+        """With agent=None, falls back to main llm_client."""
+
+        main_llm = MagicMock()
+        tr = ToolRegistry(
+            config=mock_config,
+            grounding_config=mock_grounding_config,
+            llm_client=main_llm,
+        )
+        result = tr._get_selection_llm(agent=None)
+        assert result is main_llm
+
+    def test_llm_kwargs_forwarded(self, mock_grounding_config, mock_llm_client, mock_grounding_agent):
+        """llm_kwargs are passed through to the dedicated LLM client."""
+
+        config = OpenSpaceConfig(
+            skill_registry_model="gpt-4o",
+            llm_kwargs={"api_base": "http://local"},
+        )
+        tr = ToolRegistry(
+            config=config,
+            grounding_config=mock_grounding_config,
+            llm_client=mock_llm_client,
+        )
+        with patch("openspace.tool_registry.LLMClient") as MockLLM:
+            tr._get_selection_llm(agent=mock_grounding_agent)
+            call_kwargs = MockLLM.call_args.kwargs
+            assert call_kwargs["api_base"] == "http://local"
+            # Explicit params take precedence over llm_kwargs
+            assert call_kwargs["timeout"] == 30.0
+            assert call_kwargs["max_retries"] == 2
+
 
 # ---------------------------------------------------------------------------
 # OpenSpace backward compatibility
@@ -341,7 +502,8 @@ class TestOpenSpaceDelegation:
         assert os_instance.skill_registry is None
 
     def test_openspace_has_tool_registry_attr(self):
-        """OpenSpace instance has a _tool_registry attribute after construction."""
+        """OpenSpace instance has a _tool_registry attribute initialized to None."""
 
         os_instance = OpenSpace()
         assert hasattr(os_instance, "_tool_registry")
+        assert os_instance._tool_registry is None

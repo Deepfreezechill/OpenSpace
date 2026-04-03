@@ -79,6 +79,10 @@ class ToolRegistry:
             else None
         )
 
+        if skill_cfg and not getattr(skill_cfg, "enabled", True):
+            logger.debug("Skills explicitly disabled in config")
+            return False
+
         # 1. Host agent skill directories from env (standalone mode support)
         host_dirs_raw = os.environ.get("OPENSPACE_HOST_SKILL_DIRS", "")
         if host_dirs_raw:
@@ -201,7 +205,7 @@ class ToolRegistry:
             return False
 
         # Inject active skills (full SKILL.md content, backend-aware)
-        agent_backends = agent.backend_scope if agent else None
+        agent_backends = agent.backend_scope
         context_text = self._registry.build_context_injection(
             selected, backends=agent_backends
         )
@@ -223,10 +227,10 @@ class ToolRegistry:
         # 1. Dedicated skill selection model
         if self._config.skill_registry_model:
             return LLMClient(
+                **self._config.llm_kwargs,
                 model=self._config.skill_registry_model,
                 timeout=30.0,
                 max_retries=2,
-                **self._config.llm_kwargs,
             )
 
         # 2. Tool retrieval model from grounding agent
