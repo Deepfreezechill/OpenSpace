@@ -33,6 +33,12 @@ from .evolution.models import (
     EvolutionTrigger,
     _sanitize_skill_name,
 )
+from .evolution.orchestrator import (
+    dispatch_evolution as _dispatch_evolution,
+    execute_contexts as _execute_contexts_impl,
+    log_background_result as _log_background_result_impl,
+    schedule_background as _schedule_background_impl,
+)
 from .patch import (
     SKILL_FILENAME,
     PatchType,
@@ -181,21 +187,7 @@ class SkillEvolver:
         The global semaphore is NOT acquired here — it is managed at the
         trigger-method level so the concurrency limit covers the whole batch.
         """
-        evo_type = ctx.suggestion.evolution_type
-        try:
-            if evo_type == EvolutionType.FIX:
-                return await self._evolve_fix(ctx)
-            elif evo_type == EvolutionType.DERIVED:
-                return await self._evolve_derived(ctx)
-            elif evo_type == EvolutionType.CAPTURED:
-                return await self._evolve_captured(ctx)
-            else:
-                logger.warning(f"Unknown evolution type: {evo_type}")
-                return None
-        except Exception as e:
-            targets = "+".join(ctx.suggestion.target_skill_ids) or "(new)"
-            logger.error(f"Evolution failed [{evo_type.value}] target={targets}: {e}")
-            return None
+        return await _dispatch_evolution(self, ctx)
 
     # Trigger 1: post-analysis
     async def process_analysis(
@@ -441,26 +433,7 @@ class SkillEvolver:
 
         Used by all three triggers after building/confirming contexts.
         """
-
-        async def _throttled(c: EvolutionContext) -> Optional[SkillRecord]:
-            async with self._semaphore:
-                return await self.evolve(c)
-
-        raw = await asyncio.gather(
-            *[_throttled(c) for c in contexts],
-            return_exceptions=True,
-        )
-        results: List[SkillRecord] = []
-        for r in raw:
-            if isinstance(r, BaseException):
-                logger.error(f"[Trigger:{trigger_label}] Evolution task raised: {r}")
-            elif r is not None:
-                results.append(r)
-
-        if results:
-            names = [r.name for r in results]
-            logger.info(f"[Trigger:{trigger_label}] Evolved {len(results)} skill(s): {names}")
-        return results
+        return await _execute_contexts_impl(self, contexts, trigger_label)
 
     def schedule_background(
         self,
@@ -474,30 +447,11 @@ class SkillEvolver:
         ``background_triggers`` is True.  The task is tracked so it can
         be awaited on shutdown via ``wait_background()``.
         """
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            logger.warning(f"No running event loop — cannot schedule {label}")
-            return None
+        return _schedule_background_impl(
+            self._background_tasks, coro, label=label,
+        )
 
-        task = loop.create_task(coro, name=label)
-        self._background_tasks.add(task)
-        task.add_done_callback(self._background_tasks.discard)
-        task.add_done_callback(self._log_background_result)
-        return task
-
-    @staticmethod
-    def _log_background_result(task: asyncio.Task) -> None:
-        """Log the outcome of a background evolution task."""
-        if task.cancelled():
-            logger.debug(f"Background task '{task.get_name()}' was cancelled")
-            return
-        exc = task.exception()
-        if exc:
-            logger.error(
-                f"Background task '{task.get_name()}' failed: {exc}",
-                exc_info=exc,
-            )
+    _log_background_result = staticmethod(_log_background_result_impl)
 
     # LLM confirmation for Trigger 2/3
     async def _llm_confirm_evolution(
