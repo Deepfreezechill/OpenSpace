@@ -13,13 +13,13 @@ import textwrap
 
 import pytest
 
-from openspace.security import check_code_safety
-from openspace.security.ast_scanner import (
+from scion.security import check_code_safety
+from scion.security.ast_scanner import (
     Severity,
     load_blocklist,
     scan_code,
 )
-from openspace.security.env_filter import (
+from scion.security.env_filter import (
     ENV_ALLOWLIST,
     get_safe_env,
     is_sensitive_key,
@@ -309,7 +309,7 @@ class TestSandboxSecretIsolation:
         """SandboxConnector must strip secrets from env before passing to sandbox."""
         from unittest.mock import MagicMock
 
-        from openspace.grounding.backends.mcp.transport.connectors.sandbox import SandboxConnector
+        from scion.grounding.backends.mcp.transport.connectors.sandbox import SandboxConnector
 
         mock_sandbox = MagicMock()
         hostile_env = {

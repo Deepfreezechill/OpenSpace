@@ -7,8 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
-from openspace.skill_engine.analysis_store import AnalysisStore
-from openspace.skill_engine.types import (
+from scion.skill_engine.analysis_store import AnalysisStore
+from scion.skill_engine.types import (
     ExecutionAnalysis,
     EvolutionSuggestion,
     EvolutionType, 
@@ -343,7 +343,7 @@ class TestAnalysisStoreSharedConnection:
         lock = threading.Lock()
         
         # Initialize the schema manually since we're not using standalone mode
-        from openspace.skill_engine.migration_manager import MigrationManager
+        from scion.skill_engine.migration_manager import MigrationManager
         migration_manager = MigrationManager(conn=conn, lock=lock)
         migration_manager.ensure_current_schema()
         
@@ -375,7 +375,7 @@ class TestAnalysisStoreSharedConnection:
 
 def test_analysis_store_integration_with_skill_store(temp_db_path):
     """Test AnalysisStore integration with SkillStore."""
-    from openspace.skill_engine.store import SkillStore
+    from scion.skill_engine.store import SkillStore
     
     store = SkillStore(db_path=temp_db_path)
     
@@ -474,7 +474,7 @@ def test_bulk_upsert_atomicity_with_validation_error(temp_db_path):
     lock = threading.Lock()
     
     # Initialize schema
-    from openspace.skill_engine.migration_manager import MigrationManager
+    from scion.skill_engine.migration_manager import MigrationManager
     migration_manager = MigrationManager(conn=conn, lock=lock)
     migration_manager.ensure_current_schema()
     
@@ -525,7 +525,7 @@ def test_store_calls_public_insert_analysis_method(tmp_path):
     # This test verifies the layering fix - store.py should call public methods
     temp_db_path = tmp_path / "test_public_method.db"
     
-    from openspace.skill_engine.store import SkillStore
+    from scion.skill_engine.store import SkillStore
     
     store = SkillStore(db_path=temp_db_path)
     

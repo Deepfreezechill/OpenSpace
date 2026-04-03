@@ -1,7 +1,7 @@
 """Deterministic LLM mock for testing.
 
 Provides ``MockLLMClient`` — a drop-in replacement for
-``openspace.llm.LLMClient`` that returns pre-configured responses
+``scion.llm.LLMClient`` that returns pre-configured responses
 from a response pool instead of calling a real LLM API.
 
 Usage in tests::

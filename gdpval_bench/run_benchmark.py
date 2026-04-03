@@ -69,7 +69,7 @@ sys.path.insert(0, str(_OPENSPACE_ROOT))
 try:
     from dotenv import load_dotenv
 
-    _pkg_env = _OPENSPACE_ROOT / "openspace" / ".env"
+    _pkg_env = _OPENSPACE_ROOT / "scion" / ".env"
     if _pkg_env.is_file():
         load_dotenv(_pkg_env)
     load_dotenv()  # also try CWD/.env
@@ -396,7 +396,7 @@ def _evaluate_task(
 
 def _make_config(cfg: Dict, phase: str, worker_id: int = 0):
     """Create a OpenSpaceConfig for one worker."""
-    from openspace.tool_layer import OpenSpaceConfig
+    from scion.tool_layer import OpenSpaceConfig
 
     rd = _results_dir(cfg)
     # Each worker gets its own recording dir to avoid collisions
@@ -592,7 +592,7 @@ async def _run_phase_serial(
 ) -> List[Dict[str, Any]]:
     """Run one phase sequentially. A single OpenSpace instance is reused
     so that skills accumulate within the phase."""
-    from openspace.tool_layer import OpenSpace
+    from scion.tool_layer import OpenSpace
 
     rd = _results_dir(cfg)
     results_file = rd / f"{phase}_results.jsonl"
@@ -660,7 +660,7 @@ async def _run_phase_concurrent(
       - Token tracking uses ContextVar so litellm callbacks route to the
         correct per-task bucket automatically.
     """
-    from openspace.tool_layer import OpenSpace
+    from scion.tool_layer import OpenSpace
 
     rd = _results_dir(cfg)
     results_file = rd / f"{phase}_results.jsonl"
@@ -1191,8 +1191,8 @@ def build_comparison(cfg: Dict) -> None:
 
 
 def _wipe_skill_db() -> None:
-    """Delete the shared .openspace/openspace.db for a fresh start."""
-    db_file = _OPENSPACE_DB_DIR / "openspace.db"
+    """Delete the shared .openspace/scion.db for a fresh start."""
+    db_file = _OPENSPACE_DB_DIR / "scion.db"
     for f in [db_file, db_file.with_suffix(".db-wal"), db_file.with_suffix(".db-shm")]:
         if f.exists():
             f.unlink()
@@ -1200,8 +1200,8 @@ def _wipe_skill_db() -> None:
 
 
 def _backup_skill_db(dest: Path) -> None:
-    """Copy the current .openspace/openspace.db to dest."""
-    db_file = _OPENSPACE_DB_DIR / "openspace.db"
+    """Copy the current .openspace/scion.db to dest."""
+    db_file = _OPENSPACE_DB_DIR / "scion.db"
     if db_file.exists():
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(str(db_file), str(dest))
@@ -1379,7 +1379,7 @@ async def main(args: argparse.Namespace) -> None:
 
         # Snapshot skills after Phase 1
         try:
-            from openspace.skill_engine import SkillStore
+            from scion.skill_engine import SkillStore
 
             store = SkillStore()
             skills = _snapshot_skills(store)
@@ -1462,7 +1462,7 @@ def _check_environment(cfg: Dict) -> bool:
 
     # 3. Check openspace
     try:
-        from openspace.tool_layer import OpenSpace
+        from scion.tool_layer import OpenSpace
 
         print("  ✅ openspace importable")
     except ImportError as e:

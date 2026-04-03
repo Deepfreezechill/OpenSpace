@@ -26,7 +26,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_OPENSPACE = _REPO_ROOT / "openspace"
+_OPENSPACE = _REPO_ROOT / "scion"
 _DOMAIN = _OPENSPACE / "domain"
 
 # stdlib top-level modules that are always allowed everywhere
@@ -91,7 +91,7 @@ _DOMAIN_ALLOWED_THIRD_PARTY: frozenset[str] = frozenset(
 )
 
 # All allowed import roots for domain layer
-_DOMAIN_ALLOWED_ROOTS: frozenset[str] = _STDLIB_PREFIXES | _DOMAIN_ALLOWED_THIRD_PARTY | frozenset({"openspace.domain"})
+_DOMAIN_ALLOWED_ROOTS: frozenset[str] = _STDLIB_PREFIXES | _DOMAIN_ALLOWED_THIRD_PARTY | frozenset({"scion.domain"})
 
 
 def _collect_py_files(directory: Path) -> list[Path]:
@@ -134,10 +134,10 @@ def _is_allowed_domain_import(module: str) -> bool:
     # stdlib or allowed third-party
     if root in _DOMAIN_ALLOWED_ROOTS:
         return True
-    # intra-domain (openspace.domain.*)
-    if module.startswith("openspace.domain"):
+    # intra-domain (scion.domain.*)
+    if module.startswith("scion.domain"):
         return True
-    # relative imports within domain resolve to openspace.domain
+    # relative imports within domain resolve to scion.domain
     # (already handled by ast — from .ports import X becomes module="ports")
     # Single-segment names matching stdlib
     if root in _STDLIB_PREFIXES:
@@ -153,8 +153,8 @@ def _is_allowed_domain_import(module: str) -> bool:
 class TestDomainImportPurity:
     """Domain layer (openspace/domain/) must import ZERO infrastructure modules.
 
-    Allowed: stdlib, structlog, openspace.domain.*
-    Forbidden: anything else in openspace.* or third-party infra packages.
+    Allowed: stdlib, structlog, scion.domain.*
+    Forbidden: anything else in scion.* or third-party infra packages.
     """
 
     def test_known_cross_layer_count(self) -> None:
@@ -177,9 +177,9 @@ class TestDomainImportPurity:
     # The test ensures NO NEW violations are introduced.
     _KNOWN_CROSS_LAYER: frozenset[tuple[str, str]] = frozenset(
         {
-            ("openspace/domain/enums.py", "openspace.skill_engine.types"),
-            ("openspace/domain/enums.py", "openspace.grounding.core.types"),
-            ("openspace/domain/enums.py", "openspace.grounding.core.exceptions"),
+            ("scion/domain/enums.py", "scion.skill_engine.types"),
+            ("scion/domain/enums.py", "scion.grounding.core.types"),
+            ("scion/domain/enums.py", "scion.grounding.core.exceptions"),
         }
     )
 
@@ -200,14 +200,14 @@ class TestDomainImportPurity:
             pytest.fail(f"Domain layer has {len(violations)} NEW forbidden import(s):\n{detail}")
 
     def test_domain_does_not_import_openspace_infra(self) -> None:
-        """Domain must not import from openspace.* outside openspace.domain."""
+        """Domain must not import from scion.* outside scion.domain."""
         violations: list[str] = []
 
         for filepath in self._domain_files():
             rel = filepath.relative_to(_REPO_ROOT)
             rel_posix = rel.as_posix()
             for module in _extract_imports(filepath):
-                if module.startswith("openspace.") and not module.startswith("openspace.domain"):
+                if module.startswith("scion.") and not module.startswith("scion.domain"):
                     if (rel_posix, module) not in self._KNOWN_CROSS_LAYER:
                         violations.append(f"  {rel}: imports '{module}'")
 
@@ -268,15 +268,15 @@ class TestMCPHandlerBoundary:
     # public property accessors as delegation is fully wired in Phase 4).
     _KNOWN_PRIVATE_ACCESS: frozenset[tuple[str, int, str]] = frozenset(
         {
-            ("openspace/mcp_server.py", 203, "_skill_store"),
-            ("openspace/mcp_server.py", 221, "_grounding_config"),
-            ("openspace/mcp_server.py", 314, "_skill_registry"),
-            ("openspace/mcp_server.py", 448, "_skill_registry"),
-            ("openspace/mcp_server.py", 752, "_skill_registry"),
-            ("openspace/mcp_server.py", 653, "_skill_registry"),
-            ("openspace/mcp_server.py", 771, "_skill_evolver"),
-            ("openspace/mcp_server.py", 755, "_skill_evolver"),
-            ("openspace/mcp_server.py", 437, "_grounding_config"),
+            ("scion/mcp_server.py", 203, "_skill_store"),
+            ("scion/mcp_server.py", 221, "_grounding_config"),
+            ("scion/mcp_server.py", 314, "_skill_registry"),
+            ("scion/mcp_server.py", 448, "_skill_registry"),
+            ("scion/mcp_server.py", 752, "_skill_registry"),
+            ("scion/mcp_server.py", 653, "_skill_registry"),
+            ("scion/mcp_server.py", 771, "_skill_evolver"),
+            ("scion/mcp_server.py", 755, "_skill_evolver"),
+            ("scion/mcp_server.py", 437, "_grounding_config"),
         }
     )
 

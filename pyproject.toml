@@ -3,14 +3,15 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "openspace"
+name = "scion-skills"
 version = "0.1.0"
-description = "OpenSpace"
+description = "Scion — Self-evolving skills for AI coding agents"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
 authors = [
-    {name = "OpenSpace Team@HKUDS"}
+    {name = "OpenSpace Team@HKUDS"},
+    {name = "Brian Krafft"},
 ]
 
 dependencies = [
@@ -60,20 +61,21 @@ dev = [
 ]
 
 all = [
-    "openspace[macos,linux,windows,dev]",
+    "scion-skills[macos,linux,windows,dev]",
 ]
 
 [project.urls]
-Repository = "https://github.com/HKUDS/OpenSpace"
-"Bug Tracker" = "https://github.com/HKUDS/OpenSpace/issues"
+Repository = "https://github.com/Deepfreezechill/OpenSpace"
+"Bug Tracker" = "https://github.com/Deepfreezechill/OpenSpace/issues"
+"Upstream" = "https://github.com/HKUDS/OpenSpace"
 
 [project.scripts]
-openspace = "openspace.__main__:run_main"
-openspace-server = "openspace.local_server.main:main"
-openspace-mcp = "openspace.mcp_server:run_mcp_server"
-openspace-download-skill = "openspace.cloud.cli.download_skill:main"
-openspace-upload-skill = "openspace.cloud.cli.upload_skill:main"
-openspace-dashboard = "openspace.dashboard_server:main"
+scion = "scion.__main__:run_main"
+scion-server = "scion.local_server.main:main"
+scion-mcp = "scion.mcp_server:run_mcp_server"
+scion-download-skill = "scion.cloud.cli.download_skill:main"
+scion-upload-skill = "scion.cloud.cli.upload_skill:main"
+scion-dashboard = "scion.dashboard_server:main"
 
 [tool.ruff]
 target-version = "py313"
@@ -101,10 +103,10 @@ ignore = [
 "gdpval_bench/*" = ["E", "F", "W"]  # benchmark scripts — upstream code
 
 [tool.setuptools]
-packages = {find = {where = ["."], include = ["openspace*"]}}
+packages = {find = {where = ["."], include = ["scion*"]}}
 
 [tool.setuptools.package-data]
-openspace = [
+scion = [
     "config/*.json",
     "config/*.json.example",
     "local_server/config.json",

@@ -11,8 +11,8 @@ import textwrap
 
 import pytest
 
-from openspace.security import check_code_safety
-from openspace.security.ast_scanner import (
+from scion.security import check_code_safety
+from scion.security.ast_scanner import (
     Finding,
     Severity,
     load_blocklist,

@@ -19,12 +19,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from openspace.app.container import AppContainer
-from openspace.app.factory import _StubLLM, _StubTelemetry
+from scion.app.container import AppContainer
+from scion.app.factory import _StubLLM, _StubTelemetry
 
 # tool_layer imports litellm which may not be available in all test envs
 try:
-    from openspace.tool_layer import OpenSpace, OpenSpaceConfig
+    from scion.tool_layer import OpenSpace, OpenSpaceConfig
 
     _HAS_TOOL_LAYER = True
 except (ImportError, ModuleNotFoundError):
@@ -32,7 +32,7 @@ except (ImportError, ModuleNotFoundError):
 
 pytestmark = pytest.mark.skipif(
     not _HAS_TOOL_LAYER,
-    reason="openspace.tool_layer requires litellm (not installed or broken)",
+    reason="scion.tool_layer requires litellm (not installed or broken)",
 )
 
 
