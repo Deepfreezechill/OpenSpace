@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
@@ -151,15 +149,7 @@ class OpenSpace:
         container: AppContainer,
         config: Optional[OpenSpaceConfig] = None,
     ) -> "OpenSpace":
-        """Create an OpenSpace instance backed by an AppContainer.
-
-        .. note::
-
-            Phase 1 only stores the container for property access.
-            ``initialize()`` still constructs its own services.
-            Phase 4 will wire ``initialize()`` to resolve from the
-            container, making injected services authoritative.
-        """
+        """Create an OpenSpace instance backed by an AppContainer."""
         return cls(config=config, container=container)
 
     # ── Public property accessors (replace private field access) ──────
@@ -207,95 +197,30 @@ class OpenSpace:
         logger.info("Initializing OpenSpace...")
 
         try:
+            # 1. LLM clients
             self._llm_factory = LLMFactory(config=self.config)
             self._llm_client = self._llm_factory.create_main()
             logger.info(f"✓ LLM Client: {self.config.llm_model}")
 
-            # Load grounding config
-            # If custom config is provided, merge it with default configs
-            # load_config supports multiple files and deep merges them (later files override earlier ones)
-            if self.config.grounding_config_path:
-                from openspace.config.constants import CONFIG_GROUNDING, CONFIG_SECURITY
-                from openspace.config.loader import CONFIG_DIR
-
-                # Load default configs + custom config (custom values will override defaults)
-                grounding_config = load_config(
-                    CONFIG_DIR / CONFIG_GROUNDING, CONFIG_DIR / CONFIG_SECURITY, self.config.grounding_config_path
-                )
-                logger.info(f"Merged custom grounding config: {self.config.grounding_config_path}")
-            else:
-                # Load default configs only
-                grounding_config = get_config()
-
-            # Optional: enable ClawWork productivity tools for fair benchmark comparison
-            if getattr(self.config, "use_clawwork_productivity", False):
-                shell_cfg = grounding_config.shell.model_copy(
-                    update={
-                        "use_clawwork_productivity": True,
-                        "working_dir": self.config.workspace_dir or grounding_config.shell.working_dir,
-                    }
-                )
-                grounding_config = grounding_config.model_copy(update={"shell": shell_cfg})
-                logger.info("ClawWork productivity tools enabled (shell.working_dir used as sandbox root)")
-
-            # Resolve backend_scope early so we can skip initializing
-            # providers that are not in scope (e.g. web when only shell is needed).
-            agent_config = get_agent_config("GroundingAgent")
-            _cli_max_iter = self.config.grounding_max_iterations
-            _default_max_iter = OpenSpaceConfig().grounding_max_iterations  # dataclass default (20)
-            if agent_config:
-                cfg_max_iter = agent_config.get("max_iterations", _default_max_iter)
-                if _cli_max_iter != _default_max_iter:
-                    max_iterations = _cli_max_iter
-                else:
-                    max_iterations = cfg_max_iter
-                backend_scope = (
-                    self.config.backend_scope
-                    or agent_config.get("backend_scope")
-                    or ["gui", "shell", "mcp", "web", "system"]
-                )
-                visual_analysis_timeout = agent_config.get("visual_analysis_timeout", 30.0)
-                self.config.grounding_max_iterations = max_iterations
-                logger.info(
-                    f"Loaded GroundingAgent config from config_agents.json (max_iterations={max_iterations}, visual_analysis_timeout={visual_analysis_timeout}s)"
-                )
-            else:
-                max_iterations = self.config.grounding_max_iterations
-                backend_scope = self.config.backend_scope or ["gui", "shell", "mcp", "web", "system"]
-                visual_analysis_timeout = 30.0
-                logger.warning(f"config_agents.json not found, using default config (max_iterations={max_iterations})")
-
-            # Filter enabled_backends in grounding config to only those in scope,
-            # so providers outside scope (e.g. web) are never registered/initialized.
-            if grounding_config.enabled_backends:
-                scope_set = set(backend_scope)
-                filtered = [
-                    entry for entry in grounding_config.enabled_backends if entry.get("name", "").lower() in scope_set
-                ]
-                if len(filtered) != len(grounding_config.enabled_backends):
-                    skipped = [
-                        entry.get("name")
-                        for entry in grounding_config.enabled_backends
-                        if entry.get("name", "").lower() not in scope_set
-                    ]
-                    logger.info(f"Skipping backends not in scope: {skipped}")
-                    grounding_config = grounding_config.model_copy(update={"enabled_backends": filtered})
-
+            # 2. Grounding config + client
+            grounding_config, backend_scope, max_iterations, visual_analysis_timeout = (
+                self._load_grounding_config()
+            )
             self._grounding_config = grounding_config
             self._grounding_client = GroundingClient(config=grounding_config)
             await self._grounding_client.initialize_all_providers()
-
             backends = list(self._grounding_client.list_providers().keys())
             logger.info(f"✓ Grounding Client: {len(backends)} backends")
             logger.debug(f"  Available backends: {[b.value for b in backends]}")
 
+            # 3. Recording
             if self.config.enable_recording:
                 self._recording_service = RecordingService(config=self.config)
                 self._recording_manager = self._recording_service.create(llm_client=self._llm_client)
                 self._recording_service.wire(grounding_client=self._grounding_client)
                 logger.info(f"✓ Recording enabled: {len(self._recording_manager.backends or [])} backends")
 
-            # Create separate LLM client for tool retrieval if configured
+            # 4. Tool retrieval LLM + GroundingAgent
             tool_retrieval_llm = self._llm_factory.create_tool_retrieval()
             if tool_retrieval_llm:
                 logger.info(f"✓ Tool retrieval LLM: {self.config.tool_retrieval_model}")
@@ -314,62 +239,10 @@ class OpenSpace:
             )
             logger.info(f"✓ GroundingAgent: {', '.join(backend_scope)}")
 
-            # Initialize SkillRegistry (settings from config_grounding.json → skills)
-            if self._grounding_config and self._grounding_config.skills.enabled:
-                self._tool_registry = ToolRegistry(
-                    config=self.config,
-                    grounding_config=self._grounding_config,
-                    llm_client=self._llm_client,
-                )
-                if self._tool_registry.discover():
-                    self._skill_registry = self._tool_registry.registry
-                    skills = self._skill_registry.list_skills()
-                    logger.info(f"✓ Skills: {len(skills)} discovered")
-                    self._grounding_agent.set_skill_registry(self._skill_registry)
-                else:
-                    self._skill_registry = None
+            # 5. Skill engine (registry, store, analyzer, evolver)
+            await self._setup_skill_engine()
 
-            # Initialize ExecutionAnalyzer (requires recording + skills)
-            if self.config.enable_recording and self._skill_registry:
-                try:
-                    skill_store = SkillStore()
-                    self._skill_store = skill_store  # Expose for MCP server reuse
-
-                    # Sync filesystem skills → DB (creates initial records
-                    # for newly discovered skills so that analysis stats
-                    # can be recorded against them from the very first run).
-                    await skill_store.sync_from_registry(self._skill_registry.list_skills())
-
-                    # Bridge: pass quality_manager so analysis can feed back
-                    # LLM-identified tool issues to the tool quality system.
-                    quality_mgr = self._grounding_client.quality_manager if self._grounding_client else None
-                    self._execution_analyzer = ExecutionAnalyzer(
-                        store=skill_store,
-                        llm_client=self._llm_client,
-                        model=self.config.execution_analyzer_model,
-                        skill_registry=self._skill_registry,
-                        quality_manager=quality_mgr,
-                    )
-                    logger.info("✓ Execution analysis enabled")
-
-                    # Share store with GroundingAgent so retrieve_skill
-                    # can access quality metrics for LLM selection.
-                    self._grounding_agent._skill_store = skill_store
-
-                    # Initialize SkillEvolver (reuses the same store & registry)
-                    # available_tools will be updated before each evolution cycle
-                    self._skill_evolver = SkillEvolver(
-                        store=skill_store,
-                        registry=self._skill_registry,
-                        llm_client=self._llm_client,
-                        model=self.config.skill_evolver_model,
-                        max_concurrent=self.config.evolution_max_concurrent,
-                    )
-                    logger.info(f"✓ Skill evolution enabled (concurrent={self.config.evolution_max_concurrent})")
-                except Exception as e:
-                    logger.warning(f"Execution analyzer init failed (non-fatal): {e}")
-
-            # Create ExecutionEngine with all dependencies
+            # 6. Execution engine (wires all deps)
             self._execution_engine = ExecutionEngine(
                 config=self.config,
                 grounding_agent=self._grounding_agent,
@@ -392,6 +265,121 @@ class OpenSpace:
             await self.cleanup()
             raise
 
+    def _load_grounding_config(self):
+        """Load and merge grounding config, resolve backend scope and agent params.
+
+        Returns (grounding_config, backend_scope, max_iterations, visual_analysis_timeout).
+        """
+        if self.config.grounding_config_path:
+            from openspace.config.constants import CONFIG_GROUNDING, CONFIG_SECURITY
+            from openspace.config.loader import CONFIG_DIR
+
+            grounding_config = load_config(
+                CONFIG_DIR / CONFIG_GROUNDING, CONFIG_DIR / CONFIG_SECURITY, self.config.grounding_config_path
+            )
+            logger.info(f"Merged custom grounding config: {self.config.grounding_config_path}")
+        else:
+            grounding_config = get_config()
+
+        if getattr(self.config, "use_clawwork_productivity", False):
+            shell_cfg = grounding_config.shell.model_copy(
+                update={
+                    "use_clawwork_productivity": True,
+                    "working_dir": self.config.workspace_dir or grounding_config.shell.working_dir,
+                }
+            )
+            grounding_config = grounding_config.model_copy(update={"shell": shell_cfg})
+            logger.info("ClawWork productivity tools enabled (shell.working_dir used as sandbox root)")
+
+        agent_config = get_agent_config("GroundingAgent")
+        _cli_max_iter = self.config.grounding_max_iterations
+        _default_max_iter = OpenSpaceConfig().grounding_max_iterations
+
+        if agent_config:
+            cfg_max_iter = agent_config.get("max_iterations", _default_max_iter)
+            max_iterations = _cli_max_iter if _cli_max_iter != _default_max_iter else cfg_max_iter
+            backend_scope = (
+                self.config.backend_scope
+                or agent_config.get("backend_scope")
+                or ["gui", "shell", "mcp", "web", "system"]
+            )
+            visual_analysis_timeout = agent_config.get("visual_analysis_timeout", 30.0)
+            self.config.grounding_max_iterations = max_iterations
+            logger.info(
+                f"Loaded GroundingAgent config from config_agents.json "
+                f"(max_iterations={max_iterations}, visual_analysis_timeout={visual_analysis_timeout}s)"
+            )
+        else:
+            max_iterations = self.config.grounding_max_iterations
+            backend_scope = self.config.backend_scope or ["gui", "shell", "mcp", "web", "system"]
+            visual_analysis_timeout = 30.0
+            logger.warning(f"config_agents.json not found, using default config (max_iterations={max_iterations})")
+
+        if grounding_config.enabled_backends:
+            scope_set = set(backend_scope)
+            filtered = [
+                entry for entry in grounding_config.enabled_backends if entry.get("name", "").lower() in scope_set
+            ]
+            if len(filtered) != len(grounding_config.enabled_backends):
+                skipped = [
+                    entry.get("name")
+                    for entry in grounding_config.enabled_backends
+                    if entry.get("name", "").lower() not in scope_set
+                ]
+                logger.info(f"Skipping backends not in scope: {skipped}")
+                grounding_config = grounding_config.model_copy(update={"enabled_backends": filtered})
+
+        return grounding_config, backend_scope, max_iterations, visual_analysis_timeout
+
+    async def _setup_skill_engine(self) -> None:
+        """Initialize skill registry, store, analyzer, and evolver."""
+        if not (self._grounding_config and self._grounding_config.skills.enabled):
+            return
+
+        self._tool_registry = ToolRegistry(
+            config=self.config,
+            grounding_config=self._grounding_config,
+            llm_client=self._llm_client,
+        )
+        if self._tool_registry.discover():
+            self._skill_registry = self._tool_registry.registry
+            skills = self._skill_registry.list_skills()
+            logger.info(f"✓ Skills: {len(skills)} discovered")
+            self._grounding_agent.set_skill_registry(self._skill_registry)
+        else:
+            self._skill_registry = None
+
+        if not (self.config.enable_recording and self._skill_registry):
+            return
+
+        try:
+            skill_store = SkillStore()
+            self._skill_store = skill_store
+            await skill_store.sync_from_registry(self._skill_registry.list_skills())
+
+            quality_mgr = self._grounding_client.quality_manager if self._grounding_client else None
+            self._execution_analyzer = ExecutionAnalyzer(
+                store=skill_store,
+                llm_client=self._llm_client,
+                model=self.config.execution_analyzer_model,
+                skill_registry=self._skill_registry,
+                quality_manager=quality_mgr,
+            )
+            logger.info("✓ Execution analysis enabled")
+
+            self._grounding_agent._skill_store = skill_store
+
+            self._skill_evolver = SkillEvolver(
+                store=skill_store,
+                registry=self._skill_registry,
+                llm_client=self._llm_client,
+                model=self.config.skill_evolver_model,
+                max_concurrent=self.config.evolution_max_concurrent,
+            )
+            logger.info(f"✓ Skill evolution enabled (concurrent={self.config.evolution_max_concurrent})")
+        except Exception as e:
+            logger.warning(f"Execution analyzer init failed (non-fatal): {e}")
+
     async def execute(
         self,
         task: str,
@@ -412,14 +400,6 @@ class OpenSpace:
             max_iterations=max_iterations,
             task_id=task_id,
         )
-
-    # NOTE: _init_skill_registry, _select_and_inject_skills, and
-    # _get_skill_selection_llm have been extracted to ToolRegistry
-    # (openspace/tool_registry.py) in Epic 4.1.
-    #
-    # execute(), _maybe_analyze_execution(), and _maybe_evolve_quality()
-    # have been extracted to ExecutionEngine
-    # (openspace/execution_engine.py) in Epic 4.3.
 
     async def cleanup(self) -> None:
         """
