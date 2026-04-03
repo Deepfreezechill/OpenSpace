@@ -79,7 +79,6 @@ class _FakeToolQualityRecord:
 
 from openspace.skill_engine.evolution.triggers import (
     _ANALYSIS_CONTEXT_MAX,
-    _ANALYSIS_NOTE_MAX_CHARS,
     _FALLBACK_THRESHOLD,
     _HIGH_APPLIED_FOR_FIX,
     _LOW_COMPLETION_THRESHOLD,
@@ -208,7 +207,7 @@ class TestBuildContextFromAnalysis:
         evolver = MagicMock()
         evolver._available_tools = []
         evolver._store.load_record.return_value = _FakeSkillRecord(path="/skills/s1/SKILL.md")
-        evolver._registry.load_skill_content.return_value = "# Content"
+        evolver._load_skill_content.return_value = "# Content"
 
         analysis = _FakeAnalysis()
         suggestion = _FakeSuggestion(
@@ -241,8 +240,8 @@ class TestProcessAnalysis:
     async def test_suggestions_dispatched(self):
         evolver = MagicMock()
         evolver._available_tools = []
-        evolver._store.load_record.return_value = _FakeSkillRecord(path="/s/SKILL.md")
-        evolver._registry.load_skill_content.return_value = "# Content"
+        # After MRO fix: process_analysis calls evolver._build_context_from_analysis
+        evolver._build_context_from_analysis.return_value = MagicMock()  # truthy context
         evolver._execute_contexts = AsyncMock(return_value=[_FakeSkillRecord(name="evolved")])
 
         analysis = _FakeAnalysis(
@@ -251,9 +250,7 @@ class TestProcessAnalysis:
             ],
         )
 
-        with patch("openspace.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType), \
-             patch("openspace.skill_engine.evolution.triggers.EvolutionTrigger", _FakeTrigger):
-            result = await process_analysis(evolver, analysis)
+        result = await process_analysis(evolver, analysis)
 
         assert len(result) == 1
         evolver._execute_contexts.assert_awaited_once()
@@ -300,6 +297,28 @@ class TestProcessToolDegradation:
         assert "old_tool" not in evolver._addressed_degradations
 
 
+    @pytest.mark.asyncio
+    async def test_confirmed_skill_triggers_execution(self):
+        """Happy path: LLM confirms → context built → _execute_contexts fires."""
+        evolver = MagicMock()
+        evolver._addressed_degradations = {}
+        evolver._store.find_skills_by_tool.return_value = ["skill-1"]
+        evolver._store.load_record.return_value = _FakeSkillRecord(path="/s/SKILL.md")
+        evolver._load_skill_content.return_value = "# Content"
+        evolver._store.load_analyses.return_value = []
+        evolver._llm_confirm_evolution = AsyncMock(return_value=True)
+        evolver._execute_contexts = AsyncMock(return_value=[_FakeSkillRecord(name="fixed")])
+        evolver._available_tools = []
+
+        tool = _FakeToolQualityRecord(tool_key="shell_exec")
+        result = await process_tool_degradation(evolver, [tool])
+
+        assert len(result) == 1
+        assert result[0].name == "fixed"
+        evolver._llm_confirm_evolution.assert_awaited_once()
+        evolver._execute_contexts.assert_awaited_once()
+
+
 # ---------------------------------------------------------------------------
 # process_metric_check tests
 # ---------------------------------------------------------------------------
@@ -327,11 +346,36 @@ class TestProcessMetricCheck:
             ),
         }
         evolver._available_tools = []
+        # After MRO fix: process_metric_check calls evolver._diagnose_skill_health
+        evolver._diagnose_skill_health.return_value = (None, "")
 
-        with patch("openspace.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType):
-            result = await process_metric_check(evolver, min_selections=5)
+        result = await process_metric_check(evolver, min_selections=5)
 
         assert result == []
+
+    @pytest.mark.asyncio
+    async def test_confirmed_metric_triggers_execution(self):
+        """Happy path: diagnose → LLM confirm → _execute_contexts fires."""
+        evolver = MagicMock()
+        evolver._store.load_active.return_value = {
+            "s1": _FakeSkillRecord(total_selections=10),
+        }
+        evolver._available_tools = []
+        evolver._diagnose_skill_health.return_value = (_FakeEvolutionType.FIX, "needs fix")
+        evolver._load_skill_content.return_value = "# Skill Content"
+        evolver._store.load_analyses.return_value = []
+        evolver._llm_confirm_evolution = AsyncMock(return_value=True)
+        evolver._execute_contexts = AsyncMock(return_value=[_FakeSkillRecord(name="improved")])
+
+        with patch("openspace.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType), \
+             patch("openspace.skill_engine.evolution.triggers.EvolutionTrigger", _FakeTrigger), \
+             patch("openspace.skill_engine.evolution.triggers.EvolutionSuggestion", _FakeSuggestion):
+            result = await process_metric_check(evolver, min_selections=5)
+
+        assert len(result) == 1
+        assert result[0].name == "improved"
+        evolver._llm_confirm_evolution.assert_awaited_once()
+        evolver._execute_contexts.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -348,7 +392,6 @@ class TestConstants:
 
     def test_analysis_constants(self):
         assert isinstance(_ANALYSIS_CONTEXT_MAX, int)
-        assert isinstance(_ANALYSIS_NOTE_MAX_CHARS, int)
 
     def test_constants_no_longer_in_evolver(self):
         """Constants should be imported, not defined, in evolver.py."""

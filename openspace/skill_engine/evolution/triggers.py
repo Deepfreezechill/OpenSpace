@@ -11,7 +11,6 @@ Functions extracted from ``SkillEvolver`` (Epic 5.3):
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
@@ -35,7 +34,6 @@ logger = Logger.get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 _ANALYSIS_CONTEXT_MAX = 5  # Max recent analyses to include in prompt
-_ANALYSIS_NOTE_MAX_CHARS = 500  # Per-analysis note truncation
 
 # Rule-based thresholds for candidate screening (relaxed — LLM confirms)
 _FALLBACK_THRESHOLD = 0.4
@@ -64,7 +62,7 @@ async def process_analysis(
 
     contexts: List[EvolutionContext] = []
     for suggestion in analysis.evolution_suggestions:
-        ctx = build_context_from_analysis(evolver, analysis, suggestion)
+        ctx = evolver._build_context_from_analysis(analysis, suggestion)
         if ctx is not None:
             contexts.append(ctx)
 
@@ -137,7 +135,7 @@ async def process_tool_degradation(
             recent = evolver._store.load_analyses(
                 skill_id=skill_record.skill_id, limit=_ANALYSIS_CONTEXT_MAX,
             )
-            content = load_skill_content(evolver, skill_record)
+            content = evolver._load_skill_content(skill_record)
             if not content:
                 continue
 
@@ -225,11 +223,11 @@ async def process_metric_check(
         if record.total_selections < min_selections:
             continue
 
-        evo_type, direction = diagnose_skill_health(record)
+        evo_type, direction = evolver._diagnose_skill_health(record)
         if evo_type is None:
             continue
 
-        content = load_skill_content(evolver, record)
+        content = evolver._load_skill_content(record)
         if not content:
             continue
 
@@ -313,7 +311,7 @@ def build_context_from_analysis(
             if not rec:
                 logger.warning("Target skill not found: %s", target_id)
                 return None
-            content = load_skill_content(evolver, rec)
+            content = evolver._load_skill_content(rec)
             if not content:
                 logger.warning("Cannot load content for skill: %s", target_id)
                 return None
@@ -360,7 +358,7 @@ def load_skill_content(evolver, record: "SkillRecord") -> str:
 
 def diagnose_skill_health(
     record: "SkillRecord",
-) -> tuple:
+) -> tuple[Optional[EvolutionType], str]:
     """Diagnose what type of evolution a skill needs based on metrics.
 
     Returns ``(EvolutionType, direction_str)`` or ``(None, "")`` if healthy.

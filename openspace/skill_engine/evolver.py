@@ -41,7 +41,6 @@ from .evolution.orchestrator import (
 )
 from .evolution.triggers import (
     _ANALYSIS_CONTEXT_MAX,
-    _ANALYSIS_NOTE_MAX_CHARS,
     build_context_from_analysis as _build_context_from_analysis_impl,
     diagnose_skill_health as _diagnose_skill_health_impl,
     load_skill_content as _load_skill_content_impl,
@@ -1055,6 +1054,8 @@ class SkillEvolver:
     @staticmethod
     def _format_analysis_context(analyses: List[ExecutionAnalysis]) -> str:
         """Format recent analyses into a concise context block for prompts."""
+        _ANALYSIS_NOTE_MAX_CHARS = 500  # Per-analysis note truncation
+
         if not analyses:
             return "(no execution history available)"
 
