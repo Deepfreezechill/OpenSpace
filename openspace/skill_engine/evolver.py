@@ -39,6 +39,11 @@ from .evolution.orchestrator import (
     log_background_result as _log_background_result_impl,
     schedule_background as _schedule_background_impl,
 )
+from .evolution.confirmation import (
+    _SKILL_CONTENT_MAX_CHARS,
+    llm_confirm_evolution as _llm_confirm_evolution_impl,
+    parse_confirmation as _parse_confirmation_impl,
+)
 from .evolution.triggers import (
     _ANALYSIS_CONTEXT_MAX,
     build_context_from_analysis as _build_context_from_analysis_impl,
@@ -98,8 +103,6 @@ logger = Logger.get_logger(__name__)
 
 EVOLUTION_COMPLETE = SkillEnginePrompts.EVOLUTION_COMPLETE
 EVOLUTION_FAILED = SkillEnginePrompts.EVOLUTION_FAILED
-
-_SKILL_CONTENT_MAX_CHARS = 12_000  # Max chars of SKILL.md in evolution prompt
 
 # Agent loop / retry constants
 _MAX_EVOLUTION_ITERATIONS = 5  # Max tool-calling rounds for evolution agent
@@ -252,103 +255,18 @@ class SkillEvolver:
         recent_analyses: List[ExecutionAnalysis],
     ) -> bool:
         """Ask LLM to confirm whether a rule-based evolution candidate
-        truly needs evolution.
-
-        Returns True if LLM agrees, False otherwise.
-        This prevents false positives from rigid threshold-based rules.
-
-        The confirmation prompt and response are recorded to
-        ``conversations.jsonl`` under agent_name="SkillEvolver.confirm".
-        """
-        from openspace.recording import RecordingManager
-
-        analysis_ctx = self._format_analysis_context(recent_analyses)
-
-        prompt = SkillEnginePrompts.evolution_confirm(
-            skill_id=skill_record.skill_id,
-            skill_content=_truncate(skill_content, _SKILL_CONTENT_MAX_CHARS // 2),
-            proposed_type=proposed_type.value,
+        truly needs evolution."""
+        return await _llm_confirm_evolution_impl(
+            self,
+            skill_record=skill_record,
+            skill_content=skill_content,
+            proposed_type=proposed_type,
             proposed_direction=proposed_direction,
             trigger_context=trigger_context,
-            recent_analyses=analysis_ctx,
+            recent_analyses=recent_analyses,
         )
 
-        confirm_messages = [{"role": "user", "content": prompt}]
-
-        # Record confirmation setup
-        await RecordingManager.record_conversation_setup(
-            setup_messages=copy.deepcopy(confirm_messages),
-            agent_name="SkillEvolver.confirm",
-            extra={
-                "skill_id": skill_record.skill_id,
-                "proposed_type": proposed_type.value,
-                "trigger_context": trigger_context[:200],
-            },
-        )
-
-        model = self._model or self._llm_client.model
-        try:
-            result = await self._llm_client.complete(
-                messages=confirm_messages,
-                model=model,
-            )
-            content = result["message"].get("content", "").strip().lower()
-            confirmed = self._parse_confirmation(content)
-
-            # Record confirmation response
-            await RecordingManager.record_iteration_context(
-                iteration=1,
-                delta_messages=[{"role": "assistant", "content": content}],
-                response_metadata={
-                    "has_tool_calls": False,
-                    "confirmed": confirmed,
-                },
-                agent_name="SkillEvolver.confirm",
-            )
-
-            return confirmed
-        except Exception as e:
-            logger.warning(f"LLM confirmation failed, defaulting to skip: {e}")
-            return False
-
-    @staticmethod
-    def _parse_confirmation(response: str) -> bool:
-        """Parse LLM confirmation response (expects JSON with 'proceed' field)."""
-        # Try JSON parse first
-        try:
-            # Strip markdown fences
-            cleaned = response.strip()
-            if cleaned.startswith("```"):
-                cleaned = re.sub(r"^```(?:json)?\s*\n?", "", cleaned)
-                cleaned = re.sub(r"\n?```\s*$", "", cleaned)
-            data = json.loads(cleaned)
-            if isinstance(data, dict):
-                return bool(data.get("proceed", False))
-        except (json.JSONDecodeError, ValueError):
-            pass
-        # Fallback: look for keywords.
-        # - yes/no use strict word boundaries to avoid false positives
-        #   (e.g. "know" matching "no").
-        # - confirm/reject/skip use stem-style matching so that common
-        #   LLM variants like "confirmed", "rejected", "skipping" still
-        #   parse correctly.
-        _wb = re.search  # shorthand
-        if (
-            any(w in response for w in ('"proceed": true', "proceed: true"))
-            or _wb(r"\byes\b", response)
-            or _wb(r"\bconfirm\w*\b", response)
-        ):
-            return True
-        if (
-            any(w in response for w in ('"proceed": false', "proceed: false"))
-            or _wb(r"\bno\b", response)
-            or _wb(r"\breject\w*\b", response)
-            or _wb(r"\bskip\w*\b", response)
-        ):
-            return False
-        # Default: skip — ambiguous response should not trigger costly evolution
-        logger.debug("LLM confirmation response was ambiguous, defaulting to skip")
-        return False
+    _parse_confirmation = staticmethod(_parse_confirmation_impl)
 
     async def _evolve_fix(self, ctx: EvolutionContext) -> Optional[SkillRecord]:
         """In-place fix: same name, same directory, new version record.
