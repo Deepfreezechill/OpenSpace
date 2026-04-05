@@ -126,6 +126,18 @@ class TestParseConfirmation:
         """'don't proceed' — contraction negation."""
         assert parse_confirmation("don't proceed with this change") is False
 
+    def test_cannot_confirm(self):
+        """'cannot confirm' — 'cannot' is a negation keyword."""
+        assert parse_confirmation("cannot confirm this evolution") is False
+
+    def test_cant_confirm(self):
+        """'can't confirm' — contraction of cannot."""
+        assert parse_confirmation("can't confirm this change") is False
+
+    def test_cant_proceed_no_apostrophe(self):
+        """'cant proceed' — informal spelling without apostrophe."""
+        assert parse_confirmation("cant proceed with evolution") is False
+
     def test_negation_with_json_example(self):
         """Negation in prose even with JSON example should fail-safe."""
         assert parse_confirmation('do not proceed. Example JSON: {"proceed": true}') is False

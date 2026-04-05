@@ -154,7 +154,7 @@ def parse_confirmation(response: str) -> bool:
     # confirm/reject/skip use stem-style matching so that common
     # LLM variants like "confirmed", "rejected", "skipping" still
     # parse correctly.
-    # Negation words (not/never/don't) catch "do not confirm" patterns.
+    # Negation words catch "do not confirm", "cannot confirm", "can't proceed".
     _wb = re.search  # shorthand
     if (
         any(w in response for w in ('"proceed": false', "proceed: false"))
@@ -162,6 +162,8 @@ def parse_confirmation(response: str) -> bool:
         or _wb(r"\bnot\b", response)
         or _wb(r"\bnever\b", response)
         or _wb(r"\bdon'?t\b", response)
+        or _wb(r"\bcannot\b", response)
+        or _wb(r"\bcan'?t\b", response)
         or _wb(r"\breject\w*\b", response)
         or _wb(r"\bskip\w*\b", response)
     ):
