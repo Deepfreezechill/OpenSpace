@@ -40,6 +40,7 @@ from .evolution.orchestrator import (
     schedule_background as _schedule_background_impl,
 )
 from .evolution.confirmation import (
+    _RECORDING_MAX_CHARS,
     _SKILL_CONTENT_MAX_CHARS,
     llm_confirm_evolution as _llm_confirm_evolution_impl,
     parse_confirmation as _parse_confirmation_impl,
@@ -640,9 +641,13 @@ class SkillEvolver:
             {"role": "user", "content": prompt},
         ]
 
-        # Record initial conversation setup
+        # Record initial conversation setup (truncated for data minimization)
+        recorded_setup = [
+            {"role": m["role"], "content": _truncate(m["content"], _RECORDING_MAX_CHARS)}
+            for m in messages
+        ]
         await RecordingManager.record_conversation_setup(
-            setup_messages=copy.deepcopy(messages),
+            setup_messages=recorded_setup,
             tools=evolution_tools if evolution_tools else None,
             agent_name="SkillEvolver",
             extra={
@@ -691,11 +696,15 @@ class SkillEvolver:
             updated_messages = result["messages"]
             has_tool_calls = result.get("has_tool_calls", False)
 
-            # Record iteration delta
+            # Record iteration delta (truncated for data minimization)
             delta = updated_messages[msg_count_before:]
+            recorded_delta = [
+                {"role": m["role"], "content": _truncate(m.get("content", ""), _RECORDING_MAX_CHARS)}
+                for m in delta
+            ]
             await RecordingManager.record_iteration_context(
                 iteration=iteration + 1,
-                delta_messages=copy.deepcopy(delta),
+                delta_messages=recorded_delta,
                 response_metadata={
                     "has_tool_calls": has_tool_calls,
                     "tool_calls_count": len(result.get("tool_results", [])),
@@ -866,8 +875,12 @@ class SkillEvolver:
 
             # Record retry setup on first retry attempt
             if not retry_setup_recorded:
+                recorded_retry = [
+                    {"role": m["role"], "content": _truncate(m.get("content", ""), _RECORDING_MAX_CHARS)}
+                    for m in msg_history
+                ]
                 await RecordingManager.record_conversation_setup(
-                    setup_messages=copy.deepcopy(msg_history),
+                    setup_messages=recorded_retry,
                     agent_name="SkillEvolver.retry",
                     extra={
                         "evolution_type": ctx.suggestion.evolution_type.value,
@@ -913,8 +926,8 @@ class SkillEvolver:
                 await RecordingManager.record_iteration_context(
                     iteration=attempt + 1,
                     delta_messages=[
-                        {"role": "user", "content": retry_prompt},
-                        {"role": "assistant", "content": new_content},
+                        {"role": "user", "content": _truncate(retry_prompt, _RECORDING_MAX_CHARS)},
+                        {"role": "assistant", "content": _truncate(new_content, _RECORDING_MAX_CHARS)},
                     ],
                     response_metadata={
                         "has_tool_calls": False,

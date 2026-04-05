@@ -43,7 +43,15 @@ class TestParseConfirmation:
     def test_json_missing_proceed_key(self):
         assert parse_confirmation('{"analysis": "looks good"}') is False
 
-    def test_json_proceed_zero_is_false(self):
+    def test_json_proceed_string_false_is_false(self):
+        """String 'false' must NOT be truthy — was a real bug."""
+        assert parse_confirmation('{"proceed": "false"}') is False
+
+    def test_json_proceed_string_true_is_true(self):
+        assert parse_confirmation('{"proceed": "true"}') is True
+
+    def test_json_proceed_string_no_is_false(self):
+        assert parse_confirmation('{"proceed": "no"}') is False
         assert parse_confirmation('{"proceed": 0}') is False
 
     def test_json_proceed_one_is_true(self):
@@ -93,10 +101,34 @@ class TestParseConfirmation:
         # Uppercase does NOT match \byes\b — by design, caller lowercases
         assert parse_confirmation("YES") is False
 
-    def test_conflicting_keywords_first_wins(self):
-        """When both yes and no keywords appear, positive match wins
-        because the positive branch is checked first."""
-        assert parse_confirmation("yes but also no") is True
+    def test_conflicting_keywords_negative_wins(self):
+        """When both yes and no keywords appear, negative wins (conservative —
+        err toward skipping costly evolution)."""
+        assert parse_confirmation("yes but also no") is False
+
+    def test_not_confirmed_returns_false(self):
+        """'not confirmed' should NOT trigger positive confirm match."""
+        assert parse_confirmation("not confirmed, skip this") is False
+
+    def test_negated_yes_returns_false(self):
+        """'no, I would not say yes' — 'no' wins."""
+        assert parse_confirmation("no, I would not say yes to this") is False
+
+    def test_do_not_confirm(self):
+        """'do not confirm' — 'not' is a negation keyword."""
+        assert parse_confirmation("do not confirm this evolution") is False
+
+    def test_never_confirm(self):
+        """'never confirm' — 'never' is a negation keyword."""
+        assert parse_confirmation("never confirm; leave the skill unchanged") is False
+
+    def test_dont_proceed(self):
+        """'don't proceed' — contraction negation."""
+        assert parse_confirmation("don't proceed with this change") is False
+
+    def test_negation_with_json_example(self):
+        """Negation in prose even with JSON example should fail-safe."""
+        assert parse_confirmation('do not proceed. Example JSON: {"proceed": true}') is False
 
     def test_json_array_falls_through_to_keywords(self):
         """JSON array is not a dict — falls through to keyword matching.

@@ -96,7 +96,7 @@ async def llm_confirm_evolution(
         content = result["message"].get("content", "").strip().lower()
         confirmed = evolver._parse_confirmation(content)
 
-        # Record truncated confirmation response
+        # Record truncated confirmation response (include skill_id for correlation)
         await RecordingManager.record_iteration_context(
             iteration=1,
             delta_messages=[
@@ -105,6 +105,7 @@ async def llm_confirm_evolution(
             response_metadata={
                 "has_tool_calls": False,
                 "confirmed": confirmed,
+                "skill_id": skill_record.skill_id,
             },
             agent_name="SkillEvolver.confirm",
         )
@@ -124,7 +125,7 @@ def parse_confirmation(response: str) -> bool:
 
     Parsing order:
     1. JSON ``{"proceed": true/false}`` (with markdown-fence stripping)
-    2. Keyword matching (yes/confirm → True, no/reject/skip → False)
+    2. Keyword matching — negatives checked FIRST (conservative: err toward skip)
     3. Default: False (ambiguous → skip costly evolution)
     """
     # Try JSON parse first
@@ -135,30 +136,42 @@ def parse_confirmation(response: str) -> bool:
             cleaned = re.sub(r"\n?```\s*$", "", cleaned)
         data = json.loads(cleaned)
         if isinstance(data, dict):
-            return bool(data.get("proceed", False))
+            proceed = data.get("proceed", False)
+            # Strict boolean check — "false" (string) must not be truthy
+            if isinstance(proceed, bool):
+                return proceed
+            if isinstance(proceed, (int, float)):
+                return bool(proceed)
+            # String values: explicit true/false
+            return str(proceed).lower() in ("true", "1", "yes")
     except (json.JSONDecodeError, ValueError):
         pass
 
     # Fallback: keyword matching.
-    # - yes/no use strict word boundaries to avoid false positives
-    #   (e.g. "know" matching "no").
-    # - confirm/reject/skip use stem-style matching so that common
-    #   LLM variants like "confirmed", "rejected", "skipping" still
-    #   parse correctly.
+    # Negatives checked FIRST — conservative (err toward skipping).
+    # yes/no use strict word boundaries to avoid false positives
+    # (e.g. "know" matching "no").
+    # confirm/reject/skip use stem-style matching so that common
+    # LLM variants like "confirmed", "rejected", "skipping" still
+    # parse correctly.
+    # Negation words (not/never/don't) catch "do not confirm" patterns.
     _wb = re.search  # shorthand
+    if (
+        any(w in response for w in ('"proceed": false', "proceed: false"))
+        or _wb(r"\bno\b", response)
+        or _wb(r"\bnot\b", response)
+        or _wb(r"\bnever\b", response)
+        or _wb(r"\bdon'?t\b", response)
+        or _wb(r"\breject\w*\b", response)
+        or _wb(r"\bskip\w*\b", response)
+    ):
+        return False
     if (
         any(w in response for w in ('"proceed": true', "proceed: true"))
         or _wb(r"\byes\b", response)
         or _wb(r"\bconfirm\w*\b", response)
     ):
         return True
-    if (
-        any(w in response for w in ('"proceed": false', "proceed: false"))
-        or _wb(r"\bno\b", response)
-        or _wb(r"\breject\w*\b", response)
-        or _wb(r"\bskip\w*\b", response)
-    ):
-        return False
 
     # Default: skip — ambiguous response should not trigger costly evolution
     logger.debug("LLM confirmation response was ambiguous, defaulting to skip")
