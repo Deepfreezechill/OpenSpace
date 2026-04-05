@@ -39,6 +39,12 @@ from .evolution.orchestrator import (
     log_background_result as _log_background_result_impl,
     schedule_background as _schedule_background_impl,
 )
+from .evolution.confirmation import (
+    _RECORDING_MAX_CHARS,
+    _SKILL_CONTENT_MAX_CHARS,
+    llm_confirm_evolution as _llm_confirm_evolution_impl,
+    parse_confirmation as _parse_confirmation_impl,
+)
 from .evolution.triggers import (
     _ANALYSIS_CONTEXT_MAX,
     build_context_from_analysis as _build_context_from_analysis_impl,
@@ -98,8 +104,6 @@ logger = Logger.get_logger(__name__)
 
 EVOLUTION_COMPLETE = SkillEnginePrompts.EVOLUTION_COMPLETE
 EVOLUTION_FAILED = SkillEnginePrompts.EVOLUTION_FAILED
-
-_SKILL_CONTENT_MAX_CHARS = 12_000  # Max chars of SKILL.md in evolution prompt
 
 # Agent loop / retry constants
 _MAX_EVOLUTION_ITERATIONS = 5  # Max tool-calling rounds for evolution agent
@@ -252,103 +256,18 @@ class SkillEvolver:
         recent_analyses: List[ExecutionAnalysis],
     ) -> bool:
         """Ask LLM to confirm whether a rule-based evolution candidate
-        truly needs evolution.
-
-        Returns True if LLM agrees, False otherwise.
-        This prevents false positives from rigid threshold-based rules.
-
-        The confirmation prompt and response are recorded to
-        ``conversations.jsonl`` under agent_name="SkillEvolver.confirm".
-        """
-        from openspace.recording import RecordingManager
-
-        analysis_ctx = self._format_analysis_context(recent_analyses)
-
-        prompt = SkillEnginePrompts.evolution_confirm(
-            skill_id=skill_record.skill_id,
-            skill_content=_truncate(skill_content, _SKILL_CONTENT_MAX_CHARS // 2),
-            proposed_type=proposed_type.value,
+        truly needs evolution."""
+        return await _llm_confirm_evolution_impl(
+            self,
+            skill_record=skill_record,
+            skill_content=skill_content,
+            proposed_type=proposed_type,
             proposed_direction=proposed_direction,
             trigger_context=trigger_context,
-            recent_analyses=analysis_ctx,
+            recent_analyses=recent_analyses,
         )
 
-        confirm_messages = [{"role": "user", "content": prompt}]
-
-        # Record confirmation setup
-        await RecordingManager.record_conversation_setup(
-            setup_messages=copy.deepcopy(confirm_messages),
-            agent_name="SkillEvolver.confirm",
-            extra={
-                "skill_id": skill_record.skill_id,
-                "proposed_type": proposed_type.value,
-                "trigger_context": trigger_context[:200],
-            },
-        )
-
-        model = self._model or self._llm_client.model
-        try:
-            result = await self._llm_client.complete(
-                messages=confirm_messages,
-                model=model,
-            )
-            content = result["message"].get("content", "").strip().lower()
-            confirmed = self._parse_confirmation(content)
-
-            # Record confirmation response
-            await RecordingManager.record_iteration_context(
-                iteration=1,
-                delta_messages=[{"role": "assistant", "content": content}],
-                response_metadata={
-                    "has_tool_calls": False,
-                    "confirmed": confirmed,
-                },
-                agent_name="SkillEvolver.confirm",
-            )
-
-            return confirmed
-        except Exception as e:
-            logger.warning(f"LLM confirmation failed, defaulting to skip: {e}")
-            return False
-
-    @staticmethod
-    def _parse_confirmation(response: str) -> bool:
-        """Parse LLM confirmation response (expects JSON with 'proceed' field)."""
-        # Try JSON parse first
-        try:
-            # Strip markdown fences
-            cleaned = response.strip()
-            if cleaned.startswith("```"):
-                cleaned = re.sub(r"^```(?:json)?\s*\n?", "", cleaned)
-                cleaned = re.sub(r"\n?```\s*$", "", cleaned)
-            data = json.loads(cleaned)
-            if isinstance(data, dict):
-                return bool(data.get("proceed", False))
-        except (json.JSONDecodeError, ValueError):
-            pass
-        # Fallback: look for keywords.
-        # - yes/no use strict word boundaries to avoid false positives
-        #   (e.g. "know" matching "no").
-        # - confirm/reject/skip use stem-style matching so that common
-        #   LLM variants like "confirmed", "rejected", "skipping" still
-        #   parse correctly.
-        _wb = re.search  # shorthand
-        if (
-            any(w in response for w in ('"proceed": true', "proceed: true"))
-            or _wb(r"\byes\b", response)
-            or _wb(r"\bconfirm\w*\b", response)
-        ):
-            return True
-        if (
-            any(w in response for w in ('"proceed": false', "proceed: false"))
-            or _wb(r"\bno\b", response)
-            or _wb(r"\breject\w*\b", response)
-            or _wb(r"\bskip\w*\b", response)
-        ):
-            return False
-        # Default: skip — ambiguous response should not trigger costly evolution
-        logger.debug("LLM confirmation response was ambiguous, defaulting to skip")
-        return False
+    _parse_confirmation = staticmethod(_parse_confirmation_impl)
 
     async def _evolve_fix(self, ctx: EvolutionContext) -> Optional[SkillRecord]:
         """In-place fix: same name, same directory, new version record.
@@ -722,9 +641,13 @@ class SkillEvolver:
             {"role": "user", "content": prompt},
         ]
 
-        # Record initial conversation setup
+        # Record initial conversation setup (truncated for data minimization)
+        recorded_setup = [
+            {"role": m["role"], "content": _truncate(m["content"], _RECORDING_MAX_CHARS)}
+            for m in messages
+        ]
         await RecordingManager.record_conversation_setup(
-            setup_messages=copy.deepcopy(messages),
+            setup_messages=recorded_setup,
             tools=evolution_tools if evolution_tools else None,
             agent_name="SkillEvolver",
             extra={
@@ -773,11 +696,15 @@ class SkillEvolver:
             updated_messages = result["messages"]
             has_tool_calls = result.get("has_tool_calls", False)
 
-            # Record iteration delta
+            # Record iteration delta (truncated for data minimization)
             delta = updated_messages[msg_count_before:]
+            recorded_delta = [
+                {"role": m["role"], "content": _truncate(m.get("content", ""), _RECORDING_MAX_CHARS)}
+                for m in delta
+            ]
             await RecordingManager.record_iteration_context(
                 iteration=iteration + 1,
-                delta_messages=copy.deepcopy(delta),
+                delta_messages=recorded_delta,
                 response_metadata={
                     "has_tool_calls": has_tool_calls,
                     "tool_calls_count": len(result.get("tool_results", [])),
@@ -948,8 +875,12 @@ class SkillEvolver:
 
             # Record retry setup on first retry attempt
             if not retry_setup_recorded:
+                recorded_retry = [
+                    {"role": m["role"], "content": _truncate(m.get("content", ""), _RECORDING_MAX_CHARS)}
+                    for m in msg_history
+                ]
                 await RecordingManager.record_conversation_setup(
-                    setup_messages=copy.deepcopy(msg_history),
+                    setup_messages=recorded_retry,
                     agent_name="SkillEvolver.retry",
                     extra={
                         "evolution_type": ctx.suggestion.evolution_type.value,
@@ -995,8 +926,8 @@ class SkillEvolver:
                 await RecordingManager.record_iteration_context(
                     iteration=attempt + 1,
                     delta_messages=[
-                        {"role": "user", "content": retry_prompt},
-                        {"role": "assistant", "content": new_content},
+                        {"role": "user", "content": _truncate(retry_prompt, _RECORDING_MAX_CHARS)},
+                        {"role": "assistant", "content": _truncate(new_content, _RECORDING_MAX_CHARS)},
                     ],
                     response_metadata={
                         "has_tool_calls": False,
