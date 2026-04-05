@@ -7,7 +7,6 @@ Functions extracted from ``SkillEvolver`` (Epic 5.4):
 
 from __future__ import annotations
 
-import copy
 import json
 import re
 from typing import TYPE_CHECKING, List
@@ -23,13 +22,16 @@ if TYPE_CHECKING:
         SkillRecord,
     )
 
-logger = Logger.get_logger(__name__)
+# Preserve evolver's logger namespace so existing log filters/alerts
+# continue to capture confirmation warnings without reconfiguration.
+logger = Logger.get_logger("openspace.skill_engine.evolver")
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
 _SKILL_CONTENT_MAX_CHARS = 12_000  # Max chars of SKILL.md in evolution prompt
+_RECORDING_MAX_CHARS = 2_000  # Cap recorded prompt content for data minimization
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +54,7 @@ async def llm_confirm_evolution(
     Returns True if LLM agrees, False otherwise.
     This prevents false positives from rigid threshold-based rules.
 
-    The confirmation prompt and response are recorded to
+    The confirmation prompt and response are recorded (truncated) to
     ``conversations.jsonl`` under agent_name="SkillEvolver.confirm".
     """
     from openspace.recording import RecordingManager
@@ -70,9 +72,13 @@ async def llm_confirm_evolution(
 
     confirm_messages = [{"role": "user", "content": prompt}]
 
-    # Record confirmation setup
+    # Record truncated confirmation setup — full prompt goes to LLM only
+    recorded_messages = [
+        {"role": m["role"], "content": truncate(m["content"], _RECORDING_MAX_CHARS)}
+        for m in confirm_messages
+    ]
     await RecordingManager.record_conversation_setup(
-        setup_messages=copy.deepcopy(confirm_messages),
+        setup_messages=recorded_messages,
         agent_name="SkillEvolver.confirm",
         extra={
             "skill_id": skill_record.skill_id,
@@ -90,10 +96,12 @@ async def llm_confirm_evolution(
         content = result["message"].get("content", "").strip().lower()
         confirmed = evolver._parse_confirmation(content)
 
-        # Record confirmation response
+        # Record truncated confirmation response
         await RecordingManager.record_iteration_context(
             iteration=1,
-            delta_messages=[{"role": "assistant", "content": content}],
+            delta_messages=[
+                {"role": "assistant", "content": truncate(content, _RECORDING_MAX_CHARS)},
+            ],
             response_metadata={
                 "has_tool_calls": False,
                 "confirmed": confirmed,

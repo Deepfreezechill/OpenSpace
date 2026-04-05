@@ -93,6 +93,20 @@ class TestParseConfirmation:
         # Uppercase does NOT match \byes\b — by design, caller lowercases
         assert parse_confirmation("YES") is False
 
+    def test_conflicting_keywords_first_wins(self):
+        """When both yes and no keywords appear, positive match wins
+        because the positive branch is checked first."""
+        assert parse_confirmation("yes but also no") is True
+
+    def test_json_array_falls_through_to_keywords(self):
+        """JSON array is not a dict — falls through to keyword matching.
+        The string '"proceed": true' is found as a substring, so returns True."""
+        assert parse_confirmation('[{"proceed": true}]') is True
+
+    def test_json_with_extra_fields(self):
+        """Extra JSON fields are ignored; only 'proceed' matters."""
+        assert parse_confirmation('{"proceed": true, "reason": "looks good"}') is True
+
 
 # ---------------------------------------------------------------------------
 # llm_confirm_evolution — async integration
@@ -238,6 +252,61 @@ class TestLlmConfirmEvolution:
 
         evolver._parse_confirmation.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_model_fallback_to_client_model(self):
+        """When evolver._model is None, falls back to evolver._llm_client.model."""
+        evolver = self._make_evolver(llm_response='{"proceed": true}')
+        evolver._model = None
+        evolver._llm_client.model = "fallback-model"
+
+        with patch(self._RM_PATCH) as mock_rm:
+            mock_rm.record_conversation_setup = AsyncMock()
+            mock_rm.record_iteration_context = AsyncMock()
+
+            result = await llm_confirm_evolution(
+                evolver,
+                skill_record=MagicMock(skill_id="s1"),
+                skill_content="# Skill",
+                proposed_type=MagicMock(value="fix"),
+                proposed_direction="fix",
+                trigger_context="test",
+                recent_analyses=[],
+            )
+
+        assert result is True
+        # Verify fallback model was used
+        call_kwargs = evolver._llm_client.complete.call_args
+        assert call_kwargs[1]["model"] == "fallback-model"
+
+    @pytest.mark.asyncio
+    async def test_recording_truncates_content(self):
+        """Recorded messages are truncated to _RECORDING_MAX_CHARS."""
+        from openspace.skill_engine.evolution.confirmation import _RECORDING_MAX_CHARS
+
+        # Create skill content larger than recording limit
+        big_content = "x" * (_RECORDING_MAX_CHARS + 5000)
+        evolver = self._make_evolver(llm_response='{"proceed": true}')
+
+        with patch(self._RM_PATCH) as mock_rm:
+            mock_rm.record_conversation_setup = AsyncMock()
+            mock_rm.record_iteration_context = AsyncMock()
+
+            await llm_confirm_evolution(
+                evolver,
+                skill_record=MagicMock(skill_id="s1"),
+                skill_content=big_content,
+                proposed_type=MagicMock(value="fix"),
+                proposed_direction="fix",
+                trigger_context="test",
+                recent_analyses=[],
+            )
+
+        # Verify recorded setup messages are truncated
+        setup_call = mock_rm.record_conversation_setup.call_args
+        recorded_msgs = setup_call[1]["setup_messages"]
+        for msg in recorded_msgs:
+            assert len(msg["content"]) <= _RECORDING_MAX_CHARS + 50  # small margin for truncation suffix
+
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -247,6 +316,11 @@ class TestConstants:
     def test_skill_content_max_chars(self):
         assert isinstance(_SKILL_CONTENT_MAX_CHARS, int)
         assert _SKILL_CONTENT_MAX_CHARS == 12_000
+
+    def test_logger_uses_evolver_namespace(self):
+        """Logger preserves evolver namespace for log filter compatibility."""
+        from openspace.skill_engine.evolution import confirmation
+        assert confirmation.logger.name == "openspace.skill_engine.evolver"
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +346,50 @@ class TestBackwardCompat:
         # _parse_confirmation should be callable without self
         result = SkillEvolver._parse_confirmation('{"proceed": true}')
         assert result is True
+
+
+# ---------------------------------------------------------------------------
+# Delegation seam tests (real SkillEvolver → confirmation module)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.skipif(not _HAS_EVOLVER, reason="SkillEvolver not importable")
+class TestDelegationSeam:
+    """Verify real SkillEvolver delegates to confirmation.py functions."""
+
+    def test_parse_confirmation_delegates(self):
+        """Real SkillEvolver._parse_confirmation routes to confirmation module."""
+        evolver = object.__new__(SkillEvolver)
+        assert evolver._parse_confirmation('{"proceed": true}') is True
+        assert evolver._parse_confirmation('{"proceed": false}') is False
+        assert evolver._parse_confirmation("yes do it") is True
+        assert evolver._parse_confirmation("no skip") is False
+
+    @pytest.mark.asyncio
+    async def test_llm_confirm_delegates_to_module(self):
+        """Real SkillEvolver._llm_confirm_evolution calls confirmation module."""
+        evolver = object.__new__(SkillEvolver)
+        # Wire up required attributes
+        evolver._model = "test-model"
+        evolver._llm_client = MagicMock()
+        evolver._llm_client.complete = AsyncMock(
+            return_value={"message": {"content": '{"proceed": true}'}}
+        )
+
+        with patch("openspace.recording.RecordingManager") as mock_rm:
+            mock_rm.record_conversation_setup = AsyncMock()
+            mock_rm.record_iteration_context = AsyncMock()
+
+            result = await evolver._llm_confirm_evolution(
+                skill_record=MagicMock(skill_id="s1"),
+                skill_content="# Skill",
+                proposed_type=MagicMock(value="fix"),
+                proposed_direction="fix it",
+                trigger_context="test",
+                recent_analyses=[],
+            )
+
+        assert result is True
+        evolver._llm_client.complete.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
