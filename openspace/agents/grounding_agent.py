@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import copy
-import json
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from openspace.agents.base import BaseAgent
@@ -23,6 +21,16 @@ from openspace.agents.grounding.prompts import (
     construct_messages as _construct_messages,
     default_system_prompt as _default_system_prompt,
 )
+from openspace.agents.grounding.results import (
+    build_final_result as _build_final_result_impl,
+    build_iteration_feedback as _build_iteration_feedback_impl,
+    check_task_completion as _check_task_completion_impl,
+    extract_last_assistant_message as _extract_last_assistant_message_impl,
+    format_tool_executions as _format_tool_executions_impl,
+    generate_final_summary as _generate_final_summary_impl,
+    record_agent_execution as _record_agent_execution_impl,
+    remove_previous_guidance as _remove_previous_guidance_impl,
+)
 from openspace.agents.grounding.tools import (
     _get_available_tools as _get_available_tools_impl,
     _load_all_tools as _load_all_tools_impl,
@@ -38,7 +46,6 @@ from openspace.agents.grounding.workspace import (
     _scan_workspace_files as _scan_workspace_files_impl,
 )
 from openspace.grounding.core.types import ToolResult
-from openspace.prompts import GroundingAgentPrompts
 from openspace.utils.logging import Logger
 
 if TYPE_CHECKING:
@@ -185,91 +192,22 @@ class GroundingAgent(BaseAgent):
         """Check workspace for existing artifacts relevant to the task."""
         return await _check_workspace_artifacts_impl(self, context)
 
-    def _build_iteration_feedback(
-        self, iteration: int, llm_summary: Optional[str] = None, add_guidance: bool = True
-    ) -> Optional[Dict[str, str]]:
-        """
-        Build feedback message to add to next iteration.
-        """
-        if not llm_summary:
-            return None
+    # ── Results / telemetry delegates (Epic 5.10) ────────────────────
 
-        feedback_content = GroundingAgentPrompts.iteration_feedback(
-            iteration=iteration, llm_summary=llm_summary, add_guidance=add_guidance
-        )
+    _build_iteration_feedback = staticmethod(_build_iteration_feedback_impl)
 
-        return {"role": "system", "content": feedback_content}
+    _remove_previous_guidance = staticmethod(_remove_previous_guidance_impl)
 
-    def _remove_previous_guidance(self, messages: List[Dict[str, Any]]) -> None:
-        """
-        Remove guidance section from previous iteration feedback messages.
-        """
-        for msg in messages:
-            if msg.get("role") == "system":
-                content = msg.get("content", "")
-                # Check if this is an iteration feedback message with guidance
-                if "## Iteration" in content and "Summary" in content and "---" in content:
-                    # Remove everything from "---" onwards (the guidance part)
-                    summary_only = content.split("---")[0].strip()
-                    msg["content"] = summary_only
+    _format_tool_executions = staticmethod(_format_tool_executions_impl)
+
+    _check_task_completion = staticmethod(_check_task_completion_impl)
+
+    _extract_last_assistant_message = staticmethod(_extract_last_assistant_message_impl)
 
     async def _generate_final_summary(
         self, instruction: str, messages: List[Dict], iterations: int
     ) -> tuple[str, bool, List[Dict]]:
-        """
-        Generate final summary across all iterations for reporting to upper layer.
-
-        Returns:
-            tuple[str, bool, List[Dict]]: (summary_text, success_flag, context_used)
-                - summary_text: The generated summary or error message
-                - success_flag: True if summary was generated successfully, False otherwise
-                - context_used: The cleaned messages used for generating summary
-        """
-        final_summary_prompt = {
-            "role": "user",
-            "content": GroundingAgentPrompts.final_summary(instruction=instruction, iterations=iterations),
-        }
-
-        clean_messages = []
-        for msg in messages:
-            # Skip tool result messages
-            if msg.get("role") == "tool":
-                continue
-            # Copy message and remove tool_calls if present
-            clean_msg = msg.copy()
-            if "tool_calls" in clean_msg:
-                del clean_msg["tool_calls"]
-            clean_messages.append(clean_msg)
-
-        clean_messages.append(final_summary_prompt)
-
-        # Save context for return
-        context_for_return = copy.deepcopy(clean_messages)
-
-        try:
-            # Call LLMClient to generate final summary (without tools)
-            summary_response = await self._llm_client.complete(messages=clean_messages, tools=None, execute_tools=False)
-
-            final_summary = summary_response.get("message", {}).get("content", "")
-
-            if final_summary:
-                logger.info(f"Generated final summary: {final_summary[:200]}...")
-                return final_summary, True, context_for_return
-            else:
-                logger.warning("LLM returned empty final summary")
-                return (
-                    f"Task completed after {iterations} iteration(s). Check execution history for details.",
-                    True,
-                    context_for_return,
-                )
-
-        except Exception as e:
-            logger.error(f"Error generating final summary: {e}")
-            return (
-                f"Task completed after {iterations} iteration(s), but failed to generate summary: {str(e)}",
-                False,
-                context_for_return,
-            )
+        return await _generate_final_summary_impl(self, instruction, messages, iterations)
 
     async def _build_final_result(
         self,
@@ -282,170 +220,18 @@ class GroundingAgent(BaseAgent):
         retrieved_tools_list: List[Dict] = None,
         search_debug_info: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
-        """
-        Build final execution result.
-
-        Args:
-            instruction: Original instruction
-            messages: Complete conversation history (including all iteration summaries)
-            all_tool_results: All tool execution results
-            iterations: Number of iterations performed
-            max_iterations: Maximum allowed iterations
-            iteration_contexts: Context snapshots for each iteration
-            retrieved_tools_list: List of tools retrieved for this task
-            search_debug_info: Debug info from tool search (similarity scores, LLM selections)
-        """
-        is_complete = self._check_task_completion(messages)
-
-        tool_executions = self._format_tool_executions(all_tool_results)
-
-        result = {
-            "instruction": instruction,
-            "step": self.step,
-            "iterations": iterations,
-            "tool_executions": tool_executions,
-            "messages": messages,
-            "iteration_contexts": iteration_contexts or [],
-            "retrieved_tools_list": retrieved_tools_list or [],
-            "search_debug_info": search_debug_info,
-            "active_skills": list(self._active_skill_ids),
-            "keep_session": True,
-        }
-
-        if is_complete:
-            logger.info("Task completed with <COMPLETE> marker")
-            # Use LLM's own completion response directly (no extra LLM call needed)
-            # LLM already generates a summary before outputting <COMPLETE>
-            last_response = self._extract_last_assistant_message(messages)
-            # Remove the <COMPLETE> token from response for cleaner output
-            result["response"] = last_response.replace(GroundingAgentPrompts.TASK_COMPLETE, "").strip()
-            result["status"] = "success"
-
-            # [DISABLED] Extra LLM call to generate final summary
-            # final_summary, summary_success, final_summary_context = await self._generate_final_summary(
-            #     instruction=instruction,
-            #     messages=messages,
-            #     iterations=iterations
-            # )
-            # result["response"] = final_summary
-            # result["final_summary_context"] = final_summary_context
-        else:
-            result["response"] = self._extract_last_assistant_message(messages)
-            result["status"] = "incomplete"
-            result["warning"] = (
-                f"Task reached max iterations ({max_iterations}) without completion. "
-                f"This may indicate the task needs more steps or clarification."
-            )
-
-        return result
-
-    def _format_tool_executions(self, all_tool_results: List[Dict]) -> List[Dict]:
-        executions = []
-        for tr in all_tool_results:
-            tool_result_obj = tr.get("result")
-            tool_call = tr.get("tool_call")
-
-            status = "unknown"
-            if hasattr(tool_result_obj, "status"):
-                status_obj = tool_result_obj.status
-                status = getattr(status_obj, "value", status_obj)
-
-            # Extract tool_name and arguments from tool_call object (litellm format)
-            tool_name = "unknown"
-            arguments = {}
-            if tool_call is not None:
-                if hasattr(tool_call, "function"):
-                    # tool_call is an object with .function attribute
-                    tool_name = getattr(tool_call.function, "name", "unknown")
-                    args_raw = getattr(tool_call.function, "arguments", "{}")
-                    if isinstance(args_raw, str):
-                        try:
-                            arguments = json.loads(args_raw) if args_raw.strip() else {}
-                        except json.JSONDecodeError:
-                            arguments = {}
-                    else:
-                        arguments = args_raw if isinstance(args_raw, dict) else {}
-                elif isinstance(tool_call, dict):
-                    # Fallback: tool_call is a dict
-                    func = tool_call.get("function", {})
-                    tool_name = func.get("name", "unknown")
-                    args_raw = func.get("arguments", "{}")
-                    if isinstance(args_raw, str):
-                        try:
-                            arguments = json.loads(args_raw) if args_raw.strip() else {}
-                        except json.JSONDecodeError:
-                            arguments = {}
-                    else:
-                        arguments = args_raw if isinstance(args_raw, dict) else {}
-
-            executions.append(
-                {
-                    "tool_name": tool_name,
-                    "arguments": arguments,
-                    "backend": tr.get("backend"),
-                    "server_name": tr.get("server_name"),
-                    "status": status,
-                    "content": tool_result_obj.content if hasattr(tool_result_obj, "content") else None,
-                    "error": tool_result_obj.error if hasattr(tool_result_obj, "error") else None,
-                    "execution_time": tool_result_obj.execution_time
-                    if hasattr(tool_result_obj, "execution_time")
-                    else None,
-                    "metadata": tool_result_obj.metadata if hasattr(tool_result_obj, "metadata") else {},
-                }
-            )
-        return executions
-
-    def _check_task_completion(self, messages: List[Dict]) -> bool:
-        for msg in reversed(messages):
-            if msg.get("role") == "assistant":
-                content = msg.get("content", "")
-                return GroundingAgentPrompts.TASK_COMPLETE in content
-        return False
-
-    def _extract_last_assistant_message(self, messages: List[Dict]) -> str:
-        for msg in reversed(messages):
-            if msg.get("role") == "assistant":
-                return msg.get("content", "")
-        return ""
+        return await _build_final_result_impl(
+            self,
+            instruction,
+            messages,
+            all_tool_results,
+            iterations,
+            max_iterations,
+            iteration_contexts,
+            retrieved_tools_list,
+            search_debug_info,
+        )
 
     async def _record_agent_execution(self, result: Dict[str, Any], instruction: str) -> None:
-        """
-        Record agent execution to recording manager.
+        return await _record_agent_execution_impl(self, result, instruction)
 
-        Args:
-            result: Execution result
-            instruction: Original instruction
-        """
-        if not self._recording_manager:
-            return
-
-        # Extract tool execution summary
-        tool_summary = []
-        if result.get("tool_executions"):
-            for exec_info in result["tool_executions"]:
-                tool_summary.append(
-                    {
-                        "tool": exec_info.get("tool_name", "unknown"),
-                        "backend": exec_info.get("backend", "unknown"),
-                        "status": exec_info.get("status", "unknown"),
-                    }
-                )
-
-        await self._recording_manager.record_agent_action(
-            agent_name=self.name,
-            action_type="execute",
-            input_data={"instruction": instruction},
-            reasoning={
-                "response": result.get("response", ""),
-                "tools_selected": tool_summary,
-            },
-            output_data={
-                "status": result.get("status", "unknown"),
-                "iterations": result.get("iterations", 0),
-                "num_tool_executions": len(result.get("tool_executions", [])),
-            },
-            metadata={
-                "step": self.step,
-                "instruction": instruction,
-            },
-        )
