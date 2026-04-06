@@ -58,6 +58,7 @@ def truncate_messages(
     messages: List[Dict[str, Any]],
     keep_recent: int = 8,
     max_tokens_estimate: int = 120_000,
+    cap: int = _MAX_SINGLE_CONTENT_CHARS,
 ) -> List[Dict[str, Any]]:
     """Trim conversation history to fit within token budget.
 
@@ -71,11 +72,12 @@ def truncate_messages(
         messages: Full message list.
         keep_recent: Number of recent conversation rounds to preserve.
         max_tokens_estimate: Approximate token budget.
+        cap: Per-message character cap (forwarded to cap_message_content).
 
     Returns:
         Possibly shortened message list.
     """
-    messages = cap_message_content(messages)
+    messages = cap_message_content(messages, cap)
 
     if len(messages) <= keep_recent + 2:  # +2 for system and initial user
         return messages

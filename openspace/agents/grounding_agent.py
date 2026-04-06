@@ -122,7 +122,9 @@ class GroundingAgent(BaseAgent):
     def _truncate_messages(
         self, messages: List[Dict[str, Any]], keep_recent: int = 8, max_tokens_estimate: int = 120000
     ) -> List[Dict[str, Any]]:
-        return _truncate_messages_impl(messages, keep_recent, max_tokens_estimate)
+        return _truncate_messages_impl(
+            messages, keep_recent, max_tokens_estimate, cap=self._MAX_SINGLE_CONTENT_CHARS
+        )
 
     async def process(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """

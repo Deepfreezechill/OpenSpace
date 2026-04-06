@@ -139,6 +139,21 @@ class TestTruncateMessages:
         # system(1) + user(1) + recent(16) = 18
         assert len(result) == 18
 
+    def test_custom_cap_forwarded(self):
+        """Verify the cap parameter flows through to cap_message_content."""
+        msgs = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "go"},
+        ]
+        # Add enough oversized messages to trigger truncation
+        for i in range(20):
+            msgs.append({"role": "assistant", "content": "x" * 500})
+        result = truncate_messages(msgs, keep_recent=2, max_tokens_estimate=1, cap=200)
+        # Messages should have been capped at 200 chars
+        for m in result:
+            if m["role"] != "system" and m["role"] != "user":
+                assert len(m["content"]) <= 250  # some overhead from truncation marker
+
 
 # ── Delegation seam tests ──────────────────────────────────────────
 
