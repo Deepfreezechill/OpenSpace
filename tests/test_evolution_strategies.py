@@ -119,7 +119,7 @@ class _FakeEvolver:
 class TestEvolveFix:
     @pytest.mark.asyncio
     async def test_success(self):
-        """Happy path: FIX produces a new record."""
+        """Happy path: FIX produces a new record with correct fields."""
         evolver = _FakeEvolver()
         ctx = _FakeCtx()
 
@@ -129,6 +129,11 @@ class TestEvolveFix:
 
         assert result is not None
         assert result.name == "my-skill"
+        assert result.lineage.origin.value == "fixed"
+        assert result.lineage.generation == 2  # parent gen 1 + 1
+        assert result.lineage.parent_skill_ids == ["skill-a__v1_abc"]
+        assert result.lineage.source_task_id == "task-1"
+        assert "tool-a" in result.tool_dependencies
         evolver._store.evolve_skill.assert_awaited_once()
         evolver._registry.update_skill.assert_called_once()
 

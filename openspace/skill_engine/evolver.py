@@ -20,7 +20,6 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
-from openspace.prompts import SkillEnginePrompts
 from openspace.utils.logging import Logger
 
 from .evolution.models import (
@@ -34,8 +33,6 @@ from .evolution.orchestrator import (
     schedule_background as _schedule_background_impl,
 )
 from .evolution.confirmation import (
-    _RECORDING_MAX_CHARS,
-    _SKILL_CONTENT_MAX_CHARS,
     llm_confirm_evolution as _llm_confirm_evolution_impl,
     parse_confirmation as _parse_confirmation_impl,
 )
@@ -66,9 +63,6 @@ from .patch import (
     SKILL_FILENAME,
     SkillEditResult,
     collect_skill_snapshot,
-)
-from .skill_utils import (
-    truncate as _truncate,
 )
 from .store import SkillStore
 from .types import (
