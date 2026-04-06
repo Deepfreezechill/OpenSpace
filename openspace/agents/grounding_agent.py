@@ -5,6 +5,17 @@ import json
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from openspace.agents.base import BaseAgent
+from openspace.agents.grounding.context import (
+    clear_skill_context as _clear_skill_context,
+    has_skill_context as _has_skill_context,
+    set_skill_context as _set_skill_context,
+    set_skill_registry as _set_skill_registry,
+)
+from openspace.agents.grounding.messages import (
+    _MAX_SINGLE_CONTENT_CHARS,
+    cap_message_content as _cap_message_content,
+    truncate_messages as _truncate_messages_impl,
+)
 from openspace.grounding.core.types import BackendType, ToolResult
 from openspace.platforms.screenshot import ScreenshotClient
 from openspace.prompts import GroundingAgentPrompts
@@ -86,115 +97,34 @@ class GroundingAgent(BaseAgent):
         context: str,
         skill_ids: Optional[List[str]] = None,
     ) -> None:
-        """Inject skill guidance into the agent's system prompt.
-
-        Called by ``OpenSpace.execute()`` before ``process()`` when skills
-        are matched.  The context is a formatted string built by
-        ``SkillRegistry.build_context_injection()``.
-
-        Args:
-            context: Formatted skill content for system prompt injection.
-            skill_ids: skill_id values of injected skills.
-        """
-        self._skill_context = context if context else None
-        self._active_skill_ids = skill_ids or []
-        if self._skill_context:
-            logger.info(f"Skill context set: {', '.join(self._active_skill_ids) or '(unnamed)'}")
+        """Inject skill guidance into the agent's system prompt."""
+        return _set_skill_context(self, context, skill_ids)
 
     def clear_skill_context(self) -> None:
         """Remove skill guidance (used before fallback execution)."""
-        if self._skill_context:
-            logger.info(f"Skill context cleared (was: {', '.join(self._active_skill_ids)})")
-        self._skill_context = None
-        self._active_skill_ids = []
+        return _clear_skill_context(self)
 
     @property
     def has_skill_context(self) -> bool:
-        return self._skill_context is not None
+        return _has_skill_context(self)
 
     def set_skill_registry(self, registry: Optional["SkillRegistry"]) -> None:
         """Attach a SkillRegistry so the agent can offer ``retrieve_skill`` as a tool."""
-        self._skill_registry = registry
-        if registry:
-            count = len(registry.list_skills())
-            logger.info(f"Skill registry attached ({count} skill(s) available for mid-iteration retrieval)")
+        return _set_skill_registry(self, registry)
 
-    _MAX_SINGLE_CONTENT_CHARS = 30_000
+    _MAX_SINGLE_CONTENT_CHARS = _MAX_SINGLE_CONTENT_CHARS
 
     @classmethod
     def _cap_message_content(cls, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Truncate oversized individual message contents in-place.
-
-        Targets tool-result messages and assistant messages that can
-        carry enormous file contents (read_file on large CSVs/scripts).
-        System messages and the first user instruction are never touched.
-        """
-        cap = cls._MAX_SINGLE_CONTENT_CHARS
-        trimmed = 0
-        for msg in messages:
-            content = msg.get("content")
-            if not isinstance(content, str) or len(content) <= cap:
-                continue
-            if msg.get("role") == "system":
-                continue
-            original_len = len(content)
-            msg["content"] = (
-                content[: cap // 2]
-                + f"\n\n... [truncated {original_len - cap:,} chars] ...\n\n"
-                + content[-(cap // 2) :]
-            )
-            trimmed += 1
-        if trimmed:
-            logger.info(f"Capped {trimmed} oversized message(s) to {cap:,} chars each")
-        return messages
+        """Truncate oversized individual message contents in-place."""
+        return _cap_message_content(messages, cls._MAX_SINGLE_CONTENT_CHARS)
 
     def _truncate_messages(
         self, messages: List[Dict[str, Any]], keep_recent: int = 8, max_tokens_estimate: int = 120000
     ) -> List[Dict[str, Any]]:
-        # First: cap any single oversized message to prevent one huge
-        # tool-result from dominating the context window.
-        messages = self._cap_message_content(messages)
-
-        if len(messages) <= keep_recent + 2:  # +2 for system and initial user
-            return messages
-
-        total_text = json.dumps(messages, ensure_ascii=False)
-        estimated_tokens = len(total_text) // 4
-
-        if estimated_tokens < max_tokens_estimate:
-            return messages
-
-        logger.info(
-            f"Truncating message history: {len(messages)} messages, "
-            f"~{estimated_tokens:,} tokens -> keeping recent {keep_recent} rounds"
+        return _truncate_messages_impl(
+            messages, keep_recent, max_tokens_estimate, cap=self._MAX_SINGLE_CONTENT_CHARS
         )
-
-        system_messages = []
-        user_instruction = None
-        conversation_messages = []
-
-        for msg in messages:
-            role = msg.get("role")
-            if role == "system":
-                system_messages.append(msg)
-            elif role == "user" and user_instruction is None:
-                user_instruction = msg
-            else:
-                conversation_messages.append(msg)
-
-        recent_messages = conversation_messages[-(keep_recent * 2) :] if conversation_messages else []
-
-        truncated = system_messages.copy()
-        if user_instruction:
-            truncated.append(user_instruction)
-        truncated.extend(recent_messages)
-
-        logger.info(
-            f"After truncation: {len(truncated)} messages, "
-            f"~{len(json.dumps(truncated, ensure_ascii=False)) // 4:,} tokens (estimated)"
-        )
-
-        return truncated
 
     async def process(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
