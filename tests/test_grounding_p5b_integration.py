@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import re
 import sys
 from types import ModuleType
 from typing import Any, Dict, List, Optional
@@ -63,24 +64,27 @@ class TestPackageCompleteness:
 
 
 class TestNoCircularImports:
-    """Import each submodule independently — if circular deps exist these will blow up."""
+    """Import each submodule with the full grounding subtree evicted from sys.modules.
+
+    Popping only the target module is insufficient — circular dependencies only
+    manifest when *both* sides of the cycle are absent from the module cache.
+    """
 
     @pytest.mark.parametrize("module_name", EXPECTED_SUBMODULES)
     def test_independent_import(self, module_name: str):
-        # Force a fresh import by removing cached module if present
-        cached = sys.modules.pop(module_name, None)
+        prefix = "openspace.agents.grounding"
+        saved = {k: sys.modules.pop(k) for k in list(sys.modules) if k.startswith(prefix)}
         try:
             importlib.import_module(module_name)
         finally:
-            if cached is not None:
-                sys.modules[module_name] = cached
+            sys.modules.update(saved)
 
 
 # ── 3. Backward-compatible import paths ──────────────────────────────
 
 
 class TestBackwardCompatibility:
-    """Callers using the old import path must still work."""
+    """Callers using the old import path must still work and resolve to the same class."""
 
     def test_import_from_agents_module(self):
         from openspace.agents import GroundingAgent
@@ -96,6 +100,14 @@ class TestBackwardCompatibility:
         from openspace import GroundingAgent
 
         assert inspect.isclass(GroundingAgent)
+
+    def test_all_import_paths_resolve_to_same_class(self):
+        """Identity check — a broken re-export that duplicates the class would fail here."""
+        from openspace import GroundingAgent as GA_top
+        from openspace.agents import GroundingAgent as GA_agents
+        from openspace.agents.grounding_agent import GroundingAgent as GA_module
+
+        assert GA_top is GA_agents is GA_module
 
 
 # ── 4. Facade delegation ────────────────────────────────────────────
@@ -117,7 +129,15 @@ class TestFacadeDelegation:
 
         with patch("openspace.agents.base.BaseAgent.__init__", return_value=None):
             agent = GroundingAgent.__new__(GroundingAgent)
+            # BaseAgent attrs
+            agent._name = "TestAgent"
             agent._backend_scope = ["gui", "shell"]
+            agent._grounding_client = MagicMock()
+            agent._llm_client = MagicMock()
+            agent._recording_manager = None
+            agent._step = 0
+            agent._status = "active"
+            # GroundingAgent attrs
             agent._system_prompt = "test"
             agent._max_iterations = 5
             agent._visual_analysis_timeout = 10.0
@@ -127,11 +147,17 @@ class TestFacadeDelegation:
             agent._active_skill_ids = []
             agent._skill_registry = None
             agent._last_tools = []
-            agent._grounding_client = MagicMock()
-            agent._llm_client = MagicMock()
-            agent._recording_manager = None
-            agent._name = "TestAgent"
         return agent
+
+    def test_make_agent_covers_all_init_attrs(self):
+        from openspace.agents.grounding_agent import GroundingAgent
+
+        source = inspect.getsource(GroundingAgent.__init__)
+        init_attrs = {m.group(1) for m in re.finditer(r"self\.(_\w+)\s*=", source)}
+        agent = self._make_agent()
+        instance_attrs = set(vars(agent))
+        missing = init_attrs - instance_attrs
+        assert not missing, f"_make_agent() missing attrs from __init__: {missing}"
 
     def test_set_skill_context_delegates(self):
         agent = self._make_agent()
@@ -168,10 +194,12 @@ class TestFacadeDelegation:
 
     def test_truncate_messages_delegates(self):
         agent = self._make_agent()
-        msgs = [{"role": "user", "content": f"msg{i}"} for i in range(20)]
-        result = agent._truncate_messages(msgs, keep_recent=3)
-        # Should have kept system (if any) + recent
-        assert len(result) <= len(msgs)
+        # Generate enough messages that truncation kicks in (each ~big content)
+        msgs = [{"role": "user", "content": "x" * 10_000} for _ in range(20)]
+        result = agent._truncate_messages(msgs, keep_recent=3, max_tokens_estimate=1000)
+        # Must actually truncate — result should be shorter than input
+        assert len(result) < len(msgs), "truncate_messages should reduce message count"
+        assert len(result) >= 3, "should keep at least keep_recent messages"
 
     def test_default_system_prompt_delegates(self):
         agent = self._make_agent()
@@ -190,18 +218,156 @@ class TestFacadeDelegation:
         """Static method bindings should be callable without self."""
         from openspace.agents.grounding_agent import GroundingAgent
 
-        # _select_key_screenshots
         assert callable(GroundingAgent._select_key_screenshots)
-        # _get_workspace_path
         assert callable(GroundingAgent._get_workspace_path)
-        # _scan_workspace_files
         assert callable(GroundingAgent._scan_workspace_files)
-        # Results statics
         assert callable(GroundingAgent._build_iteration_feedback)
         assert callable(GroundingAgent._remove_previous_guidance)
         assert callable(GroundingAgent._format_tool_executions)
         assert callable(GroundingAgent._check_task_completion)
         assert callable(GroundingAgent._extract_last_assistant_message)
+
+
+# ── 4b. Async delegation tests ──────────────────────────────────────
+
+
+class TestAsyncDelegation:
+    """Async facade methods must delegate to the correct submodule function."""
+
+    def _make_agent(self):
+        from openspace.agents.grounding_agent import GroundingAgent
+
+        with patch("openspace.agents.base.BaseAgent.__init__", return_value=None):
+            agent = GroundingAgent.__new__(GroundingAgent)
+            # BaseAgent attrs
+            agent._name = "TestAgent"
+            agent._backend_scope = ["gui", "shell"]
+            agent._grounding_client = MagicMock()
+            agent._llm_client = MagicMock()
+            agent._recording_manager = None
+            agent._step = 0
+            agent._status = "active"
+            # GroundingAgent attrs
+            agent._system_prompt = "test"
+            agent._max_iterations = 5
+            agent._visual_analysis_timeout = 10.0
+            agent._tool_retrieval_llm = None
+            agent._visual_analysis_model = None
+            agent._skill_context = None
+            agent._active_skill_ids = []
+            agent._skill_registry = None
+            agent._last_tools = []
+        return agent
+
+    @pytest.mark.asyncio
+    async def test_process_delegates_to_execution(self):
+        agent = self._make_agent()
+        # Patch the module-level import reference in the facade module
+        with patch(
+            "openspace.agents.grounding_agent._process_impl",
+            new_callable=AsyncMock,
+        ) as mock_proc:
+            mock_proc.return_value = {"status": "success", "response": "done"}
+            result = await agent.process({"instruction": "test task"})
+            mock_proc.assert_called_once_with(agent, {"instruction": "test task"})
+            assert result == {"status": "success", "response": "done"}
+
+    @pytest.mark.asyncio
+    async def test_get_available_tools_delegates(self):
+        agent = self._make_agent()
+        with patch(
+            "openspace.agents.grounding_agent._get_available_tools_impl",
+            new_callable=AsyncMock,
+        ) as mock_tools:
+            mock_tools.return_value = [{"name": "tool1"}]
+            result = await agent._get_available_tools("describe task")
+            mock_tools.assert_called_once_with(agent, "describe task")
+            assert result == [{"name": "tool1"}]
+
+    @pytest.mark.asyncio
+    async def test_load_all_tools_delegates(self):
+        agent = self._make_agent()
+        mock_gc = MagicMock()
+        with patch(
+            "openspace.agents.grounding_agent._load_all_tools_impl",
+            new_callable=AsyncMock,
+        ) as mock_load:
+            mock_load.return_value = [{"name": "fallback_tool"}]
+            result = await agent._load_all_tools(mock_gc)
+            mock_load.assert_called_once_with(agent, mock_gc)
+            assert result == [{"name": "fallback_tool"}]
+
+    @pytest.mark.asyncio
+    async def test_visual_analysis_callback_delegates(self):
+        agent = self._make_agent()
+        fake_result = MagicMock()
+        with patch(
+            "openspace.agents.grounding_agent._visual_analysis_callback_impl",
+            new_callable=AsyncMock,
+        ) as mock_cb:
+            mock_cb.return_value = fake_result
+            result = await agent._visual_analysis_callback(fake_result, "click", {}, "gui")
+            mock_cb.assert_called_once_with(agent, fake_result, "click", {}, "gui")
+
+    @pytest.mark.asyncio
+    async def test_enhance_result_with_visual_context_delegates(self):
+        agent = self._make_agent()
+        fake_result = MagicMock()
+        with patch(
+            "openspace.agents.grounding_agent._enhance_result_with_visual_context_impl",
+            new_callable=AsyncMock,
+        ) as mock_enh:
+            mock_enh.return_value = fake_result
+            result = await agent._enhance_result_with_visual_context(fake_result, "screenshot")
+            mock_enh.assert_called_once_with(agent, fake_result, "screenshot")
+
+    @pytest.mark.asyncio
+    async def test_check_workspace_artifacts_delegates(self):
+        agent = self._make_agent()
+        with patch(
+            "openspace.agents.grounding_agent._check_workspace_artifacts_impl",
+            new_callable=AsyncMock,
+        ) as mock_ws:
+            mock_ws.return_value = {"artifacts": []}
+            result = await agent._check_workspace_artifacts({"instruction": "test"})
+            mock_ws.assert_called_once_with(agent, {"instruction": "test"})
+            assert result == {"artifacts": []}
+
+    @pytest.mark.asyncio
+    async def test_generate_final_summary_delegates(self):
+        agent = self._make_agent()
+        with patch(
+            "openspace.agents.grounding_agent._generate_final_summary_impl",
+            new_callable=AsyncMock,
+        ) as mock_gen:
+            mock_gen.return_value = ("summary text", True, [])
+            result = await agent._generate_final_summary("do thing", [], 3)
+            mock_gen.assert_called_once_with(agent, "do thing", [], 3)
+            assert result == ("summary text", True, [])
+
+    @pytest.mark.asyncio
+    async def test_build_final_result_delegates(self):
+        agent = self._make_agent()
+        with patch(
+            "openspace.agents.grounding_agent._build_final_result_impl",
+            new_callable=AsyncMock,
+        ) as mock_build:
+            mock_build.return_value = {"status": "complete"}
+            result = await agent._build_final_result("inst", [], [], 2, 5)
+            mock_build.assert_called_once_with(
+                agent, "inst", [], [], 2, 5, None, None, None
+            )
+            assert result == {"status": "complete"}
+
+    @pytest.mark.asyncio
+    async def test_record_agent_execution_delegates(self):
+        agent = self._make_agent()
+        with patch(
+            "openspace.agents.grounding_agent._record_agent_execution_impl",
+            new_callable=AsyncMock,
+        ) as mock_rec:
+            await agent._record_agent_execution({"status": "ok"}, "test task")
+            mock_rec.assert_called_once_with(agent, {"status": "ok"}, "test task")
 
 
 # ── 5. Facade line-count guard ───────────────────────────────────────
