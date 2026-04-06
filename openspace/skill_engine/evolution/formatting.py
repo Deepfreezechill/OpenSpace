@@ -8,13 +8,9 @@ from __future__ import annotations
 
 from typing import List
 
-from openspace.utils.logging import Logger
-
 from ..patch import SKILL_FILENAME, collect_skill_snapshot
 from ..types import ExecutionAnalysis
 from .triggers import _ANALYSIS_CONTEXT_MAX
-
-logger = Logger.get_logger("openspace.skill_engine.evolver")
 
 
 def format_skill_dir_content(skill_dir) -> str:

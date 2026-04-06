@@ -182,10 +182,6 @@ class TestDelegationSeam:
 # ---------------------------------------------------------------------------
 
 class TestMeta:
-    def test_logger_uses_evolver_namespace(self):
-        from openspace.skill_engine.evolution.formatting import logger
-        assert "evolver" in logger.name
-
     def test_module_size(self):
         """formatting.py should stay under 120 lines."""
         import openspace.skill_engine.evolution.formatting as mod
