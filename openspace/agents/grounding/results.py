@@ -186,7 +186,7 @@ async def generate_final_summary(
     except Exception as e:
         logger.error(f"Error generating final summary: {e}")
         return (
-            f"Task completed after {iterations} iteration(s), but failed to generate summary: {str(e)}",
+            f"Task completed after {iterations} iteration(s), but failed to generate summary.",
             False,
             context_for_return,
         )

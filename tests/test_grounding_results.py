@@ -40,9 +40,9 @@ class _FakeAgent:
 
         # These are the staticmethod bindings on real GroundingAgent;
         # for _build_final_result tests we attach module-level functions.
-        self._check_task_completion = staticmethod(check_task_completion)
-        self._format_tool_executions = staticmethod(format_tool_executions)
-        self._extract_last_assistant_message = staticmethod(extract_last_assistant_message)
+        self._check_task_completion = check_task_completion
+        self._format_tool_executions = format_tool_executions
+        self._extract_last_assistant_message = extract_last_assistant_message
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -258,7 +258,7 @@ class TestGenerateFinalSummary:
         text, success, _ = await generate_final_summary(agent, "inst", msgs, 1)
 
         assert "failed to generate summary" in text
-        assert "LLM down" in text
+        assert "LLM down" not in text  # str(e) must NOT leak to caller (security)
         assert success is False
 
     @pytest.mark.asyncio
@@ -483,6 +483,48 @@ class TestGroundingAgentDelegation:
             max_iterations=5,
         )
         assert result["status"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_mro_override_respected_in_build_final_result(self):
+        """Adversarial MRO test: subclass overrides _check_task_completion
+        and _build_final_result MUST call the override, not the module function."""
+        from openspace.agents.grounding_agent import GroundingAgent
+
+        SENTINEL = "SUBCLASS_OVERRIDE_SENTINEL"
+
+        class SubGroundingAgent(GroundingAgent):
+            @staticmethod
+            def _check_task_completion(messages):
+                # Always returns True regardless of content
+                return True
+
+            @staticmethod
+            def _extract_last_assistant_message(messages):
+                return SENTINEL
+
+        agent = SubGroundingAgent.__new__(SubGroundingAgent)
+        agent._backend_scope = ["shell"]
+        agent._llm_client = AsyncMock()
+        agent._recording_manager = None
+        agent._active_skill_ids = []
+        agent._step = 0
+        agent._name = "sub-test"
+        # Give it a staticmethod binding for format (not overridden)
+        agent._format_tool_executions = format_tool_executions
+
+        # Messages WITHOUT the TASK_COMPLETE token — base would return False
+        msgs = [{"role": "assistant", "content": "no complete token here"}]
+        result = await agent._build_final_result(
+            instruction="test",
+            messages=msgs,
+            all_tool_results=[],
+            iterations=1,
+            max_iterations=5,
+        )
+        # Subclass override makes _check_task_completion return True
+        assert result["status"] == "success"
+        # Subclass override makes _extract_last_assistant_message return sentinel
+        assert result["response"] == SENTINEL
 
     @pytest.mark.asyncio
     async def test_record_agent_execution_delegates(self):
