@@ -3,6 +3,7 @@
 Implements the multi-round LLM iteration with tool calling,
 skill-context stripping, message truncation, and result building.
 Extracted from grounding_agent.py (Epic 5.8).
+Instrumented with observability (Epic 6.1).
 """
 
 from __future__ import annotations
@@ -10,6 +11,8 @@ from __future__ import annotations
 import copy
 from typing import Any, Dict, List, Optional
 
+from openspace.observability.metrics import metrics as _metrics
+from openspace.observability.tracing import tracer as _tracer
 from openspace.prompts import GroundingAgentPrompts
 from openspace.utils.logging import Logger
 
@@ -46,6 +49,10 @@ async def process(agent, context: Dict[str, Any]) -> Dict[str, Any]:
     agent._current_instruction = instruction
 
     logger.info(f"Grounding Agent: Processing instruction at step {agent.step}")
+
+    # ── Observability: start trace + metrics ─────────────────────────
+    trace = _tracer.start_trace("grounding.process", instruction=instruction[:200])
+    _metrics.execution_in_flight.labels(agent=agent._name).inc()
 
     # Existing workspace files check
     workspace_info = await agent._check_workspace_artifacts(context)
@@ -274,10 +281,30 @@ async def process(agent, context: Dict[str, Any]) -> Dict[str, Any]:
             f"Grounding Agent: Execution completed with status: "
             f"{result.get('status')}"
         )
+
+        # ── Observability: record success metrics ────────────────────
+        _metrics.execution_iterations.labels(agent=agent._name).observe(current_iteration)
+        _metrics.execution_total.labels(agent=agent._name, status="success").inc()
+        _metrics.execution_in_flight.labels(agent=agent._name).dec()
+        root_span = _tracer.current_span()
+        if root_span:
+            root_span.attributes["iterations"] = current_iteration
+            root_span.attributes["status"] = result.get("status", "unknown")
+        _tracer.finish_trace()
+
         return result
 
     except Exception as e:
         logger.error(f"Grounding Agent: Execution failed: {e}")
+
+        # ── Observability: record error metrics ──────────────────────
+        _metrics.execution_total.labels(agent=agent._name, status="error").inc()
+        _metrics.execution_in_flight.labels(agent=agent._name).dec()
+        root_span = _tracer.current_span()
+        if root_span:
+            root_span.add_event("error", error_type=type(e).__name__)
+        _tracer.finish_trace()
+
         result = {
             "error": str(e),
             "status": "error",

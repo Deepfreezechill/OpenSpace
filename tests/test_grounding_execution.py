@@ -20,6 +20,7 @@ class _FakeAgent:
     """Minimal stand-in for GroundingAgent instance state."""
 
     def __init__(self):
+        self._name = "fake-agent"
         self.step = 0
         self._current_instruction = None
         self._skill_context = None

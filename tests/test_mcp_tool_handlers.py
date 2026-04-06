@@ -32,7 +32,7 @@ pytestmark = pytest.mark.skipif(not _HAS_MODULE, reason="openspace.mcp.tool_hand
 # register_handlers
 # ---------------------------------------------------------------------------
 class TestRegisterHandlers:
-    """Verify register_handlers wires all 4 tools to the FastMCP instance."""
+    """Verify register_handlers wires all 7 tools to the FastMCP instance."""
 
     def test_registers_four_tools(self):
         mock_mcp = MagicMock()
@@ -41,9 +41,12 @@ class TestRegisterHandlers:
 
         register_handlers(mock_mcp)
 
-        assert mock_mcp.tool.call_count == 4
+        assert mock_mcp.tool.call_count == 7
         registered_names = {call.args[0].__name__ for call in mock_decorator.call_args_list}
-        assert registered_names == {"execute_task", "search_skills", "fix_skill", "upload_skill"}
+        assert registered_names == {
+            "execute_task", "search_skills", "fix_skill", "upload_skill",
+            "health_check", "get_metrics", "get_execution_traces",
+        }
 
     def test_handlers_preserve_docstrings(self):
         mock_mcp = MagicMock()
@@ -63,7 +66,7 @@ class TestRegisterHandlers:
 
         register_handlers(mock_mcp)
         register_handlers(mock_mcp)
-        assert mock_mcp.tool.call_count == 8  # 4 + 4
+        assert mock_mcp.tool.call_count == 14  # 7 + 7
 
 
 # ---------------------------------------------------------------------------

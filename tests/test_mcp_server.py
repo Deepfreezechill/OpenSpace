@@ -104,8 +104,11 @@ class TestCreateMcpApp:
         # Verify all 4 MCP tools are actually wired
         if hasattr(app, "_tool_manager") and hasattr(app._tool_manager, "_tools"):
             tool_names = set(app._tool_manager._tools.keys())
-            assert tool_names == {"execute_task", "search_skills", "fix_skill", "upload_skill"}, (
-                f"Expected 4 tools, got: {tool_names}"
+            assert tool_names == {
+                "execute_task", "search_skills", "fix_skill", "upload_skill",
+                "health_check", "get_metrics", "get_execution_traces",
+            }, (
+                f"Expected 7 tools, got: {tool_names}"
             )
         else:
             # Fallback: at least verify create_mcp_app didn't silently fail
