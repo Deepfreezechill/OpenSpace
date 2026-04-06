@@ -60,7 +60,7 @@ async def _get_available_tools(agent, task_description: Optional[str]) -> List:
         )
     except Exception as e:
         logger.warning(f"Auto-search tools failed, falling back to full list: {e}")
-        tools = await _load_all_tools(agent, grounding_client)
+        tools = await agent._load_all_tools(grounding_client)
 
     # Append retrieve_skill tool when skill registry is available
     if agent._skill_registry and agent._skill_registry.list_skills():

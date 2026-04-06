@@ -117,9 +117,17 @@ class TestScanWorkspaceFiles:
 
 
 class _FakeAgent:
-    """Minimal stand-in — workspace module calls module-level functions directly,
-    so agent is only used as first parameter for _check_workspace_artifacts."""
-    pass
+    """Minimal stand-in — workspace module now routes through agent._method()."""
+
+    @staticmethod
+    def _get_workspace_path(context):
+        from openspace.agents.grounding.workspace import _get_workspace_path
+        return _get_workspace_path(context)
+
+    @staticmethod
+    def _scan_workspace_files(workspace_path, recent_threshold=600):
+        from openspace.agents.grounding.workspace import _scan_workspace_files
+        return _scan_workspace_files(workspace_path, recent_threshold)
 
 
 class TestCheckWorkspaceArtifacts:

@@ -78,7 +78,7 @@ async def _visual_analysis_callback(
         return result
 
     # 7. Perform visual analysis
-    return await _enhance_result_with_visual_context(agent, result, tool_name)
+    return await agent._enhance_result_with_visual_context(result, tool_name)
 
 
 async def _enhance_result_with_visual_context(

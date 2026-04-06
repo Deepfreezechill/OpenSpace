@@ -29,6 +29,11 @@ class _FakeAgent:
     def has_skill_context(self) -> bool:
         return self._skill_context is not None
 
+    async def _load_all_tools(self, grounding_client):
+        """Delegate for MRO — calls module function."""
+        from openspace.agents.grounding.tools import _load_all_tools
+        return await _load_all_tools(self, grounding_client)
+
 
 # ── _get_available_tools ───────────────────────────────────────────
 

@@ -88,11 +88,11 @@ async def _check_workspace_artifacts(agent, context: Dict[str, Any]) -> Dict[str
     workspace_info: Dict[str, Any] = {"has_files": False, "files": [], "file_details": {}, "recent_files": []}
 
     try:
-        # Get workspace path — call module-level function directly
-        workspace_path = _get_workspace_path(context)
+        # Get workspace path — route through agent for MRO preservation
+        workspace_path = agent._get_workspace_path(context)
 
-        # Scan workspace files — call module-level function directly
-        scan_result = _scan_workspace_files(workspace_path, recent_threshold=600)
+        # Scan workspace files — route through agent for MRO preservation
+        scan_result = agent._scan_workspace_files(workspace_path, recent_threshold=600)
 
         if scan_result["files"]:
             workspace_info["has_files"] = True

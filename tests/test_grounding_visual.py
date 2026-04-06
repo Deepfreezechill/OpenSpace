@@ -45,6 +45,11 @@ class _FakeAgent:
         self._visual_analysis_timeout = 5.0
         self._current_instruction = "test instruction"
 
+    async def _enhance_result_with_visual_context(self, result, tool_name):
+        """Delegate for MRO — calls module function."""
+        from openspace.agents.grounding.visual import _enhance_result_with_visual_context
+        return await _enhance_result_with_visual_context(self, result, tool_name)
+
 
 # ── _select_key_screenshots (pure function) ────────────────────────
 
