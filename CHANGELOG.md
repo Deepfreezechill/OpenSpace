@@ -141,7 +141,7 @@ Key security improvements across the v2.0.0 release:
 - `mcp_server.py` is now a backward-compat shim — migrate to `openspace/mcp/` package
 - `evolver.py` is now a thin facade — migrate to `openspace/skill_engine/evolution/` package
 - `grounding_agent.py` replaced by `openspace/agents/grounding/` package
-- All MCP endpoints now require bearer token auth (set `OPENSPACE_BEARER_TOKEN`)
+- All MCP endpoints now require bearer token auth (set `OPENSPACE_MCP_BEARER_TOKEN`)
 - Cloud auto-import disabled by default (set `OPENSPACE_CLOUD_IMPORT=true` to re-enable)
 - E2B sandbox enforced by default for skill execution
 

@@ -4,7 +4,8 @@
 # Build: docker build -t openspace .
 # Run:   docker run -p 8000:8000 --env-file .env openspace
 #
-# Environment variables (see .env.example):
+# Environment variables (see openspace/.env.example):
+#   OPENSPACE_MCP_BEARER_TOKEN (REQUIRED for HTTP transports)
 #   OPENSPACE_MCP_HOST, OPENSPACE_MCP_PORT, OPENSPACE_MCP_TRANSPORT,
 #   OPENSPACE_LOG_LEVEL, OPENSPACE_SHUTDOWN_TIMEOUT,
 #   OPENSPACE_METRICS_ENABLED, OPENROUTER_API_KEY, etc.
