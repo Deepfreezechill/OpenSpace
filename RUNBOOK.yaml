@@ -1,8 +1,8 @@
 schema_version: '1.0'
 lock:
-  active_claim: '6.1'
-  claimed_by: 2026-04-06-e9b4572b
-  claimed_at: '2026-04-06T23:24:00Z'
+  active_claim: null
+  claimed_by: null
+  claimed_at: null
 review:
   max_rounds: 3
   required_gates:
@@ -531,10 +531,10 @@ epics:
 - id: '6.1'
   phase: P6
   title: Observability (metrics, tracing, health)
-  status: claimed
-  branch: null
-  pr: null
-  review_round: 0
+  status: done
+  branch: epic/6.1-observability
+  pr: 50
+  review_round: 2
   description: 'Add structured metrics (execution latency, skill hit rate, evolution
     success rate), distributed tracing for multi-step workflows, and health check
     endpoints for MCP server.
