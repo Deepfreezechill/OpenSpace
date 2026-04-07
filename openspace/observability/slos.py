@@ -3,10 +3,16 @@
 Defines SLO targets, error budgets, burn-rate alerting, and an evaluator
 that reads from the Prometheus metrics registry to compute live SLO status.
 
-Implements Google's multi-window burn-rate alerting model:
-  - Critical (14.4x): exhausts 30-day budget in 2 hours
-  - High (6x): exhausts budget in 5 hours
+Uses burn-rate alerting inspired by Google's SRE model, with simplified
+instantaneous-ratio evaluation (not windowed rate-of-change). The three
+alert tiers map to budget-exhaustion pace:
+  - Critical (14.4x): would exhaust 30-day budget in ~2 hours at this pace
+  - High (6x): would exhaust budget in ~5 hours at this pace
   - Warning (1x): on-pace to exhaust budget by window end
+
+Note: This is a point-in-time approximation from cumulative counters.
+True multi-window burn-rate alerting requires rate-of-change queries
+over sliding time windows, which needs a time-series query engine.
 
 Usage::
 
@@ -23,7 +29,9 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+import math
 
 from openspace.observability.metrics import MetricsRegistry
 
@@ -31,7 +39,7 @@ from openspace.observability.metrics import MetricsRegistry
 # ── SLO Target ───────────────────────────────────────────────────────
 
 
-@dataclass
+@dataclass(frozen=True)
 class SLOTarget:
     """Definition of a single SLO target."""
 
@@ -46,6 +54,12 @@ class SLOTarget:
             raise ValueError(
                 f"objective must be in (0, 1.0], got {self.objective}"
             )
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError("name must be a non-empty string")
+        if not isinstance(self.threshold, (int, float)) or math.isnan(self.threshold) or math.isinf(self.threshold):
+            raise ValueError(f"threshold must be a finite number, got {self.threshold}")
+        if self.threshold < 0:
+            raise ValueError(f"threshold must be non-negative, got {self.threshold}")
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -59,7 +73,7 @@ class SLOTarget:
 
 # ── Default targets ──────────────────────────────────────────────────
 
-DEFAULT_TARGETS: List[SLOTarget] = [
+DEFAULT_TARGETS: Tuple[SLOTarget, ...] = (
     SLOTarget(
         name="execution_latency_p99",
         objective=0.99,
@@ -81,7 +95,7 @@ DEFAULT_TARGETS: List[SLOTarget] = [
         unit="ratio",
         description="System availability above 99%",
     ),
-]
+)
 
 
 # ── Error Budget ─────────────────────────────────────────────────────
@@ -114,9 +128,20 @@ class ErrorBudget:
                 "exhausted": False,
             }
 
+        # Zero-tolerance SLO (objective=1.0): any failure exhausts budget
+        if budget_total <= 1e-9:
+            exhausted = failed_requests > 0
+            return {
+                "budget_total": 0,
+                "budget_consumed": failed_requests,
+                "budget_remaining": 0,
+                "budget_remaining_pct": 0.0 if exhausted else 100.0,
+                "exhausted": exhausted,
+            }
+
         consumed = failed_requests
         remaining = budget_total - consumed
-        remaining_pct = (remaining / budget_total * 100) if budget_total > 0 else 100.0
+        remaining_pct = (remaining / budget_total * 100)
 
         return {
             "budget_total": budget_total,
@@ -160,15 +185,18 @@ class BurnRateCalculator:
         default_factory=lambda: list(_DEFAULT_ALERT_THRESHOLDS)
     )
 
+    # Maximum burn rate to avoid non-JSON-serializable float('inf')
+    MAX_BURN_RATE = 1000.0
+
     def burn_rate(self, total_requests: int, failed_requests: int) -> float:
-        """Calculate current burn rate."""
+        """Calculate current burn rate (clamped to MAX_BURN_RATE)."""
         if total_requests == 0:
             return 0.0
         allowed_error_rate = 1 - self.objective
-        if allowed_error_rate == 0:
-            return float("inf") if failed_requests > 0 else 0.0
+        if allowed_error_rate <= 1e-15:
+            return self.MAX_BURN_RATE if failed_requests > 0 else 0.0
         actual_error_rate = failed_requests / total_requests
-        return actual_error_rate / allowed_error_rate
+        return min(actual_error_rate / allowed_error_rate, self.MAX_BURN_RATE)
 
     def check_alerts(
         self, total_requests: int, failed_requests: int
@@ -217,12 +245,17 @@ class SLOEvaluator:
         return 0.95  # default
 
     def _get_request_counts(self) -> tuple[int, int]:
-        """Read total and failed request counts from the registry."""
+        """Read total and failed request counts from the registry.
+
+        Aggregates across all agent labels, filtering to _total samples only
+        to avoid counting _created timestamp samples.
+        """
         total = 0
         failed = 0
         try:
-            # Sum across all agent labels
             for sample in self._registry.execution_total.collect()[0].samples:
+                if not sample.name.endswith("_total"):
+                    continue
                 val = int(sample.value)
                 total += val
                 if sample.labels.get("status") == "error":
@@ -337,16 +370,23 @@ class SLOEvaluator:
         }
 
     def _estimate_p99(self) -> Optional[float]:
-        """Estimate p99 latency from histogram buckets."""
+        """Estimate p99 latency from histogram buckets.
+
+        Aggregates bucket counts across all label combinations (agent × status)
+        by `le` value, then uses linear interpolation between bucket boundaries
+        (standard Prometheus histogram_quantile approach).
+        """
         try:
             samples = self._registry.execution_latency.collect()[0].samples
-            buckets = []
+            # Aggregate bucket counts by le value across all label sets
+            bucket_sums: Dict[float, float] = {}
             count = 0
             for sample in samples:
                 if sample.name.endswith("_bucket"):
                     le = sample.labels.get("le")
                     if le and le != "+Inf":
-                        buckets.append((float(le), sample.value))
+                        le_f = float(le)
+                        bucket_sums[le_f] = bucket_sums.get(le_f, 0) + sample.value
                 elif sample.name.endswith("_count"):
                     count += sample.value
 
@@ -354,9 +394,28 @@ class SLOEvaluator:
                 return None
 
             target_count = count * 0.99
-            for le, bucket_count in sorted(buckets):
+            sorted_buckets = sorted(bucket_sums.items())
+
+            # Linear interpolation between bucket boundaries
+            prev_le = 0.0
+            prev_count = 0.0
+            for le, bucket_count in sorted_buckets:
                 if bucket_count >= target_count:
-                    return le
+                    # Interpolate within this bucket
+                    bucket_width = le - prev_le
+                    bucket_fraction = bucket_count - prev_count
+                    if bucket_fraction <= 0:
+                        return le
+                    remaining = target_count - prev_count
+                    return prev_le + bucket_width * (remaining / bucket_fraction)
+                prev_le = le
+                prev_count = bucket_count
+
+            # All observations exceed the highest finite bucket — return the
+            # highest boundary as a conservative lower-bound estimate.
+            # This prevents hiding latency incidents when p99 > max bucket.
+            if sorted_buckets:
+                return sorted_buckets[-1][0]
             return None
         except (IndexError, AttributeError, ValueError):
             return None

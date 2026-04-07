@@ -836,11 +836,16 @@ async def check_slos() -> str:
     remaining, burn rate, and any active alerts.  Use this to monitor
     system health against defined reliability targets.
     """
-    from openspace.observability.metrics import metrics
-    from openspace.observability.slos import SLOEvaluator
+    try:
+        from openspace.observability.metrics import metrics
+        from openspace.observability.slos import SLOEvaluator
 
-    evaluator = SLOEvaluator(registry=metrics)
-    return evaluator.to_json()
+        evaluator = SLOEvaluator(registry=metrics)
+        return evaluator.to_json()
+    except Exception as e:
+        from openspace.errors import EXECUTION_ERROR, handle_mcp_exception
+
+        return handle_mcp_exception(e, tool_name="check_slos", error_code=EXECUTION_ERROR)
 
 
 # ---------------------------------------------------------------------------
