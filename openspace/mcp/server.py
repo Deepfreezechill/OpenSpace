@@ -183,7 +183,84 @@ def _register_health_probes() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 4. Server entry point
+# 4. CLI argument parser (extracted for testability)
+# ---------------------------------------------------------------------------
+_VERSION = "0.1.0"  # TODO: read from pyproject.toml or importlib.metadata
+
+_EPILOG = """\
+examples:
+  openspace-mcp                          # stdio transport (local, no auth)
+  openspace-mcp --transport streamable-http  # HTTP (requires bearer token)
+  openspace-mcp --transport sse --port 9000  # SSE on custom port
+
+environment variables:
+  OPENSPACE_MCP_HOST             Bind address (default: 0.0.0.0)
+  OPENSPACE_MCP_PORT             Port number (default: 8000)
+  OPENSPACE_MCP_TRANSPORT        Transport: stdio|sse|streamable-http
+  OPENSPACE_MCP_BEARER_TOKEN     Auth token (REQUIRED for HTTP transports)
+  OPENSPACE_LOG_LEVEL            Logging: DEBUG|INFO|WARNING|ERROR
+  OPENSPACE_SHUTDOWN_TIMEOUT     Graceful shutdown seconds (default: 30)
+  OPENSPACE_METRICS_ENABLED      Prometheus metrics: true|false
+
+notes:
+  HTTP transports (sse, streamable-http) require OPENSPACE_MCP_BEARER_TOKEN.
+  Use --transport stdio for local development without authentication.
+"""
+
+
+def _build_arg_parser(deploy_cfg=None):
+    """Build the CLI argument parser with rich help text.
+
+    Extracted from run_mcp_server for testability. Returns an
+    argparse.ArgumentParser ready for parse_args().
+    """
+    import argparse
+
+    defaults = {
+        "transport": "stdio",
+        "port": 8000,
+        "host": "0.0.0.0",
+    }
+    if deploy_cfg is not None:
+        defaults["transport"] = deploy_cfg.mcp_transport
+        defaults["port"] = deploy_cfg.mcp_port
+        defaults["host"] = deploy_cfg.mcp_host
+
+    parser = argparse.ArgumentParser(
+        prog="openspace-mcp",
+        description="OpenSpace MCP Server — AI agent framework with tool execution",
+        epilog=_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"openspace-mcp {_VERSION}",
+    )
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse", "streamable-http"],
+        default=defaults["transport"],
+        help="MCP transport protocol (default: %(default)s). "
+        "HTTP transports require OPENSPACE_MCP_BEARER_TOKEN.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=defaults["port"],
+        help="Server port for HTTP transports (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default=defaults["host"],
+        help="Bind address for HTTP transports (default: %(default)s)",
+    )
+    return parser
+
+
+# ---------------------------------------------------------------------------
+# 5. Server entry point
 # ---------------------------------------------------------------------------
 def run_mcp_server(mcp=None) -> None:
     """Console-script entry point for ``openspace-mcp``.
@@ -195,8 +272,6 @@ def run_mcp_server(mcp=None) -> None:
         mcp: Optional pre-created FastMCP instance. If None, creates one
              via ``create_mcp_app()``.
     """
-    import argparse
-
     import uvicorn
 
     from openspace.auth.bearer import (
@@ -214,15 +289,28 @@ def run_mcp_server(mcp=None) -> None:
     # Load config from environment, then allow CLI overrides
     deploy_cfg = DeployConfig.from_env()
 
-    parser = argparse.ArgumentParser(description="OpenSpace MCP Server")
-    parser.add_argument(
-        "--transport",
-        choices=["stdio", "sse", "streamable-http"],
-        default=deploy_cfg.mcp_transport,
-    )
-    parser.add_argument("--port", type=int, default=deploy_cfg.mcp_port)
-    parser.add_argument("--host", type=str, default=deploy_cfg.mcp_host)
+    parser = _build_arg_parser(deploy_cfg)
     args = parser.parse_args()
+
+    # Pre-flight checks: validate environment before starting
+    from openspace.deploy.preflight import (
+        format_preflight_report,
+        preflight_check,
+    )
+
+    issues = preflight_check(
+        transport=args.transport,
+        port=args.port,
+        host=args.host,
+        skill_store_path=deploy_cfg.skill_store_path,
+        check_port=(args.transport != "stdio"),
+    )
+    if issues:
+        errors = [i for i in issues if i.severity == "error"]
+        report = format_preflight_report(issues)
+        logger.info(report)
+        if errors:
+            sys.exit(1)
 
     if args.transport == "stdio":
         mcp.run(transport="stdio")
