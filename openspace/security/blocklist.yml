@@ -89,6 +89,13 @@ patterns:
     targets:
       - ctypes.*
 
+  - name: os_wildcard_import
+    description: "Importing os exposes all dangerous os functions as bare names"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - os.*
+
   - name: env_access
     description: "Environment variable access may leak secrets"
     severity: HIGH
@@ -254,6 +261,10 @@ patterns:
       - os.unlink
       - os.rmdir
       - os.removedirs
+      - remove
+      - unlink
+      - rmdir
+      - removedirs
 
   - name: os_chmod
     description: "os.chmod() can weaken file permissions"
@@ -262,6 +273,8 @@ patterns:
     targets:
       - os.chmod
       - os.chown
+      - chmod
+      - chown
 
   - name: pty_spawn
     description: "pty.spawn() drops to interactive shell — full escape"

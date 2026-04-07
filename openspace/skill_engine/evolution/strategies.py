@@ -76,6 +76,17 @@ async def evolve_fix(evolver, ctx: EvolutionContext) -> Optional[SkillRecord]:
     # Extract change_summary from LLM output (first line if prefixed)
     new_content, change_summary = _extract_change_summary(new_content)
 
+    # Snapshot the parent directory BEFORE edits so we can roll back
+    # if the guard rejects the result (P0 fix: no dangerous code on disk).
+    _pre_edit_snapshot: dict[str, bytes] = {}
+    if parent_dir.is_dir():
+        for f in parent_dir.iterdir():
+            if f.is_file():
+                try:
+                    _pre_edit_snapshot[f.name] = f.read_bytes()
+                except OSError:
+                    pass
+
     # Apply-retry cycle
     edit_result = await evolver._apply_with_retry(
         apply_fn=lambda content: fix_skill(parent_dir, content, PatchType.AUTO),
@@ -123,11 +134,23 @@ async def evolve_fix(evolver, ctx: EvolutionContext) -> Optional[SkillRecord]:
 
     if not result.passed:
         # Guard rejected — dangerous code is on disk from _apply_with_retry.
-        # Restore the parent directory from the ORIGINAL content_snapshot
-        # that existed before our edit attempt.
+        # Restore the parent directory from the pre-edit snapshot.
         logger.warning(
-            f"FIX: guard rejected {new_id} — skill NOT persisted or registered"
+            f"FIX: guard rejected {new_id} — rolling back disk to pre-edit state"
         )
+        if _pre_edit_snapshot and parent_dir.is_dir():
+            for fname, content in _pre_edit_snapshot.items():
+                try:
+                    (parent_dir / fname).write_bytes(content)
+                except OSError:
+                    logger.error(f"FIX: rollback failed for {fname}")
+            # Remove any NEW files that weren't in the original snapshot
+            for f in parent_dir.iterdir():
+                if f.is_file() and f.name not in _pre_edit_snapshot:
+                    try:
+                        f.unlink()
+                    except OSError:
+                        pass
         return None
 
     # Stamp the new skill_id into the sidecar file so next discover()
