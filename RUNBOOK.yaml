@@ -608,15 +608,20 @@ epics:
 - id: '7.1'
   phase: P7
   title: Eight-eyes integration
-  status: pending
-  branch: null
-  pr: null
-  review_round: 0
+  status: done
+  branch: epic/7.1-review-gate
+  pr: 54
+  review_round: 3
   description: "Built-in /8eyes review for skill evolution \xE2\u20AC\u201D every\
     \ evolved skill gets multi-agent review before activation.\n"
   acceptance:
   - Skill evolution triggers /8eyes review automatically
   - Evolved skills quarantined until review passes
+  notes: |
+    ReviewGate with 5-layer security: path traversal, extension allowlist,
+    size limits, HIGH+CRITICAL AST blocking, lineage.validate().
+    63 tests (45 adversarial), 2020 total passed.
+    3 review rounds, 12 agent-reviews (impl, sec, GPT-5.4, Opus 4.6).
 - id: '7.2'
   phase: P7
   title: SkillGuard quality gates

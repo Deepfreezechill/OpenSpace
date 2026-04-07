@@ -118,7 +118,7 @@ async def evolve_fix(evolver, ctx: EvolutionContext) -> Optional[SkillRecord]:
         critical_tools=list(parent.critical_tools),
     )
 
-    await evolver._store.evolve_skill(new_record, [parent.skill_id])
+    await evolver._guard.guarded_evolve(new_record, [parent.skill_id])
 
     # Stamp the new skill_id into the sidecar file so next discover()
     write_skill_id(parent_dir, new_id)
@@ -252,7 +252,7 @@ async def evolve_derived(evolver, ctx: EvolutionContext) -> Optional[SkillRecord
         critical_tools=sorted(all_critical),
     )
 
-    await evolver._store.evolve_skill(new_record, parent_ids)
+    await evolver._guard.guarded_evolve(new_record, parent_ids)
 
     # Stamp skill_id sidecar so discover() uses this ID on restart
     write_skill_id(target_dir, new_id)
@@ -360,7 +360,7 @@ async def evolve_captured(evolver, ctx: EvolutionContext) -> Optional[SkillRecor
         ),
     )
 
-    await evolver._store.save_record(new_record)
+    await evolver._guard.guarded_save(new_record)
 
     # Stamp skill_id sidecar so discover() uses this ID on restart
     write_skill_id(target_dir, new_id)

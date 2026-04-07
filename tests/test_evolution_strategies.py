@@ -22,6 +22,8 @@ from openspace.skill_engine.evolution.strategies import (
     evolve_derived,
     evolve_fix,
 )
+from openspace.skill_engine.review_gate import CheckResult, ReviewResult
+from openspace.skill_engine.skill_guard import SkillGuard
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +96,12 @@ class _FakeEvolver:
         self._store = MagicMock()
         self._store.evolve_skill = AsyncMock()
         self._store.save_record = AsyncMock()
+        # SkillGuard wraps the mock store with an always-pass gate
+        _pass_gate = MagicMock()
+        _pass_gate.review = MagicMock(return_value=ReviewResult.from_checks([
+            CheckResult(name="test-gate", verdict="pass", detail="ok"),
+        ]))
+        self._guard = SkillGuard(store=self._store, gate=_pass_gate)
         self._registry = MagicMock()
         self._registry._skill_dirs = [Path("/skills")]
         self._registry.update_skill = MagicMock()
