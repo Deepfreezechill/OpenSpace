@@ -60,12 +60,20 @@ def check_bearer_token(transport: str) -> Optional[PreflightIssue]:
     token_env = "OPENSPACE_MCP_BEARER_TOKEN"
     token = os.environ.get(token_env, "").strip()
     if not token:
+        if sys.platform == "win32":
+            set_cmd = (
+                f'$env:{token_env} = python -c "import secrets; print(secrets.token_urlsafe(32))"'
+            )
+        else:
+            set_cmd = (
+                f'export {token_env}=$(python -c "import secrets; print(secrets.token_urlsafe(32))")'
+            )
         return PreflightIssue(
             check="bearer-token",
             message=f"{token_env} not set (required for {transport} transport)",
             suggestion=(
                 f"Set {token_env} to a strong random token:\n"
-                f"    export {token_env}=$(python -c \"import secrets; print(secrets.token_urlsafe(32))\")\n"
+                f"    {set_cmd}\n"
                 f"  Or use --transport stdio for local-only access (no auth required)"
             ),
         )
@@ -76,10 +84,14 @@ def check_skill_store(path: str) -> Optional[PreflightIssue]:
     """Verify skill store directory exists or can be created."""
     p = Path(path)
     if p.exists() and not p.is_dir():
+        if sys.platform == "win32":
+            fix_cmd = f"Remove-Item {path}; New-Item -ItemType Directory {path}"
+        else:
+            fix_cmd = f"rm {path} && mkdir -p {path}"
         return PreflightIssue(
             check="skill-store",
             message=f"Skill store path exists but is not a directory: {path}",
-            suggestion=f"Remove the file and create directory:\n    rm {path} && mkdir -p {path}",
+            suggestion=f"Remove the file and create directory:\n    {fix_cmd}",
         )
     return None
 

@@ -308,7 +308,10 @@ def run_mcp_server(mcp=None) -> None:
     if issues:
         errors = [i for i in issues if i.severity == "error"]
         report = format_preflight_report(issues)
-        logger.info(report)
+        # Write directly to console — logger goes to file only, user won't see it
+        _console = sys.__stderr__ or sys.stderr
+        _console.write(report + "\n")
+        _console.flush()
         if errors:
             sys.exit(1)
 
@@ -318,19 +321,25 @@ def run_mcp_server(mcp=None) -> None:
 
     # --- HTTP transports: enforce bearer token auth (fail-closed) ---
     token = get_bearer_token()
+    _console = sys.__stderr__ or sys.stderr
     if not token:
-        logger.critical(
-            "FAIL-CLOSED: %s not set. Refusing to start %s transport "
-            "without authentication. Set the environment variable or "
-            "use --transport stdio for local-only access.",
-            BEARER_TOKEN_ENV,
-            args.transport,
+        msg = (
+            f"FAIL-CLOSED: {BEARER_TOKEN_ENV} not set. Refusing to start "
+            f"{args.transport} transport without authentication.\n"
+            f"  → Set the environment variable or use --transport stdio "
+            f"for local-only access.\n"
         )
+        _console.write(msg)
+        _console.flush()
+        logger.critical(msg.strip())
         sys.exit(1)
 
     token_ok, reason = validate_token_strength(token)
     if not token_ok:
-        logger.critical("FAIL-CLOSED: %s — %s", BEARER_TOKEN_ENV, reason)
+        msg = f"FAIL-CLOSED: {BEARER_TOKEN_ENV} — {reason}\n"
+        _console.write(msg)
+        _console.flush()
+        logger.critical(msg.strip())
         sys.exit(1)
 
     if args.transport == "sse":

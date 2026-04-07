@@ -105,7 +105,7 @@ class TestPreflightChecks:
         assert "OPENSPACE_MCP_BEARER_TOKEN" in token_issues[0].message
 
     def test_preflight_suggestion_is_actionable(self):
-        """Suggestions must include a command the user can run."""
+        """Suggestions must include a platform-appropriate set command."""
         from openspace.deploy.preflight import preflight_check
 
         with patch.dict(os.environ, {}, clear=True):
@@ -113,7 +113,8 @@ class TestPreflightChecks:
         token_issues = [i for i in issues if i.check == "bearer-token"]
         assert token_issues
         suggestion = token_issues[0].suggestion
-        assert "export" in suggestion or "set" in suggestion.lower()
+        # Must contain a real shell command, not just descriptive text
+        assert "$env:" in suggestion or "export " in suggestion
 
     def test_preflight_no_token_check_for_stdio(self):
         from openspace.deploy.preflight import check_bearer_token
@@ -200,6 +201,60 @@ class TestPreflightChecks:
 
         report = format_preflight_report([])
         assert "All checks passed" in report
+
+    def test_preflight_bearer_suggestion_platform_aware(self):
+        """Suggestion must use platform-appropriate shell syntax."""
+        from openspace.deploy.preflight import check_bearer_token
+
+        with patch.dict(os.environ, {}, clear=True):
+            result = check_bearer_token("streamable-http")
+        assert result is not None
+        if os.name == "nt":
+            assert "$env:" in result.suggestion
+        else:
+            assert "export " in result.suggestion
+
+    def test_preflight_skill_store_suggestion_platform_aware(self, tmp_path):
+        """Skill store fix suggestion must use platform-appropriate commands."""
+        from openspace.deploy.preflight import check_skill_store
+
+        fake_path = tmp_path / "skills"
+        fake_path.write_text("not a directory")
+        result = check_skill_store(str(fake_path))
+        assert result is not None
+        if os.name == "nt":
+            assert "Remove-Item" in result.suggestion
+        else:
+            assert "rm " in result.suggestion
+
+
+# ======================================================================
+# Preflight visibility (P0 fix)
+# ======================================================================
+class TestPreflightVisibility:
+    """Preflight output must reach the user, not just the log file."""
+
+    def test_preflight_writes_to_console_not_just_logger(self):
+        """run_mcp_server must write preflight to sys.__stderr__, not just logger."""
+        import inspect
+        from openspace.mcp.server import run_mcp_server
+
+        source = inspect.getsource(run_mcp_server)
+        assert "__stderr__" in source, (
+            "Preflight output must use sys.__stderr__ to reach console"
+        )
+
+    def test_critical_errors_write_to_console(self):
+        """Bearer token errors must also reach console."""
+        import inspect
+        from openspace.mcp.server import run_mcp_server
+
+        source = inspect.getsource(run_mcp_server)
+        # Count __stderr__ occurrences — should be used for both preflight AND auth errors
+        count = source.count("__stderr__")
+        assert count >= 2, (
+            f"Expected __stderr__ used for preflight AND auth errors, found {count} uses"
+        )
 
 
 # ======================================================================
