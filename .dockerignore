@@ -1,0 +1,48 @@
+# ============================================
+# Docker build context exclusions
+# ============================================
+
+# Version control
+.git
+.gitignore
+
+# Tests and development
+tests/
+.pytest_cache/
+__pycache__/
+*.pyc
+.coverage
+htmlcov/
+
+# Frontend (separate build)
+frontend/
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation and meta
+*.md
+!README.md
+LICENSE
+RUNBOOK.yaml
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Logs
+logs/
+*.log
