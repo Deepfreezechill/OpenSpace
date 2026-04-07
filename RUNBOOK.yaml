@@ -1,7 +1,7 @@
 schema_version: '1.0'
 lock:
-  active_claim: '6.4'
-  claimed_by: 2026-04-07-e9b4572b
+  active_claim: null
+  claimed_by: null
   claimed_at: '2026-04-07T01:20:00Z'
 review:
   max_rounds: 3
@@ -585,10 +585,10 @@ epics:
 - id: '6.4'
   phase: P6
   title: DX polish (CLI help, errors, onboarding)
-  status: claimed
+  status: done
   branch: epic/6.4-dx-polish
   pr: 53
-  review_round: 1
+  review_round: 2
   description: 'Improve CLI help text, error messages with actionable suggestions,
     first-run onboarding flow, quickstart documentation.
 
@@ -598,6 +598,13 @@ epics:
   - Error messages include suggested fixes
   - Quickstart guide tested on clean install
   - /8eyes + /collab buyoff on complete P6
+  notes:
+  - Rich --help with epilog (examples, env vars, auth notes), --version
+  - Preflight checks: bearer token, skill store, port, Python version
+  - Platform-aware suggestions (PowerShell on Win, bash on Unix)
+  - Output writes to sys.__stderr__ (console), not just logger (file)
+  - 32 DX tests, 1957 total passed
+  - 2 review rounds, 7 agents total (4 R1 + 3 R2)
 - id: '7.1'
   phase: P7
   title: Eight-eyes integration
