@@ -13,8 +13,12 @@ import hashlib
 import time
 from typing import Any, Dict, List, Optional
 
-from openspace.observability.metrics import metrics as _metrics
-from openspace.observability.tracing import tracer as _tracer
+try:
+    from openspace.observability.metrics import metrics as _metrics
+    from openspace.observability.tracing import tracer as _tracer
+except ImportError:
+    _metrics = None  # type: ignore[assignment]
+    _tracer = None  # type: ignore[assignment]
 from openspace.prompts import GroundingAgentPrompts
 from openspace.utils.logging import Logger
 
@@ -105,16 +109,21 @@ async def process(agent, context: Dict[str, Any]) -> Dict[str, Any]:
         tools=tools,
     )
 
+    # ── Observability setup (isolated — must not kill execution) ──────
+    _gauge_incremented = False
     try:
-        # ── Observability: trace + metrics inside try to prevent leaks ──
         _instr_hash = hashlib.sha256(instruction.encode()).hexdigest()[:12]
-        trace = _tracer.start_trace(
+        _tracer.start_trace(
             "grounding.process",
             instruction_hash=_instr_hash,
             instruction_length=len(instruction),
         )
         _metrics.execution_in_flight.labels(agent=_agent_label).inc()
+        _gauge_incremented = True
+    except Exception:
+        logger.debug("Observability setup failed", exc_info=True)
 
+    try:
         while current_iteration < max_iterations:
             current_iteration += 1
             logger.info(
@@ -293,33 +302,42 @@ async def process(agent, context: Dict[str, Any]) -> Dict[str, Any]:
             f"{result.get('status')}"
         )
 
-        # ── Observability: record success metrics ────────────────────
-        _elapsed = time.monotonic() - _exec_start
-        _metrics.execution_latency.labels(agent=_agent_label, status="success").observe(_elapsed)
-        _metrics.execution_iterations.labels(agent=_agent_label).observe(current_iteration)
-        _metrics.execution_total.labels(agent=_agent_label, status="success").inc()
-        _metrics.execution_in_flight.labels(agent=_agent_label).dec()
-        root_span = _tracer.current_span()
-        if root_span:
-            root_span.attributes["iterations"] = current_iteration
-            root_span.attributes["status"] = result.get("status", "unknown")
-        _tracer.finish_trace()
+        # ── Observability: record success (isolated — must not discard result)
+        try:
+            _elapsed = time.monotonic() - _exec_start
+            _metrics.execution_latency.labels(agent=_agent_label, status="success").observe(_elapsed)
+            _metrics.execution_iterations.labels(agent=_agent_label).observe(current_iteration)
+            _metrics.execution_total.labels(agent=_agent_label, status="success").inc()
+            if _gauge_incremented:
+                _metrics.execution_in_flight.labels(agent=_agent_label).dec()
+                _gauge_incremented = False
+            root_span = _tracer.current_span()
+            if root_span:
+                root_span.attributes["iterations"] = current_iteration
+                root_span.attributes["status"] = result.get("status", "unknown")
+            _tracer.finish_trace()
+        except Exception:
+            logger.debug("Observability recording failed", exc_info=True)
 
         return result
 
     except Exception as e:
         logger.error(f"Grounding Agent: Execution failed: {e}")
 
-        # ── Observability: record error metrics ──────────────────────
-        _elapsed = time.monotonic() - _exec_start
-        _metrics.execution_latency.labels(agent=_agent_label, status="error").observe(_elapsed)
-        _metrics.execution_total.labels(agent=_agent_label, status="error").inc()
-        _metrics.execution_in_flight.labels(agent=_agent_label).dec()
-        root_span = _tracer.current_span()
-        if root_span:
-            root_span.add_event("error", error_type=type(e).__name__)
-            root_span.status = "error"
-        _tracer.finish_trace()
+        # ── Observability: record error (isolated — must not mask result)
+        try:
+            _elapsed = time.monotonic() - _exec_start
+            _metrics.execution_latency.labels(agent=_agent_label, status="error").observe(_elapsed)
+            _metrics.execution_total.labels(agent=_agent_label, status="error").inc()
+            if _gauge_incremented:
+                _metrics.execution_in_flight.labels(agent=_agent_label).dec()
+            root_span = _tracer.current_span()
+            if root_span:
+                root_span.add_event("error", error_type=type(e).__name__)
+                root_span.status = "error"
+            _tracer.finish_trace()
+        except Exception:
+            logger.debug("Observability recording failed", exc_info=True)
 
         result = {
             "error": type(e).__name__,
@@ -367,16 +385,19 @@ def _build_retrieved_tools_list(
     return retrieved_tools_list
 
 
+import re
+
 # ── Label sanitization ───────────────────────────────────────────────
 
-# Prometheus label values should be bounded. We keep a short allowlist
-# and map everything else to "unknown" to prevent cardinality bombs.
-_LABEL_MAX_LEN = 64
+# Prometheus label values must be bounded and safe. Strict allowlist
+# prevents cardinality bombs and scraper injection.
+_LABEL_MAX_LEN = 32
+_LABEL_SAFE_RE = re.compile(r"[^a-zA-Z0-9_\-]")
 
 
 def _sanitize_label(value: str) -> str:
-    """Clamp a label value to a safe length and replace spaces."""
+    """Sanitize a string for use as a Prometheus label value."""
     if not value:
         return "unknown"
-    clean = value[:_LABEL_MAX_LEN].replace(" ", "_")
-    return clean
+    clean = _LABEL_SAFE_RE.sub("_", value[:_LABEL_MAX_LEN])
+    return clean or "unknown"

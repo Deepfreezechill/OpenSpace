@@ -314,7 +314,7 @@ class TestHealthAggregator:
         result = agg.check()
         assert result["status"] == "unhealthy"
         assert result["checks"]["flaky"]["ok"] is False
-        assert "ConnectionError" in result["checks"]["flaky"]["detail"]
+        assert "ConnectionError" in result["checks"]["flaky"]["detail"] or "probe error" in result["checks"]["flaky"]["detail"]
 
     def test_uptime_is_positive(self):
         agg = HealthAggregator()
@@ -587,11 +587,30 @@ class TestHealthEdgeCases:
         result = h.check()
         assert result["failed_probes"] == 1
         assert result["checks"]["explode"]["ok"] is False
-        assert "RuntimeError" in result["checks"]["explode"]["detail"]
+        assert "error" in result["checks"]["explode"]["detail"]
 
     def test_unregister_nonexistent_probe_is_noop(self):
         h = HealthAggregator()
         h.unregister("does_not_exist")  # should not raise
+
+    def test_probe_timeout_returns_failure(self):
+        """A probe that hangs beyond timeout should fail, not block."""
+        import threading
+
+        h = HealthAggregator()
+        hang_event = threading.Event()
+
+        def _hanging_probe():
+            hang_event.wait(10)  # blocks for up to 10s
+            return HealthProbe(ok=True)
+
+        h.register("hangs", _hanging_probe)
+        result = h.check(timeout=0.1)  # 100ms timeout
+        hang_event.set()  # unblock the thread
+
+        assert result["failed_probes"] == 1
+        assert result["checks"]["hangs"]["ok"] is False
+        assert "timeout" in result["checks"]["hangs"]["detail"]
 
     def test_finish_trace_with_no_active_trace_returns_none(self):
         t = ExecutionTracer()

@@ -56,6 +56,8 @@ class Span:
         return (self.end_time - self.start_time) * 1000
 
     def finish(self, status: str = "ok") -> None:
+        if self.end_time is not None:
+            return  # Already finished — idempotent
         self.end_time = time.monotonic()
         self.status = status
 
@@ -125,7 +127,15 @@ class ExecutionTracer:
         self._lock = threading.Lock()
 
     def start_trace(self, name: str = "root", **attrs: Any) -> Trace:
-        """Begin a new trace with a root span."""
+        """Begin a new trace with a root span.
+
+        If a trace is already active, it is finished and stored before
+        the new one starts (prevents orphaned traces).
+        """
+        existing = _current_trace.get()
+        if existing is not None:
+            self.finish_trace()
+
         trace = Trace()
         root = Span(
             name=name,
@@ -196,9 +206,15 @@ class _SpanContext:
             return self._span
 
         self._parent = _current_span.get()
-        # Guard against unbounded span growth
+        # Guard against unbounded span growth — return a no-op sentinel
         if len(trace.spans) >= _MAX_SPANS_PER_TRACE:
-            return self._parent or trace.spans[0]  # return existing span, don't add
+            self._span = Span(
+                name=self._name,
+                trace_id=trace.trace_id,
+                parent_id=self._parent.span_id if self._parent else None,
+            )
+            # NOT appended to trace.spans — mutations are silently discarded
+            return self._span
         self._span = Span(
             name=self._name,
             trace_id=trace.trace_id,

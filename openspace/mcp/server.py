@@ -162,17 +162,17 @@ def _register_health_probes() -> None:
                 _probe_skill_store._cached = SkillStore()
             store = _probe_skill_store._cached
             count = len(store.list_skills()) if hasattr(store, "list_skills") else 0
-            return HealthProbe(ok=True, detail=f"{count} skills", metadata={"count": count})
-        except Exception as exc:
-            return HealthProbe(ok=False, detail=f"{type(exc).__name__}")
+            return HealthProbe(ok=True, detail=f"{count} skills")
+        except Exception:
+            return HealthProbe(ok=False, detail="not available")
 
     def _probe_grounding() -> HealthProbe:
         try:
             from openspace.agents.grounding_agent import GroundingAgent
 
             return HealthProbe(ok=True, detail="module loaded")
-        except Exception as exc:
-            return HealthProbe(ok=False, detail=f"{type(exc).__name__}")
+        except Exception:
+            return HealthProbe(ok=False, detail="not available")
 
     def _probe_mcp_tools() -> HealthProbe:
         return HealthProbe(ok=True, detail="tools registered")

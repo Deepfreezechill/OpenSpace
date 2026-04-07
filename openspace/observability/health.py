@@ -19,10 +19,14 @@ Usage::
 
 from __future__ import annotations
 
+import concurrent.futures
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
+
+# Per-probe timeout in seconds
+_PROBE_TIMEOUT = 5.0
 
 
 class HealthStatus(str, Enum):
@@ -79,8 +83,12 @@ class HealthAggregator:
     def probe_names(self) -> List[str]:
         return list(self._probes.keys())
 
-    def check(self) -> Dict[str, Any]:
-        """Run all probes and return structured health status."""
+    def check(self, timeout: float = _PROBE_TIMEOUT) -> Dict[str, Any]:
+        """Run all probes and return structured health status.
+
+        Each probe is run with a timeout guard to prevent a hung probe
+        from stalling the entire health check.
+        """
         results: Dict[str, Dict[str, Any]] = {}
         failed = 0
         total = len(self._probes)
@@ -88,16 +96,26 @@ class HealthAggregator:
         for name, probe_fn in self._probes.items():
             start = time.monotonic()
             try:
-                probe = probe_fn()
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    future = pool.submit(probe_fn)
+                    probe = future.result(timeout=timeout)
                 probe.latency_ms = (time.monotonic() - start) * 1000
                 results[name] = probe.to_dict()
                 if not probe.ok:
                     failed += 1
-            except Exception as exc:
+            except concurrent.futures.TimeoutError:
                 elapsed = (time.monotonic() - start) * 1000
                 results[name] = HealthProbe(
                     ok=False,
-                    detail=f"probe error: {type(exc).__name__}",
+                    detail="probe timeout",
+                    latency_ms=elapsed,
+                ).to_dict()
+                failed += 1
+            except Exception:
+                elapsed = (time.monotonic() - start) * 1000
+                results[name] = HealthProbe(
+                    ok=False,
+                    detail="probe error",
                     latency_ms=elapsed,
                 ).to_dict()
                 failed += 1
