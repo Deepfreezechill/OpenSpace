@@ -33,9 +33,10 @@ logger = logging.getLogger(__name__)
 # ALLOWLIST: only these extensions may appear in skill snapshots.
 # Anything not on this list is rejected. This is fail-closed by design —
 # new file types must be explicitly approved.
+# NOTE: Template files (.jinja, .j2, .tmpl) deliberately EXCLUDED — SSTI risk.
 _ALLOWED_EXTENSIONS = frozenset({
     ".py", ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".cfg", ".ini",
-    ".csv", ".html", ".css", ".rst", ".jinja", ".jinja2", ".j2", ".tmpl",
+    ".csv", ".html", ".css", ".rst",
 })
 
 # Max individual file size (bytes) before AST scan is refused
@@ -43,6 +44,12 @@ _MAX_FILE_SIZE = 512 * 1024  # 512 KB
 
 # Max total snapshot size (bytes) — prevents DoS via many files
 _MAX_TOTAL_SIZE = 5 * 1024 * 1024  # 5 MB
+
+# Windows reserved device names — hang or corrupt if written to disk
+import re
+_WINDOWS_RESERVED_RE = re.compile(
+    r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..+)?$", re.IGNORECASE
+)
 
 
 @dataclass
@@ -101,17 +108,27 @@ def check_ast_safety(record: SkillRecord) -> CheckResult:
     """
     snapshot = record.lineage.content_snapshot or {}
 
-    # --- Layer 1: Path traversal check on all snapshot keys ---
+    # --- Layer 1: Path traversal + reserved name check on all snapshot keys ---
     traversal = []
     for key in snapshot:
         normalized = os.path.normpath(key)
-        if normalized.startswith("..") or os.path.isabs(normalized):
+        # Block .., absolute paths, and drive-relative paths (C:..\evil.py)
+        if (
+            normalized.startswith("..")
+            or os.path.isabs(normalized)
+            or (len(normalized) >= 2 and normalized[1] == ":")  # drive-letter paths
+        ):
+            traversal.append(key)
+            continue
+        # Block Windows reserved device names (CON.py, NUL.txt, etc.)
+        basename = os.path.basename(normalized)
+        if _WINDOWS_RESERVED_RE.match(basename):
             traversal.append(key)
     if traversal:
         return CheckResult(
             name="ast-safety",
             verdict="fail",
-            detail=f"Path traversal in snapshot keys: {', '.join(sorted(traversal))}",
+            detail=f"Unsafe snapshot keys: {', '.join(sorted(traversal))}",
         )
 
     # --- Layer 2: Extension allowlist (fail-closed — unknown = blocked) ---

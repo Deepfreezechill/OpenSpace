@@ -559,7 +559,7 @@ class TestPathTraversal:
         })
         result = check_ast_safety(record)
         assert result.verdict == "fail"
-        assert "traversal" in result.detail.lower()
+        assert "../../.bashrc" in result.detail
 
     def test_absolute_path_blocked(self):
         """Absolute paths in snapshot keys must be blocked."""
@@ -583,6 +583,42 @@ class TestPathTraversal:
         })
         result = check_ast_safety(record)
         assert result.verdict == "fail"
+
+    def test_windows_drive_relative_path_blocked(self):
+        """Windows drive-relative paths (C:..\\evil.py) must be blocked."""
+        from openspace.skill_engine.review_gate import check_ast_safety
+
+        record = _make_record(content_snapshot={
+            "SKILL.md": "name: test\n",
+            "C:..\\evil.py": "import os; os.system('calc')\n",
+        })
+        result = check_ast_safety(record)
+        assert result.verdict == "fail"
+        assert "C:..\\\\evil.py" in result.detail or "C:.." in result.detail
+
+    def test_windows_reserved_device_name_blocked(self):
+        """CON.py, NUL.txt, AUX.json etc. hang Windows — must block."""
+        from openspace.skill_engine.review_gate import check_ast_safety
+
+        for name in ["CON.py", "NUL.txt", "AUX.json", "COM1.py", "LPT1.cfg"]:
+            record = _make_record(content_snapshot={
+                "SKILL.md": "name: test\n",
+                name: "x = 1\n",
+            })
+            result = check_ast_safety(record)
+            assert result.verdict == "fail", f"{name} should be blocked"
+
+    def test_jinja_template_blocked(self):
+        """Jinja templates removed from allowlist — SSTI risk."""
+        from openspace.skill_engine.review_gate import check_ast_safety
+
+        for ext in [".jinja", ".jinja2", ".j2", ".tmpl"]:
+            record = _make_record(content_snapshot={
+                "SKILL.md": "name: test\n",
+                f"template{ext}": "{{ config.__class__.__init__.__globals__['os'].popen('id') }}",
+            })
+            result = check_ast_safety(record)
+            assert result.verdict == "fail", f"{ext} should be blocked"
 
 
 class TestHighSeverityBlocking:
