@@ -10,6 +10,7 @@ resolution order for subclass / hook / telemetry compatibility.
 
 from __future__ import annotations
 
+import shutil
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -75,6 +76,22 @@ async def evolve_fix(evolver, ctx: EvolutionContext) -> Optional[SkillRecord]:
     # Extract change_summary from LLM output (first line if prefixed)
     new_content, change_summary = _extract_change_summary(new_content)
 
+    # Snapshot the parent directory BEFORE edits so we can roll back
+    # if the guard rejects the result (P0 fix: no dangerous code on disk).
+    # Uses rglob for DEEP snapshot — captures subdirectory files too.
+    _pre_edit_snapshot: dict[str, bytes] = {}
+    _pre_edit_dirs: set[str] = set()
+    if parent_dir.is_dir():
+        for f in parent_dir.rglob("*"):
+            rel = str(f.relative_to(parent_dir))
+            if f.is_file():
+                try:
+                    _pre_edit_snapshot[rel] = f.read_bytes()
+                except OSError:
+                    pass
+            elif f.is_dir():
+                _pre_edit_dirs.add(rel)
+
     # Apply-retry cycle
     edit_result = await evolver._apply_with_retry(
         apply_fn=lambda content: fix_skill(parent_dir, content, PatchType.AUTO),
@@ -118,7 +135,37 @@ async def evolve_fix(evolver, ctx: EvolutionContext) -> Optional[SkillRecord]:
         critical_tools=list(parent.critical_tools),
     )
 
-    await evolver._store.evolve_skill(new_record, [parent.skill_id])
+    result = await evolver._guard.guarded_evolve(new_record, [parent.skill_id])
+
+    if not result.passed:
+        # Guard rejected — dangerous code is on disk from _apply_with_retry.
+        # Restore the parent directory from the deep pre-edit snapshot.
+        logger.warning(
+            f"FIX: guard rejected {new_id} — rolling back disk to pre-edit state"
+        )
+        if _pre_edit_snapshot and parent_dir.is_dir():
+            # Remove any NEW files/dirs that weren't in the original snapshot
+            for f in sorted(parent_dir.rglob("*"), reverse=True):
+                rel = str(f.relative_to(parent_dir))
+                if f.is_file() and rel not in _pre_edit_snapshot:
+                    try:
+                        f.unlink()
+                    except OSError:
+                        pass
+                elif f.is_dir() and rel not in _pre_edit_dirs:
+                    try:
+                        f.rmdir()  # only removes if empty
+                    except OSError:
+                        pass
+            # Restore original file contents
+            for rel_path, content in _pre_edit_snapshot.items():
+                target = parent_dir / rel_path
+                try:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(content)
+                except OSError:
+                    logger.error(f"FIX: rollback failed for {rel_path}")
+        return None
 
     # Stamp the new skill_id into the sidecar file so next discover()
     write_skill_id(parent_dir, new_id)
@@ -252,7 +299,16 @@ async def evolve_derived(evolver, ctx: EvolutionContext) -> Optional[SkillRecord
         critical_tools=sorted(all_critical),
     )
 
-    await evolver._store.evolve_skill(new_record, parent_ids)
+    result = await evolver._guard.guarded_evolve(new_record, parent_ids)
+
+    if not result.passed:
+        # Guard rejected — remove the newly created target directory
+        logger.warning(
+            f"DERIVED: guard rejected {new_id} — cleaning up {target_dir}"
+        )
+        if target_dir.exists():
+            shutil.rmtree(target_dir, ignore_errors=True)
+        return None
 
     # Stamp skill_id sidecar so discover() uses this ID on restart
     write_skill_id(target_dir, new_id)
@@ -360,7 +416,16 @@ async def evolve_captured(evolver, ctx: EvolutionContext) -> Optional[SkillRecor
         ),
     )
 
-    await evolver._store.save_record(new_record)
+    result = await evolver._guard.guarded_save(new_record)
+
+    if not result.passed:
+        # Guard rejected — remove the newly created target directory
+        logger.warning(
+            f"CAPTURED: guard rejected {new_id} — cleaning up {target_dir}"
+        )
+        if target_dir.exists():
+            shutil.rmtree(target_dir, ignore_errors=True)
+        return None
 
     # Stamp skill_id sidecar so discover() uses this ID on restart
     write_skill_id(target_dir, new_id)

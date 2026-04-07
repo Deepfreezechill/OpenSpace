@@ -63,6 +63,7 @@ from .evolution.triggers import (
     process_tool_degradation as _process_tool_degradation_impl,
 )
 from .patch import SkillEditResult
+from .skill_guard import SkillGuard
 from .store import SkillStore
 from .types import (
     EvolutionSuggestion,
@@ -123,6 +124,7 @@ class SkillEvolver:
         max_concurrent: int = 3,
     ) -> None:
         self._store = store
+        self._guard = SkillGuard(store=store)
         self._registry = registry
         self._llm_client = llm_client
         self._model = model

@@ -30,6 +30,7 @@ patterns:
     ast_type: Call
     targets:
       - os.system
+      - system
 
   - name: os_popen
     description: "os.popen() executes shell commands"
@@ -37,6 +38,7 @@ patterns:
     ast_type: Call
     targets:
       - os.popen
+      - popen
 
   - name: subprocess
     description: "subprocess module enables arbitrary command execution"
@@ -87,6 +89,13 @@ patterns:
     targets:
       - ctypes.*
 
+  - name: os_wildcard_import
+    description: "Importing os exposes all dangerous os functions as bare names"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - os.*
+
   - name: env_access
     description: "Environment variable access may leak secrets"
     severity: HIGH
@@ -123,8 +132,8 @@ patterns:
       - compile
 
   - name: getattr_injection
-    description: "getattr() on modules can access private/dangerous attributes"
-    severity: MEDIUM
+    description: "getattr() on modules can access private/dangerous attributes and bypass blocklist"
+    severity: CRITICAL
     ast_type: Call
     targets:
       - getattr
@@ -175,3 +184,283 @@ patterns:
       - globals
       - locals
       - vars
+
+  # === Added in Epic 7.2 — SkillGuard hardening ===
+
+  - name: os_exec_family
+    description: "os.exec*() replaces the current process — full RCE"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - os.execv
+      - os.execve
+      - os.execvp
+      - os.execvpe
+      - os.execl
+      - os.execlp
+      - os.execlpe
+      - execv
+      - execve
+      - execvp
+      - execvpe
+      - execl
+      - execlp
+      - execlpe
+
+  - name: os_spawn_family
+    description: "os.spawn*() creates new processes — command execution"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - os.spawnl
+      - os.spawnle
+      - os.spawnlp
+      - os.spawnlpe
+      - os.spawnv
+      - os.spawnve
+      - os.spawnvp
+      - os.spawnvpe
+      - spawnl
+      - spawnle
+      - spawnlp
+      - spawnlpe
+      - spawnv
+      - spawnve
+      - spawnvp
+      - spawnvpe
+
+  - name: breakpoint_debugger
+    description: "breakpoint() drops to interactive debugger — arbitrary code"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - breakpoint
+
+  - name: shutil_destructive
+    description: "shutil.rmtree/move/copy can destroy or exfiltrate filesystem data"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - shutil.rmtree
+      - shutil.move
+      - shutil.copytree
+
+  - name: shutil_import
+    description: "Importing shutil enables destructive filesystem operations"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - shutil.*
+
+  - name: os_remove_family
+    description: "os.remove/unlink/rmdir can delete files and directories"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - os.remove
+      - os.unlink
+      - os.rmdir
+      - os.removedirs
+      - remove
+      - unlink
+      - rmdir
+      - removedirs
+
+  - name: os_chmod
+    description: "os.chmod() can weaken file permissions"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - os.chmod
+      - os.chown
+      - chmod
+      - chown
+
+  - name: pty_spawn
+    description: "pty.spawn() drops to interactive shell — full escape"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - pty.spawn
+      - pty.openpty
+
+  - name: pty_import
+    description: "Importing pty enables interactive shell escape"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - pty.*
+
+  - name: code_interactive
+    description: "code.interact/InteractiveConsole drops to Python REPL — arbitrary code"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - code.interact
+      - code.InteractiveConsole
+      - code.InteractiveInterpreter
+
+  - name: code_import
+    description: "Importing code module enables interactive interpreter access"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - code.*
+
+  - name: webbrowser_open
+    description: "webbrowser.open() can exfiltrate data via URL or open malicious sites"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - webbrowser.open
+      - webbrowser.open_new
+      - webbrowser.open_new_tab
+
+  - name: webbrowser_import
+    description: "Importing webbrowser enables data exfiltration via browser"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - webbrowser.*
+
+  - name: signal_handler
+    description: "signal.signal() can hijack signal handlers for persistence"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - signal.signal
+      - signal.alarm
+
+  - name: signal_import
+    description: "Importing signal enables signal handler hijacking"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - signal.*
+
+  - name: multiprocessing_spawn
+    description: "multiprocessing.Process spawns unmonitored child processes"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - multiprocessing.Process
+      - multiprocessing.Pool
+
+  - name: multiprocessing_import
+    description: "Importing multiprocessing enables unmonitored child process creation"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - multiprocessing.*
+
+  - name: asyncio_subprocess
+    description: "asyncio subprocess creation bypasses standard subprocess blocks"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - asyncio.create_subprocess_exec
+      - asyncio.create_subprocess_shell
+
+  - name: http_exfiltration
+    description: "HTTP client libraries can exfiltrate data to external servers"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - requests.get
+      - requests.post
+      - requests.put
+      - requests.delete
+      - requests.patch
+      - urllib.request.urlopen
+      - urllib.request.urlretrieve
+      - http.client.HTTPConnection
+      - http.client.HTTPSConnection
+      - httpx.get
+      - httpx.post
+
+  - name: http_import
+    description: "Importing HTTP client libraries enables data exfiltration"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - requests.*
+      - httpx.*
+      - urllib.request.*
+      - http.client.*
+
+  - name: marshal_runpy
+    description: "marshal/runpy enable code execution from untrusted bytecode"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - marshal.loads
+      - marshal.load
+      - runpy.run_module
+      - runpy.run_path
+      - run_module
+      - run_path
+
+  - name: runpy_import
+    description: "Importing runpy enables arbitrary module/script execution"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - runpy.*
+
+  - name: builtins_bypass
+    description: "builtins.eval/exec/__import__ bypass bare-name blocklist via module prefix"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - builtins.eval
+      - builtins.exec
+      - builtins.__import__
+      - builtins.compile
+      - builtins.getattr
+      - builtins.setattr
+      - builtins.globals
+      - builtins.locals
+      - builtins.open
+
+  - name: builtins_import
+    description: "Importing builtins module enables blocklist bypass via builtins.eval()"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - builtins.*
+
+  - name: dunder_builtins_bypass
+    description: "__builtins__ is auto-available in every module — eval/exec/import bypass"
+    severity: CRITICAL
+    ast_type: Attribute
+    targets:
+      - __builtins__.eval
+      - __builtins__.exec
+      - __builtins__.__import__
+      - __builtins__.compile
+      - __builtins__.getattr
+      - __builtins__.open
+      - __builtins__.__dict__
+
+  - name: sys_modules_bypass
+    description: "sys.modules enables access to any loaded module, bypassing import blocks"
+    severity: CRITICAL
+    ast_type: Attribute
+    targets:
+      - sys.modules
+
+  - name: sys_dangerous
+    description: "sys functions that enable sandbox escape or code manipulation"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - sys.settrace
+      - sys.setprofile
+      - sys._getframe
+
+  - name: sys_import
+    description: "Importing sys enables sys.modules bypass"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - sys.*
