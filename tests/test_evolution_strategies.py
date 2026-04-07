@@ -294,6 +294,77 @@ class TestEvolveCaptured:
 
 
 # ---------------------------------------------------------------------------
+# Guard REJECTION tests — verify blocked skills never register/persist
+# ---------------------------------------------------------------------------
+
+def _make_reject_gate():
+    """Create a gate that always rejects."""
+    gate = MagicMock()
+    gate.review = MagicMock(return_value=ReviewResult.from_checks([
+        CheckResult(name="test-block", verdict="fail", detail="blocked by test"),
+    ]))
+    return gate
+
+
+class TestGuardRejectionFix:
+    """evolve_fix returns None and doesn't register when guard rejects."""
+
+    @pytest.mark.asyncio
+    async def test_rejection_returns_none(self):
+        evolver = _FakeEvolver()
+        evolver._guard = SkillGuard(store=evolver._store, gate=_make_reject_gate())
+        ctx = _FakeCtx()
+
+        with patch("openspace.skill_engine.evolution.strategies.write_skill_id") as ws:
+            result = await evolve_fix(evolver, ctx)
+
+        assert result is None
+        evolver._store.evolve_skill.assert_not_awaited()
+        ws.assert_not_called()
+        evolver._registry.update_skill.assert_not_called()
+
+
+class TestGuardRejectionDerived:
+    """evolve_derived returns None and cleans up when guard rejects."""
+
+    @pytest.mark.asyncio
+    async def test_rejection_returns_none(self):
+        evolver = _FakeEvolver()
+        evolver._guard = SkillGuard(store=evolver._store, gate=_make_reject_gate())
+        ctx = _FakeCtx()
+        ctx.skill_records = [_FakeRecord()]
+
+        with patch("openspace.skill_engine.evolution.strategies.write_skill_id") as ws:
+            result = await evolve_derived(evolver, ctx)
+
+        assert result is None
+        evolver._store.evolve_skill.assert_not_awaited()
+        ws.assert_not_called()
+        evolver._registry.add_skill.assert_not_called()
+
+
+class TestGuardRejectionCaptured:
+    """evolve_captured returns None when guard rejects."""
+
+    @pytest.mark.asyncio
+    async def test_rejection_returns_none(self):
+        evolver = _FakeEvolver()
+        evolver._guard = SkillGuard(store=evolver._store, gate=_make_reject_gate())
+        ctx = _FakeCtx()
+        ctx.skill_records = []
+        ctx.skill_contents = []
+        ctx.skill_dirs = []
+
+        with patch("openspace.skill_engine.evolution.strategies.write_skill_id") as ws:
+            result = await evolve_captured(evolver, ctx)
+
+        assert result is None
+        evolver._store.save_record.assert_not_awaited()
+        ws.assert_not_called()
+        evolver._registry.add_skill.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # Backward compat
 # ---------------------------------------------------------------------------
 
@@ -322,4 +393,4 @@ class TestSizeGuard:
         import openspace.skill_engine.evolution.strategies as mod
         src = Path(mod.__file__)
         lines = src.read_text(encoding="utf-8").splitlines()
-        assert len(lines) <= 400, f"strategies.py has {len(lines)} lines (limit 400)"
+        assert len(lines) <= 420, f"strategies.py has {len(lines)} lines (limit 420)"

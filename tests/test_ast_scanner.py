@@ -288,10 +288,11 @@ class TestCheckCodeSafety:
         assert is_safe is True
         assert any(f.severity == Severity.HIGH for f in findings)
 
-    def test_medium_only_allowed(self):
-        """MEDIUM-severity findings do NOT block execution."""
+    def test_getattr_now_critical(self):
+        """getattr() was elevated to CRITICAL to prevent blocklist bypass."""
         is_safe, findings = check_code_safety("getattr(os, 'path')")
-        assert is_safe is True
+        assert is_safe is False
+        assert any(f.pattern_name == "getattr_injection" for f in findings)
 
     def test_multiple_findings_returned(self):
         code = "eval('x')\nexec('y')\nimport os; os.system('z')"

@@ -96,7 +96,7 @@ class SkillGuard:
 
         Fetches the record, runs review, and only reactivates if it passes.
         """
-        record = await self._store.get_record(skill_id)
+        record = self._store.load_record(skill_id)
         if record is None:
             return ReviewResult.from_checks([
                 CheckResult(

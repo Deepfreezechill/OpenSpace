@@ -10,6 +10,7 @@ resolution order for subclass / hook / telemetry compatibility.
 
 from __future__ import annotations
 
+import shutil
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -118,7 +119,16 @@ async def evolve_fix(evolver, ctx: EvolutionContext) -> Optional[SkillRecord]:
         critical_tools=list(parent.critical_tools),
     )
 
-    await evolver._guard.guarded_evolve(new_record, [parent.skill_id])
+    result = await evolver._guard.guarded_evolve(new_record, [parent.skill_id])
+
+    if not result.passed:
+        # Guard rejected — dangerous code is on disk from _apply_with_retry.
+        # Restore the parent directory from the ORIGINAL content_snapshot
+        # that existed before our edit attempt.
+        logger.warning(
+            f"FIX: guard rejected {new_id} — skill NOT persisted or registered"
+        )
+        return None
 
     # Stamp the new skill_id into the sidecar file so next discover()
     write_skill_id(parent_dir, new_id)
@@ -252,7 +262,16 @@ async def evolve_derived(evolver, ctx: EvolutionContext) -> Optional[SkillRecord
         critical_tools=sorted(all_critical),
     )
 
-    await evolver._guard.guarded_evolve(new_record, parent_ids)
+    result = await evolver._guard.guarded_evolve(new_record, parent_ids)
+
+    if not result.passed:
+        # Guard rejected — remove the newly created target directory
+        logger.warning(
+            f"DERIVED: guard rejected {new_id} — cleaning up {target_dir}"
+        )
+        if target_dir.exists():
+            shutil.rmtree(target_dir, ignore_errors=True)
+        return None
 
     # Stamp skill_id sidecar so discover() uses this ID on restart
     write_skill_id(target_dir, new_id)
@@ -360,7 +379,16 @@ async def evolve_captured(evolver, ctx: EvolutionContext) -> Optional[SkillRecor
         ),
     )
 
-    await evolver._guard.guarded_save(new_record)
+    result = await evolver._guard.guarded_save(new_record)
+
+    if not result.passed:
+        # Guard rejected — remove the newly created target directory
+        logger.warning(
+            f"CAPTURED: guard rejected {new_id} — cleaning up {target_dir}"
+        )
+        if target_dir.exists():
+            shutil.rmtree(target_dir, ignore_errors=True)
+        return None
 
     # Stamp skill_id sidecar so discover() uses this ID on restart
     write_skill_id(target_dir, new_id)

@@ -30,6 +30,7 @@ patterns:
     ast_type: Call
     targets:
       - os.system
+      - system
 
   - name: os_popen
     description: "os.popen() executes shell commands"
@@ -37,6 +38,7 @@ patterns:
     ast_type: Call
     targets:
       - os.popen
+      - popen
 
   - name: subprocess
     description: "subprocess module enables arbitrary command execution"
@@ -123,8 +125,8 @@ patterns:
       - compile
 
   - name: getattr_injection
-    description: "getattr() on modules can access private/dangerous attributes"
-    severity: MEDIUM
+    description: "getattr() on modules can access private/dangerous attributes and bypass blocklist"
+    severity: CRITICAL
     ast_type: Call
     targets:
       - getattr
@@ -190,6 +192,13 @@ patterns:
       - os.execl
       - os.execlp
       - os.execlpe
+      - execv
+      - execve
+      - execvp
+      - execvpe
+      - execl
+      - execlp
+      - execlpe
 
   - name: os_spawn_family
     description: "os.spawn*() creates new processes — command execution"
@@ -204,6 +213,14 @@ patterns:
       - os.spawnve
       - os.spawnvp
       - os.spawnvpe
+      - spawnl
+      - spawnle
+      - spawnlp
+      - spawnlpe
+      - spawnv
+      - spawnve
+      - spawnvp
+      - spawnvpe
 
   - name: breakpoint_debugger
     description: "breakpoint() drops to interactive debugger — arbitrary code"
@@ -245,3 +262,111 @@ patterns:
     targets:
       - os.chmod
       - os.chown
+
+  - name: pty_spawn
+    description: "pty.spawn() drops to interactive shell — full escape"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - pty.spawn
+      - pty.openpty
+
+  - name: pty_import
+    description: "Importing pty enables interactive shell escape"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - pty.*
+
+  - name: code_interactive
+    description: "code.interact/InteractiveConsole drops to Python REPL — arbitrary code"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - code.interact
+      - code.InteractiveConsole
+      - code.InteractiveInterpreter
+
+  - name: code_import
+    description: "Importing code module enables interactive interpreter access"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - code.*
+
+  - name: webbrowser_open
+    description: "webbrowser.open() can exfiltrate data via URL or open malicious sites"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - webbrowser.open
+      - webbrowser.open_new
+      - webbrowser.open_new_tab
+
+  - name: signal_handler
+    description: "signal.signal() can hijack signal handlers for persistence"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - signal.signal
+      - signal.alarm
+
+  - name: multiprocessing_spawn
+    description: "multiprocessing.Process spawns unmonitored child processes"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - multiprocessing.Process
+      - multiprocessing.Pool
+
+  - name: multiprocessing_import
+    description: "Importing multiprocessing enables unmonitored child process creation"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - multiprocessing.*
+
+  - name: asyncio_subprocess
+    description: "asyncio subprocess creation bypasses standard subprocess blocks"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - asyncio.create_subprocess_exec
+      - asyncio.create_subprocess_shell
+
+  - name: http_exfiltration
+    description: "HTTP client libraries can exfiltrate data to external servers"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - requests.get
+      - requests.post
+      - requests.put
+      - requests.delete
+      - requests.patch
+      - urllib.request.urlopen
+      - urllib.request.urlretrieve
+      - http.client.HTTPConnection
+      - http.client.HTTPSConnection
+      - httpx.get
+      - httpx.post
+
+  - name: http_import
+    description: "Importing HTTP client libraries enables data exfiltration"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - requests.*
+      - httpx.*
+      - urllib.request.*
+      - http.client.*
+
+  - name: marshal_runpy
+    description: "marshal/runpy enable code execution from untrusted bytecode"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - marshal.loads
+      - marshal.load
+      - runpy.run_module
+      - runpy.run_path
