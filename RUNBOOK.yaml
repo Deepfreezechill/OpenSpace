@@ -625,18 +625,24 @@ epics:
 - id: '7.2'
   phase: P7
   title: SkillGuard quality gates
-  status: pending
-  branch: null
-  pr: null
-  review_round: 0
-  description: 'Automated skill quality gates: blocklist enforcement, capability scope
-    validation, test coverage minimums for activated skills.
+  status: done
+  branch: epic/7.2-skillguard
+  pr: 55
+  review_round: 2
+  description: 'Pre-persist quality gates for all skill mutations. SkillGuard wraps
+    ReviewGate+SkillStore. AST blocklist hardened to 40+ patterns covering RCE, sandbox
+    escape, data exfil. Deep disk rollback on guard rejection. 2 review rounds, 7
+    agent-reviews, all P0/P1s fixed.
 
     '
   acceptance:
   - SkillGuard blocks activation of unsafe skills
   - Capability scope validated against tier
   - Test coverage minimum enforced
+  notes: '33 guard tests, 2056 total. Blocklist: builtins, __builtins__, sys.modules,
+    os.exec*, os.spawn*, pty, code, http exfil, marshal/runpy, asyncio subprocess,
+    signal, webbrowser, multiprocessing, shutil, os.remove, os.chmod. Deep rollback
+    via rglob snapshot. sync_from_registry unguarded = accepted risk for 7.3.'
 - id: '7.3'
   phase: P7
   title: Launch checklist
