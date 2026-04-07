@@ -1,7 +1,7 @@
 schema_version: '1.0'
 lock:
-  active_claim: '6.3'
-  claimed_by: 2026-04-07-e9b4572b
+  active_claim: null
+  claimed_by: null
   claimed_at: '2026-04-07T01:20:00Z'
 review:
   max_rounds: 3
@@ -562,10 +562,10 @@ epics:
 - id: '6.3'
   phase: P6
   title: Deployment architecture
-  status: claimed
+  status: done
   branch: epic/6.3-deployment
-  pr: null
-  review_round: 0
+  pr: 52
+  review_round: 2
   description: 'Containerization (Dockerfile), config management (env-based), graceful
     shutdown, startup probes, resource limits.
 
@@ -574,6 +574,14 @@ epics:
   - Dockerfile builds and runs successfully
   - Config via environment variables documented
   - Graceful shutdown handles in-flight tasks
+  notes:
+  - DeployConfig frozen dataclass with env-based config
+  - GracefulShutdownHandler with global monotonic deadline, 70/30 drain/hook budget
+  - /health endpoint outside auth for K8s probes
+  - HEALTHCHECK hits real /health endpoint
+  - Dockerfile multi-stage, non-root, OPENSPACE_SHUTDOWN_TIMEOUT=8
+  - 41 deployment tests, 1925 total passed
+  - 2 review rounds, 9 agents total
 - id: '6.4'
   phase: P6
   title: DX polish (CLI help, errors, onboarding)
