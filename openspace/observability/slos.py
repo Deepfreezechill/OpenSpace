@@ -249,6 +249,11 @@ class SLOEvaluator:
 
         Aggregates across all agent labels, filtering to _total samples only
         to avoid counting _created timestamp samples.
+
+        COUPLING NOTE: This method assumes failure status is labeled "error".
+        See execution.py lines ~310,331 where status labels are set.
+        If new status values are added (e.g., "timeout", "cancelled"),
+        update the failure detection here or switch to success-allowlist.
         """
         total = 0
         failed = 0
@@ -260,7 +265,7 @@ class SLOEvaluator:
                 total += val
                 if sample.labels.get("status") == "error":
                     failed += val
-        except (IndexError, AttributeError):
+        except (IndexError, AttributeError, ValueError, OverflowError):
             pass
         return total, failed
 
@@ -407,7 +412,8 @@ class SLOEvaluator:
                     if bucket_fraction <= 0:
                         return le
                     remaining = target_count - prev_count
-                    return prev_le + bucket_width * (remaining / bucket_fraction)
+                    result = prev_le + bucket_width * (remaining / bucket_fraction)
+                    return result if math.isfinite(result) else le
                 prev_le = le
                 prev_count = bucket_count
 
@@ -422,4 +428,4 @@ class SLOEvaluator:
 
     def to_json(self) -> str:
         """Return evaluation result as JSON string."""
-        return json.dumps(self.evaluate(), default=str, indent=2)
+        return json.dumps(self.evaluate(), default=str, indent=2, allow_nan=False)
