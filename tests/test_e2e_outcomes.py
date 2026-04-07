@@ -11,7 +11,7 @@ Test Matrix (10 outcome categories):
   4. Review Gate      — blocks unsafe code, passes safe code
   5. Execution Engine — submit task → get structured result (orchestration-level;
                         grounding agent is mocked since it requires a live LLM)
-  6. MCP Server       — tools are registered and callable
+  6. MCP Server       — tools are registered and discoverable
   7. Evolution        — skill evolves, lineage preserved, quarantine works
   8. Command Execute  — server runs commands and returns output
   9. Version          — consistent version across all entry points
@@ -502,17 +502,28 @@ class TestExecutionEngineOutcome:
         assert "response" in result
 
     def test_tasks_get_unique_ids_and_count_increments(self, engine, fake_grounding_agent):
-        """OUTCOME: Each task gets a unique identifier and the system tracks count."""
+        """OUTCOME: Each task gets a unique identifier and the system tracks count.
+
+        Verifies engine-generated IDs (not caller-supplied) are unique by
+        inspecting the execution_context passed to the grounding agent.
+        """
         assert engine.execution_count == 0
 
-        result1 = _run(engine.execute("Task 1", task_id="task_alpha"))
+        # Let engine auto-generate task IDs (don't supply them)
+        _run(engine.execute("Task 1"))
         assert engine.execution_count == 1
+        ctx1 = fake_grounding_agent.process.call_args_list[0][0][0]
 
-        result2 = _run(engine.execute("Task 2", task_id="task_beta"))
+        _run(engine.execute("Task 2"))
         assert engine.execution_count == 2
+        ctx2 = fake_grounding_agent.process.call_args_list[1][0][0]
 
-        # Verify IDs are actually different (not recycled)
-        assert "task_alpha" != "task_beta", "Task IDs must be unique"
+        # Verify the engine assigned unique, non-empty task IDs
+        id1 = ctx1.get("task_id", "")
+        id2 = ctx2.get("task_id", "")
+        assert id1, "Engine must assign a task_id to execution context"
+        assert id2, "Engine must assign a task_id to execution context"
+        assert id1 != id2, f"Engine-generated task IDs must be unique: {id1!r} == {id2!r}"
 
     def test_no_grounding_agent_raises(self, tmp_path):
         """OUTCOME: System clearly tells user it's not ready if not initialized."""
