@@ -1,8 +1,7 @@
 # SkillGuard SDK — Public API Surface
 
-> **Phase:** 1 (design only — implementation in Phase 6)
-> **Status:** Draft
 > **Version:** 2.0.0
+> **Status:** Stable
 
 ## Overview
 

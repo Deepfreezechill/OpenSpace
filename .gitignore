@@ -78,3 +78,8 @@ frontend/node_modules
 .coverage
 htmlcov/
 coverage.xml
+
+# Dev artifacts (PR diffs, scratch files, Windows NUL)
+pr-*-diff*.txt
+NUL.txt
+scratch_*/

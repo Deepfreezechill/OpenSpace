@@ -21,7 +21,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy dependency files first (layer caching — code changes don't bust this)
-COPY pyproject.toml requirements.txt ./
+COPY pyproject.toml requirements.txt README.md ./
 
 # Install Python dependencies (cached unless requirements change)
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
