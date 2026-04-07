@@ -312,7 +312,7 @@ class HttpConnector(MCPBaseConnector):
                 "params": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {},
-                    "clientInfo": {"name": "OpenSpace", "version": "1.0.0"},
+                    "clientInfo": {"name": "OpenSpace", "version": "2.0.0"},
                 },
             }
 
@@ -520,7 +520,7 @@ class HttpConnector(MCPBaseConnector):
             {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {},
-                "clientInfo": {"name": "OpenSpace", "version": "1.0.0"},
+                "clientInfo": {"name": "OpenSpace", "version": "2.0.0"},
             },
         )
 
