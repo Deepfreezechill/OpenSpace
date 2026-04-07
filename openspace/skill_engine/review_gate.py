@@ -5,7 +5,7 @@ checks before allowing the skill to become active. Skills that fail
 review are quarantined (deactivated) until manually approved.
 
 Checks:
-  1. AST Safety — scans Python files for dangerous patterns
+  1. AST Safety — scans Python files for dangerous patterns (HIGH + CRITICAL block)
   2. Content    — validates required fields (name, description, SKILL.md)
   3. Lineage    — validates parent chain integrity for evolved skills
 
@@ -22,6 +22,7 @@ Usage::
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 
@@ -29,13 +30,19 @@ from openspace.skill_engine.types import SkillOrigin, SkillRecord, ValidationErr
 
 logger = logging.getLogger(__name__)
 
-# Executable extensions that must not appear in skill snapshots
-_BLOCKED_EXTENSIONS = frozenset({
-    ".sh", ".bash", ".bat", ".cmd", ".ps1", ".pyw", ".js", ".rb", ".pl",
+# ALLOWLIST: only these extensions may appear in skill snapshots.
+# Anything not on this list is rejected. This is fail-closed by design —
+# new file types must be explicitly approved.
+_ALLOWED_EXTENSIONS = frozenset({
+    ".py", ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".cfg", ".ini",
+    ".csv", ".html", ".css", ".rst", ".jinja", ".jinja2", ".j2", ".tmpl",
 })
 
 # Max individual file size (bytes) before AST scan is refused
 _MAX_FILE_SIZE = 512 * 1024  # 512 KB
+
+# Max total snapshot size (bytes) — prevents DoS via many files
+_MAX_TOTAL_SIZE = 5 * 1024 * 1024  # 5 MB
 
 
 @dataclass
@@ -45,6 +52,10 @@ class CheckResult:
     name: str
     verdict: str  # "pass" | "fail"
     detail: str = ""
+
+    def __post_init__(self) -> None:
+        if self.verdict not in ("pass", "fail"):
+            raise ValueError(f"CheckResult verdict must be 'pass' or 'fail', got '{self.verdict}'")
 
 
 @dataclass
@@ -60,8 +71,11 @@ class ReviewResult:
 
     @classmethod
     def from_checks(cls, checks: List[CheckResult]) -> ReviewResult:
-        """Aggregate individual check results into a final verdict."""
-        any_fail = any(c.verdict == "fail" for c in checks)
+        """Aggregate individual check results into a final verdict.
+
+        Fail-closed: any verdict that is not explicitly "pass" counts as failure.
+        """
+        any_fail = any(c.verdict != "pass" for c in checks)
         return cls(
             verdict="fail" if any_fail else "pass",
             checks=list(checks),
@@ -78,22 +92,53 @@ def check_ast_safety(record: SkillRecord) -> CheckResult:
 
     Uses the existing AST scanner from openspace.security.
     Fails-closed: if the scanner is unavailable, the check FAILS (not skips).
-    Also rejects executable non-Python files (.sh, .bat, .ps1, etc.).
+
+    Security layers:
+      1. Allowlist — only permitted file extensions accepted
+      2. Path sanitization — no traversal (../) or absolute paths in keys
+      3. Size limits — per-file (512KB) and total (5MB)
+      4. AST scan — blocks both CRITICAL and HIGH severity findings
     """
     snapshot = record.lineage.content_snapshot or {}
 
-    # Block executable non-Python files (shell scripts, batch files, etc.)
-    blocked = [
-        k for k in snapshot
-        if any(k.lower().endswith(ext) for ext in _BLOCKED_EXTENSIONS)
-    ]
-    if blocked:
+    # --- Layer 1: Path traversal check on all snapshot keys ---
+    traversal = []
+    for key in snapshot:
+        normalized = os.path.normpath(key)
+        if normalized.startswith("..") or os.path.isabs(normalized):
+            traversal.append(key)
+    if traversal:
         return CheckResult(
             name="ast-safety",
             verdict="fail",
-            detail=f"Blocked executable files: {', '.join(sorted(blocked))}",
+            detail=f"Path traversal in snapshot keys: {', '.join(sorted(traversal))}",
         )
 
+    # --- Layer 2: Extension allowlist (fail-closed — unknown = blocked) ---
+    disallowed = []
+    for key in snapshot:
+        _, ext = os.path.splitext(key.lower())
+        if ext and ext not in _ALLOWED_EXTENSIONS:
+            disallowed.append(key)
+        elif not ext and key.lower() not in ("readme", "license", "changelog"):
+            disallowed.append(key)
+    if disallowed:
+        return CheckResult(
+            name="ast-safety",
+            verdict="fail",
+            detail=f"Disallowed file types (not in allowlist): {', '.join(sorted(disallowed))}",
+        )
+
+    # --- Layer 3: Total snapshot size check ---
+    total_bytes = sum(len(v.encode("utf-8")) if isinstance(v, str) else 0 for v in snapshot.values())
+    if total_bytes > _MAX_TOTAL_SIZE:
+        return CheckResult(
+            name="ast-safety",
+            verdict="fail",
+            detail=f"Total snapshot size {total_bytes} bytes exceeds {_MAX_TOTAL_SIZE} limit",
+        )
+
+    # --- Layer 4: AST scan on Python files ---
     py_files = {
         k: v for k, v in snapshot.items() if k.lower().endswith(".py")
     }
@@ -113,12 +158,15 @@ def check_ast_safety(record: SkillRecord) -> CheckResult:
 
     violations = []
     for filename, source in py_files.items():
-        if len(source) > _MAX_FILE_SIZE:
-            violations.append(f"{filename}: file too large ({len(source)} bytes, max {_MAX_FILE_SIZE})")
+        file_bytes = len(source.encode("utf-8"))
+        if file_bytes > _MAX_FILE_SIZE:
+            violations.append(f"{filename}: file too large ({file_bytes} bytes, max {_MAX_FILE_SIZE})")
             continue
         is_safe, findings = check_code_safety(source)
-        if not is_safe:
-            descs = [f.description for f in findings]
+        # ReviewGate is stricter than runtime: block HIGH + CRITICAL
+        high_or_critical = [f for f in findings if f.severity.value in ("CRITICAL", "HIGH")]
+        if not is_safe or high_or_critical:
+            descs = [f.description for f in high_or_critical] if high_or_critical else [f.description for f in findings]
             violations.append(f"{filename}: {'; '.join(descs) or 'unsafe'}")
 
     if violations:
