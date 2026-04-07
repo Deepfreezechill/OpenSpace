@@ -1,8 +1,8 @@
 schema_version: '1.0'
 lock:
-  active_claim: '6.2'
-  claimed_by: 2026-04-07-e9b4572b
-  claimed_at: '2026-04-07T00:29:00Z'
+  active_claim: null
+  claimed_by: null
+  claimed_at: null
 review:
   max_rounds: 3
   required_gates:
@@ -547,10 +547,10 @@ epics:
 - id: '6.2'
   phase: P6
   title: SLOs (latency, error rate, availability)
-  status: claimed
+  status: done
   branch: epic/6.2-slos
-  pr: null
-  review_round: 0
+  pr: 51
+  review_round: 2
   description: 'Define and enforce SLO targets: p99 execution latency, error rate
     budget, availability targets. Add SLO burn-rate alerting logic.
 
