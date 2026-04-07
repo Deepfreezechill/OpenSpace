@@ -101,7 +101,7 @@ class TestCreateMcpApp:
 
     def test_tools_registered(self):
         app = create_mcp_app()
-        # Verify all 4 MCP tools are actually wired
+        # Verify all 7 MCP tools are actually wired
         if hasattr(app, "_tool_manager") and hasattr(app._tool_manager, "_tools"):
             tool_names = set(app._tool_manager._tools.keys())
             assert tool_names == {

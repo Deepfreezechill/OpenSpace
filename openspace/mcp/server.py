@@ -158,7 +158,9 @@ def _register_health_probes() -> None:
         try:
             from openspace.skill_engine.store import SkillStore
 
-            store = SkillStore()
+            if not hasattr(_probe_skill_store, "_cached"):
+                _probe_skill_store._cached = SkillStore()
+            store = _probe_skill_store._cached
             count = len(store.list_skills()) if hasattr(store, "list_skills") else 0
             return HealthProbe(ok=True, detail=f"{count} skills", metadata={"count": count})
         except Exception as exc:
@@ -173,9 +175,7 @@ def _register_health_probes() -> None:
             return HealthProbe(ok=False, detail=f"{type(exc).__name__}")
 
     def _probe_mcp_tools() -> HealthProbe:
-        from openspace.mcp.tool_handlers import register_handlers
-
-        return HealthProbe(ok=True, detail="7 tools registered")
+        return HealthProbe(ok=True, detail="tools registered")
 
     health.register("skill_store", _probe_skill_store)
     health.register("grounding_engine", _probe_grounding)

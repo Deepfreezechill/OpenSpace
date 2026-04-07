@@ -433,3 +433,181 @@ class TestPackageCompleteness:
         register_handlers(mock_mcp)
         # 4 original + 3 observability = 7 calls
         assert mock_mcp.tool.call_count == 7
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Additional tests — review findings coverage
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestMetricsAdditional:
+    """Cover metrics that were untested: execution_iterations, skill_misses, skill_search_latency."""
+
+    def test_execution_iterations_histogram(self):
+        reg = MetricsRegistry()
+        reg.execution_iterations.labels(agent="test").observe(5)
+        rendered = reg.render().decode()
+        assert "openspace_execution_iterations" in rendered
+
+    def test_skill_misses_counter(self):
+        reg = MetricsRegistry()
+        reg.skill_misses.inc()
+        reg.skill_misses.inc()
+        rendered = reg.render().decode()
+        assert "openspace_skill_misses_total" in rendered
+
+    def test_skill_search_latency_histogram(self):
+        reg = MetricsRegistry()
+        reg.skill_search_latency.observe(0.042)
+        rendered = reg.render().decode()
+        assert "openspace_skill_search_latency_seconds" in rendered
+
+    def test_in_flight_gauge_lifecycle(self):
+        """Verify gauge increments inside track_execution and decrements on exit."""
+        reg = MetricsRegistry()
+        gauge = reg.execution_in_flight.labels(agent="test")
+        assert gauge._value.get() == 0.0
+        with reg.track_execution("test"):
+            assert gauge._value.get() == 1.0
+        assert gauge._value.get() == 0.0
+
+    def test_in_flight_gauge_decrements_on_error(self):
+        """Verify gauge still decrements when track_execution raises."""
+        reg = MetricsRegistry()
+        gauge = reg.execution_in_flight.labels(agent="test")
+        with pytest.raises(ValueError):
+            with reg.track_execution("test"):
+                assert gauge._value.get() == 1.0
+                raise ValueError("boom")
+        assert gauge._value.get() == 0.0
+
+    def test_track_execution_records_latency(self):
+        """Verify track_execution records latency into the histogram."""
+        reg = MetricsRegistry()
+        with reg.track_execution("test"):
+            time.sleep(0.01)
+        rendered = reg.render().decode()
+        assert "openspace_execution_latency_seconds" in rendered
+        # At least one observation should be recorded
+        assert '_count 1.0' in rendered or '_count{' in rendered
+
+
+class TestTraceAsyncChildSpan:
+    """Cover the trace_async child-span (non-root) path."""
+
+    @pytest.mark.asyncio
+    async def test_child_span_created_under_existing_trace(self):
+        t = ExecutionTracer()
+
+        @trace_async("child.op", tracer_instance=t)
+        async def inner():
+            return "ok"
+
+        # Start a parent trace first
+        t.start_trace("parent")
+        result = await inner()
+        assert result == "ok"
+
+        # The trace should have root + child spans
+        trace = t.current_trace()
+        assert trace is not None
+        assert len(trace.spans) >= 2
+        names = [s.name for s in trace.spans]
+        assert "parent" in names
+        assert "child.op" in names
+
+        t.finish_trace()
+
+    @pytest.mark.asyncio
+    async def test_trace_async_error_sets_root_span_error_status(self):
+        """trace_async must set root span status to 'error' on exception."""
+        t = ExecutionTracer()
+
+        @trace_async("failing.op", tracer_instance=t)
+        async def boom():
+            raise RuntimeError("kaboom")
+
+        with pytest.raises(RuntimeError, match="kaboom"):
+            await boom()
+
+        # After exception, trace should be finished with error status
+        traces = t.recent_traces
+        assert len(traces) == 1
+        root = traces[0].spans[0]
+        assert root.status == "error"
+
+
+class TestTracerThreadSafety:
+    """Verify the lock protects ring buffer operations."""
+
+    def test_concurrent_finish_trace_no_corruption(self):
+        import threading
+
+        t = ExecutionTracer(max_traces=10)
+        errors = []
+
+        def worker(n):
+            try:
+                for _ in range(20):
+                    t.start_trace(f"worker-{n}")
+                    t.finish_trace()
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(4)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join()
+
+        assert errors == [], f"Thread safety errors: {errors}"
+        # Ring buffer should be bounded
+        assert len(t.recent_traces) <= 10
+
+
+class TestHealthEdgeCases:
+    """Cover health boundary and edge cases."""
+
+    def test_exact_50_percent_failure_is_unhealthy(self):
+        """At exactly 50% (2/4), status should be unhealthy, not degraded."""
+        h = HealthAggregator()
+        h.register("a", lambda: HealthProbe(ok=True))
+        h.register("b", lambda: HealthProbe(ok=True))
+        h.register("c", lambda: HealthProbe(ok=False, detail="down"))
+        h.register("d", lambda: HealthProbe(ok=False, detail="down"))
+        result = h.check()
+        # failed=2, total=4 → 2 < 4/2 is False → unhealthy
+        assert result["status"] == "unhealthy"
+
+    def test_probe_exception_counted_as_failure(self):
+        """A probe that throws should count as failed, not crash check()."""
+        h = HealthAggregator()
+        h.register("ok", lambda: HealthProbe(ok=True))
+        h.register("explode", lambda: (_ for _ in ()).throw(RuntimeError("bang")))
+        result = h.check()
+        assert result["failed_probes"] == 1
+        assert result["checks"]["explode"]["ok"] is False
+        assert "RuntimeError" in result["checks"]["explode"]["detail"]
+
+    def test_unregister_nonexistent_probe_is_noop(self):
+        h = HealthAggregator()
+        h.unregister("does_not_exist")  # should not raise
+
+    def test_finish_trace_with_no_active_trace_returns_none(self):
+        t = ExecutionTracer()
+        result = t.finish_trace()
+        assert result is None
+
+
+class TestSpanContextNoActiveTrace:
+    """Cover _SpanContext.__enter__ when no trace is active (auto-creates)."""
+
+    def test_span_auto_creates_trace_when_none_active(self):
+        t = ExecutionTracer()
+        assert t.current_trace() is None
+        with t.span("auto-root") as s:
+            assert s.name == "auto-root"
+            assert t.current_trace() is not None
+        # After exit, trace context still set (not finished by span)
+        assert t.current_trace() is not None
+        t.finish_trace()

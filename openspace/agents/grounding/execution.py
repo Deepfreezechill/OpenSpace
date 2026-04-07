@@ -9,6 +9,8 @@ Instrumented with observability (Epic 6.1).
 from __future__ import annotations
 
 import copy
+import hashlib
+import time
 from typing import Any, Dict, List, Optional
 
 from openspace.observability.metrics import metrics as _metrics
@@ -50,9 +52,9 @@ async def process(agent, context: Dict[str, Any]) -> Dict[str, Any]:
 
     logger.info(f"Grounding Agent: Processing instruction at step {agent.step}")
 
-    # ── Observability: start trace + metrics ─────────────────────────
-    trace = _tracer.start_trace("grounding.process", instruction=instruction[:200])
-    _metrics.execution_in_flight.labels(agent=agent._name).inc()
+    # ── Observability: agent name sanitized for Prometheus labels ─────
+    _agent_label = _sanitize_label(agent._name)
+    _exec_start = time.monotonic()
 
     # Existing workspace files check
     workspace_info = await agent._check_workspace_artifacts(context)
@@ -104,6 +106,15 @@ async def process(agent, context: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     try:
+        # ── Observability: trace + metrics inside try to prevent leaks ──
+        _instr_hash = hashlib.sha256(instruction.encode()).hexdigest()[:12]
+        trace = _tracer.start_trace(
+            "grounding.process",
+            instruction_hash=_instr_hash,
+            instruction_length=len(instruction),
+        )
+        _metrics.execution_in_flight.labels(agent=_agent_label).inc()
+
         while current_iteration < max_iterations:
             current_iteration += 1
             logger.info(
@@ -283,9 +294,11 @@ async def process(agent, context: Dict[str, Any]) -> Dict[str, Any]:
         )
 
         # ── Observability: record success metrics ────────────────────
-        _metrics.execution_iterations.labels(agent=agent._name).observe(current_iteration)
-        _metrics.execution_total.labels(agent=agent._name, status="success").inc()
-        _metrics.execution_in_flight.labels(agent=agent._name).dec()
+        _elapsed = time.monotonic() - _exec_start
+        _metrics.execution_latency.labels(agent=_agent_label, status="success").observe(_elapsed)
+        _metrics.execution_iterations.labels(agent=_agent_label).observe(current_iteration)
+        _metrics.execution_total.labels(agent=_agent_label, status="success").inc()
+        _metrics.execution_in_flight.labels(agent=_agent_label).dec()
         root_span = _tracer.current_span()
         if root_span:
             root_span.attributes["iterations"] = current_iteration
@@ -298,17 +311,19 @@ async def process(agent, context: Dict[str, Any]) -> Dict[str, Any]:
         logger.error(f"Grounding Agent: Execution failed: {e}")
 
         # ── Observability: record error metrics ──────────────────────
-        _metrics.execution_total.labels(agent=agent._name, status="error").inc()
-        _metrics.execution_in_flight.labels(agent=agent._name).dec()
+        _elapsed = time.monotonic() - _exec_start
+        _metrics.execution_latency.labels(agent=_agent_label, status="error").observe(_elapsed)
+        _metrics.execution_total.labels(agent=_agent_label, status="error").inc()
+        _metrics.execution_in_flight.labels(agent=_agent_label).dec()
         root_span = _tracer.current_span()
         if root_span:
             root_span.add_event("error", error_type=type(e).__name__)
+            root_span.status = "error"
         _tracer.finish_trace()
 
         result = {
-            "error": str(e),
+            "error": type(e).__name__,
             "status": "error",
-            "instruction": instruction,
             "iteration": current_iteration,
         }
         agent.increment_step()
@@ -350,3 +365,18 @@ def _build_retrieved_tools_list(
 
         retrieved_tools_list.append(tool_info)
     return retrieved_tools_list
+
+
+# ── Label sanitization ───────────────────────────────────────────────
+
+# Prometheus label values should be bounded. We keep a short allowlist
+# and map everything else to "unknown" to prevent cardinality bombs.
+_LABEL_MAX_LEN = 64
+
+
+def _sanitize_label(value: str) -> str:
+    """Clamp a label value to a safe length and replace spaces."""
+    if not value:
+        return "unknown"
+    clean = value[:_LABEL_MAX_LEN].replace(" ", "_")
+    return clean

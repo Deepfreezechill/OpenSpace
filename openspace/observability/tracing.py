@@ -23,8 +23,10 @@ Usage::
 
 from __future__ import annotations
 
+import collections
 import contextvars
 import functools
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -105,6 +107,7 @@ _current_span: contextvars.ContextVar[Optional[Span]] = contextvars.ContextVar(
 
 # Ring buffer size — keep last N traces in memory for debugging
 _MAX_TRACES = 50
+_MAX_SPANS_PER_TRACE = 500
 
 
 class ExecutionTracer:
@@ -118,7 +121,8 @@ class ExecutionTracer:
 
     def __init__(self, max_traces: int = _MAX_TRACES) -> None:
         self._max_traces = max_traces
-        self._traces: List[Trace] = []
+        self._traces: collections.deque[Trace] = collections.deque(maxlen=max_traces)
+        self._lock = threading.Lock()
 
     def start_trace(self, name: str = "root", **attrs: Any) -> Trace:
         """Begin a new trace with a root span."""
@@ -143,15 +147,14 @@ class ExecutionTracer:
         if trace is None:
             return None
 
-        # Close any open spans
+        # Close any open spans (preserving their current status)
         for s in trace.spans:
             if s.end_time is None:
-                s.finish()
+                s.finish(status=s.status)
 
-        # Store in ring buffer
-        self._traces.append(trace)
-        if len(self._traces) > self._max_traces:
-            self._traces = self._traces[-self._max_traces:]
+        # Store in ring buffer (thread-safe deque with maxlen)
+        with self._lock:
+            self._traces.append(trace)
 
         _current_trace.set(None)
         _current_span.set(None)
@@ -165,10 +168,12 @@ class ExecutionTracer:
 
     @property
     def recent_traces(self) -> List[Trace]:
-        return list(self._traces)
+        with self._lock:
+            return list(self._traces)
 
     def clear(self) -> None:
-        self._traces.clear()
+        with self._lock:
+            self._traces.clear()
         _current_trace.set(None)
         _current_span.set(None)
 
@@ -191,6 +196,9 @@ class _SpanContext:
             return self._span
 
         self._parent = _current_span.get()
+        # Guard against unbounded span growth
+        if len(trace.spans) >= _MAX_SPANS_PER_TRACE:
+            return self._parent or trace.spans[0]  # return existing span, don't add
         self._span = Span(
             name=self._name,
             trace_id=trace.trace_id,
@@ -240,6 +248,13 @@ def trace_async(
                         return await fn(*args, **kwargs)
                 else:
                     return await fn(*args, **kwargs)
+            except Exception:
+                # Mark root span as error before finish
+                if is_root:
+                    root = t.current_span()
+                    if root:
+                        root.status = "error"
+                raise
             finally:
                 if is_root:
                     t.finish_trace()

@@ -34,7 +34,7 @@ pytestmark = pytest.mark.skipif(not _HAS_MODULE, reason="openspace.mcp.tool_hand
 class TestRegisterHandlers:
     """Verify register_handlers wires all 7 tools to the FastMCP instance."""
 
-    def test_registers_four_tools(self):
+    def test_registers_seven_tools(self):
         mock_mcp = MagicMock()
         mock_decorator = MagicMock(side_effect=lambda fn: fn)
         mock_mcp.tool.return_value = mock_decorator

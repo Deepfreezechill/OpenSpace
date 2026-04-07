@@ -172,7 +172,7 @@ class TestProcess:
             mock_rm.record_iteration_context = AsyncMock()
             result = await process(agent, {"instruction": "crash"})
         assert result["status"] == "error"
-        assert "boom" in result["error"]
+        assert result["error"] == "RuntimeError"
         agent.increment_step.assert_called_once()
 
     def test_max_consecutive_empty_constant(self):
