@@ -394,7 +394,7 @@ class TestArchitectureSoundness:
         """Verify MCP modules are within expected bounds."""
         modules = {
             "openspace/mcp_server.py": 65,           # shim, ~51 (+27% headroom)
-            "openspace/mcp/server.py": 310,           # ~272 (+14% headroom, health probes added 6.1)
+            "openspace/mcp/server.py": 410,           # ~396 (+4% headroom, CLI help + preflight added 6.4)
             "openspace/mcp/tool_handlers.py": 970,    # ~880 (+10% headroom, SLO tool added 6.2)
         }
         base = Path(__file__).parent.parent
