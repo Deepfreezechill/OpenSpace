@@ -20,13 +20,17 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files first (layer caching)
+# Copy dependency files first (layer caching — code changes don't bust this)
 COPY pyproject.toml requirements.txt ./
+
+# Install Python dependencies (cached unless requirements change)
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# Copy application code (separate layer — changes more often)
 COPY openspace/ openspace/
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt && \
-    pip install --no-cache-dir --prefix=/install .
+# Install the package itself
+RUN pip install --no-cache-dir --prefix=/install --no-deps .
 
 # ── Stage 2: Runtime ────────────────────────────────────────────────
 FROM python:3.13-slim AS runtime
@@ -66,10 +70,11 @@ ENV OPENSPACE_MCP_HOST=0.0.0.0 \
 
 EXPOSE 8000
 
-# Health check: hit the MCP health endpoint
-# For stdio transport, override this in docker-compose
+# Health check: Python-based (works for both stdio and HTTP transports)
+# For HTTP transports, /health endpoint is available via Starlette
+# For stdio transport, override with HEALTHCHECK NONE in docker-compose
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+    CMD python -c "from openspace.observability.health import health; r=health.check(); exit(0 if r.get('status')=='healthy' else 1)" || exit 1
 
 # Graceful shutdown: Docker sends SIGTERM, handler drains in-flight tasks
 STOPSIGNAL SIGTERM

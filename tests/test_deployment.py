@@ -93,6 +93,59 @@ class TestDeployConfig:
         with pytest.raises(ValueError, match="shutdown_timeout"):
             DeployConfig(shutdown_timeout=-1)
 
+    def test_zero_shutdown_timeout_rejected(self):
+        """timeout=0 would cause instant task cancellation."""
+        from openspace.deploy.config import DeployConfig
+
+        with pytest.raises(ValueError, match="shutdown_timeout"):
+            DeployConfig(shutdown_timeout=0)
+
+    def test_port_boundary_values(self):
+        from openspace.deploy.config import DeployConfig
+
+        # Valid boundaries
+        assert DeployConfig(mcp_port=1).mcp_port == 1
+        assert DeployConfig(mcp_port=65535).mcp_port == 65535
+        # Invalid boundaries
+        with pytest.raises(ValueError, match="port"):
+            DeployConfig(mcp_port=0)
+        with pytest.raises(ValueError, match="port"):
+            DeployConfig(mcp_port=65536)
+
+    def test_log_level_normalized_to_upper(self):
+        from openspace.deploy.config import DeployConfig
+
+        cfg = DeployConfig(log_level="debug")
+        assert cfg.log_level == "DEBUG"
+
+    def test_non_integer_port_env_raises(self):
+        from openspace.deploy.config import DeployConfig
+
+        with patch.dict(os.environ, {"OPENSPACE_MCP_PORT": "abc"}, clear=True):
+            with pytest.raises(ValueError, match="OPENSPACE_MCP_PORT"):
+                DeployConfig.from_env()
+
+    def test_empty_port_env_uses_default(self):
+        from openspace.deploy.config import DeployConfig
+
+        with patch.dict(os.environ, {"OPENSPACE_MCP_PORT": ""}, clear=True):
+            cfg = DeployConfig.from_env()
+            assert cfg.mcp_port == 8000
+
+    def test_boolean_env_parsing_variants(self):
+        """All boolean truthy values should work."""
+        from openspace.deploy.config import DeployConfig
+
+        for val in ("true", "True", "TRUE", "1", "yes"):
+            with patch.dict(os.environ, {"OPENSPACE_METRICS_ENABLED": val}, clear=True):
+                cfg = DeployConfig.from_env()
+                assert cfg.metrics_enabled is True, f"Failed for {val!r}"
+
+        for val in ("false", "0", "no", ""):
+            with patch.dict(os.environ, {"OPENSPACE_METRICS_ENABLED": val}, clear=True):
+                cfg = DeployConfig.from_env()
+                assert cfg.metrics_enabled is False, f"Failed for {val!r}"
+
     def test_to_dict_excludes_secrets(self):
         """Serialization must not leak API keys."""
         from openspace.deploy.config import DeployConfig
@@ -203,6 +256,51 @@ class TestGracefulShutdown:
         await handler.shutdown()
         assert completed, "In-flight task was not drained before shutdown"
 
+    @pytest.mark.asyncio
+    async def test_drain_survives_task_exception(self):
+        """A throwing in-flight task must not crash shutdown."""
+        from openspace.deploy.shutdown import GracefulShutdownHandler
+
+        handler = GracefulShutdownHandler(timeout=5)
+        success_hook = AsyncMock()
+        handler.register_hook(success_hook)
+
+        async def exploding_task():
+            raise RuntimeError("task boom")
+
+        handler.track_task(asyncio.create_task(exploding_task()))
+        await handler.shutdown()
+        success_hook.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_track_task_during_shutdown_auto_cancels(self):
+        """Tasks tracked after shutdown starts are auto-cancelled."""
+        from openspace.deploy.shutdown import GracefulShutdownHandler
+
+        handler = GracefulShutdownHandler(timeout=5)
+        await handler.shutdown()
+
+        # Now try to track a new task — should be cancelled
+        task = asyncio.create_task(asyncio.sleep(100))
+        handler.track_task(task)
+        await asyncio.sleep(0.1)
+        assert task.cancelled()
+
+    @pytest.mark.asyncio
+    async def test_shutdown_with_no_hooks_no_tasks(self):
+        """Empty shutdown completes without error."""
+        from openspace.deploy.shutdown import GracefulShutdownHandler
+
+        handler = GracefulShutdownHandler(timeout=5)
+        await handler.shutdown()  # should not raise
+
+    def test_shutdown_timeout_minimum(self):
+        """timeout < 1 is rejected."""
+        from openspace.deploy.shutdown import GracefulShutdownHandler
+
+        with pytest.raises(ValueError, match="timeout"):
+            GracefulShutdownHandler(timeout=0)
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # Dockerfile
@@ -223,11 +321,16 @@ class TestDockerfile:
 
     def test_dockerfile_non_root_user(self):
         content = (ROOT / "Dockerfile").read_text()
-        assert "USER " in content, "Dockerfile must run as non-root user"
+        # Must be a Dockerfile instruction, not a comment
+        lines = content.splitlines()
+        user_lines = [l for l in lines if l.strip().startswith("USER ")]
+        assert user_lines, "Dockerfile must have USER instruction (not in comment)"
 
     def test_dockerfile_healthcheck(self):
         content = (ROOT / "Dockerfile").read_text()
-        assert "HEALTHCHECK" in content, "Dockerfile must include HEALTHCHECK"
+        lines = content.splitlines()
+        hc_lines = [l for l in lines if l.strip().startswith("HEALTHCHECK")]
+        assert hc_lines, "Dockerfile must have HEALTHCHECK instruction"
 
     def test_dockerfile_no_secrets(self):
         """Dockerfile must not contain hardcoded secrets."""
@@ -261,11 +364,37 @@ class TestEntrypoint:
         from openspace.deploy.config import DeployConfig
 
         cfg = DeployConfig()
-        # Config provides all the values the MCP server needs
         assert hasattr(cfg, "mcp_host")
         assert hasattr(cfg, "mcp_port")
         assert hasattr(cfg, "mcp_transport")
         assert hasattr(cfg, "shutdown_timeout")
+
+    def test_deploy_config_wired_into_server(self):
+        """run_mcp_server imports DeployConfig (not dead code)."""
+        import inspect
+
+        from openspace.mcp.server import run_mcp_server
+
+        source = inspect.getsource(run_mcp_server)
+        assert "DeployConfig" in source, "DeployConfig must be used in run_mcp_server"
+
+    def test_health_endpoint_wired_into_server(self):
+        """HTTP transports have /health route."""
+        import inspect
+
+        from openspace.mcp.server import run_mcp_server
+
+        source = inspect.getsource(run_mcp_server)
+        assert "/health" in source, "/health route must exist for HTTP transports"
+
+    def test_shutdown_handler_wired_into_server(self):
+        """GracefulShutdownHandler is created in run_mcp_server."""
+        import inspect
+
+        from openspace.mcp.server import run_mcp_server
+
+        source = inspect.getsource(run_mcp_server)
+        assert "GracefulShutdownHandler" in source
 
 
 # ═══════════════════════════════════════════════════════════════════════

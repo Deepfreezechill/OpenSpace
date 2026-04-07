@@ -13,6 +13,7 @@ __pycache__/
 *.pyc
 .coverage
 htmlcov/
+coverage.xml
 
 # Frontend (separate build)
 frontend/
@@ -28,11 +29,18 @@ frontend/
 !README.md
 LICENSE
 RUNBOOK.yaml
+docs/
+showcase/
 
 # Environment and secrets
 .env
 .env.*
 !.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
 
 # OS files
 .DS_Store
@@ -42,7 +50,23 @@ Thumbs.db
 dist/
 build/
 *.egg-info/
+scion_skills.egg-info/
+
+# Caches
+.mypy_cache/
+.ruff_cache/
+
+# Benchmarks and external
+gdpval_bench/
+scion/
+
+# Local state
+.openspace/
 
 # Logs
 logs/
 *.log
+
+# PR artifacts
+pr-*-diff*.txt
+docker-compose*.yml
