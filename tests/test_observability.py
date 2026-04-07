@@ -432,7 +432,7 @@ class TestPackageCompleteness:
 
         register_handlers(mock_mcp)
         # 4 original + 3 observability = 7 calls
-        assert mock_mcp.tool.call_count == 7
+        assert mock_mcp.tool.call_count == 8
 
 
 # ═══════════════════════════════════════════════════════════════════════
