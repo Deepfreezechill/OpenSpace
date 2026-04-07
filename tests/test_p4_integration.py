@@ -167,8 +167,11 @@ class TestMCPServerIntegration:
         assert hasattr(app, "_tool_manager"), "FastMCP app missing _tool_manager"
         assert hasattr(app._tool_manager, "_tools"), "_tool_manager missing _tools"
         tools = set(app._tool_manager._tools.keys())
-        assert tools == {"execute_task", "search_skills", "fix_skill", "upload_skill"}, (
-            f"Expected 4 tools, got: {tools}"
+        assert tools == {
+            "execute_task", "search_skills", "fix_skill", "upload_skill",
+            "health_check", "get_metrics", "get_execution_traces",
+        }, (
+            f"Expected 7 tools, got: {tools}"
         )
 
     def test_tool_signatures_have_docstrings(self):
@@ -390,8 +393,8 @@ class TestArchitectureSoundness:
         """Verify MCP modules are within expected bounds."""
         modules = {
             "openspace/mcp_server.py": 65,           # shim, ~51 (+27% headroom)
-            "openspace/mcp/server.py": 270,           # ~236 (+14% headroom)
-            "openspace/mcp/tool_handlers.py": 870,    # ~799 (+9% headroom)
+            "openspace/mcp/server.py": 310,           # ~272 (+14% headroom, health probes added 6.1)
+            "openspace/mcp/tool_handlers.py": 920,    # ~850 (+8% headroom, observability tools added 6.1)
         }
         base = Path(__file__).parent.parent
         for path, max_lines in modules.items():

@@ -20,3 +20,4 @@ pyautogui>=0.9.54,<1
 pydantic>=2.12.0,<3
 requests>=2.32.0,<3
 structlog>=24.0.0,<26
+prometheus-client>=0.21.0,<1

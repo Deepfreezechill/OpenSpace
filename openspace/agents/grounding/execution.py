@@ -3,13 +3,22 @@
 Implements the multi-round LLM iteration with tool calling,
 skill-context stripping, message truncation, and result building.
 Extracted from grounding_agent.py (Epic 5.8).
+Instrumented with observability (Epic 6.1).
 """
 
 from __future__ import annotations
 
 import copy
+import hashlib
+import time
 from typing import Any, Dict, List, Optional
 
+try:
+    from openspace.observability.metrics import metrics as _metrics
+    from openspace.observability.tracing import tracer as _tracer
+except ImportError:
+    _metrics = None  # type: ignore[assignment]
+    _tracer = None  # type: ignore[assignment]
 from openspace.prompts import GroundingAgentPrompts
 from openspace.utils.logging import Logger
 
@@ -46,6 +55,10 @@ async def process(agent, context: Dict[str, Any]) -> Dict[str, Any]:
     agent._current_instruction = instruction
 
     logger.info(f"Grounding Agent: Processing instruction at step {agent.step}")
+
+    # ── Observability: agent name sanitized for Prometheus labels ─────
+    _agent_label = _sanitize_label(agent._name)
+    _exec_start = time.monotonic()
 
     # Existing workspace files check
     workspace_info = await agent._check_workspace_artifacts(context)
@@ -95,6 +108,20 @@ async def process(agent, context: Dict[str, Any]) -> Dict[str, Any]:
         setup_messages=copy.deepcopy(messages),
         tools=tools,
     )
+
+    # ── Observability setup (isolated — must not kill execution) ──────
+    _gauge_incremented = False
+    try:
+        _instr_hash = hashlib.sha256(instruction.encode()).hexdigest()[:12]
+        _tracer.start_trace(
+            "grounding.process",
+            instruction_hash=_instr_hash,
+            instruction_length=len(instruction),
+        )
+        _metrics.execution_in_flight.labels(agent=_agent_label).inc()
+        _gauge_incremented = True
+    except Exception:
+        logger.debug("Observability setup failed", exc_info=True)
 
     try:
         while current_iteration < max_iterations:
@@ -274,14 +301,47 @@ async def process(agent, context: Dict[str, Any]) -> Dict[str, Any]:
             f"Grounding Agent: Execution completed with status: "
             f"{result.get('status')}"
         )
+
+        # ── Observability: record success (isolated — must not discard result)
+        try:
+            _elapsed = time.monotonic() - _exec_start
+            _metrics.execution_latency.labels(agent=_agent_label, status="success").observe(_elapsed)
+            _metrics.execution_iterations.labels(agent=_agent_label).observe(current_iteration)
+            _metrics.execution_total.labels(agent=_agent_label, status="success").inc()
+            if _gauge_incremented:
+                _metrics.execution_in_flight.labels(agent=_agent_label).dec()
+                _gauge_incremented = False
+            root_span = _tracer.current_span()
+            if root_span:
+                root_span.attributes["iterations"] = current_iteration
+                root_span.attributes["status"] = result.get("status", "unknown")
+            _tracer.finish_trace()
+        except Exception:
+            logger.debug("Observability recording failed", exc_info=True)
+
         return result
 
     except Exception as e:
         logger.error(f"Grounding Agent: Execution failed: {e}")
+
+        # ── Observability: record error (isolated — must not mask result)
+        try:
+            _elapsed = time.monotonic() - _exec_start
+            _metrics.execution_latency.labels(agent=_agent_label, status="error").observe(_elapsed)
+            _metrics.execution_total.labels(agent=_agent_label, status="error").inc()
+            if _gauge_incremented:
+                _metrics.execution_in_flight.labels(agent=_agent_label).dec()
+            root_span = _tracer.current_span()
+            if root_span:
+                root_span.add_event("error", error_type=type(e).__name__)
+                root_span.status = "error"
+            _tracer.finish_trace()
+        except Exception:
+            logger.debug("Observability recording failed", exc_info=True)
+
         result = {
-            "error": str(e),
+            "error": type(e).__name__,
             "status": "error",
-            "instruction": instruction,
             "iteration": current_iteration,
         }
         agent.increment_step()
@@ -323,3 +383,21 @@ def _build_retrieved_tools_list(
 
         retrieved_tools_list.append(tool_info)
     return retrieved_tools_list
+
+
+import re
+
+# ── Label sanitization ───────────────────────────────────────────────
+
+# Prometheus label values must be bounded and safe. Strict allowlist
+# prevents cardinality bombs and scraper injection.
+_LABEL_MAX_LEN = 32
+_LABEL_SAFE_RE = re.compile(r"[^a-zA-Z0-9_\-]")
+
+
+def _sanitize_label(value: str) -> str:
+    """Sanitize a string for use as a Prometheus label value."""
+    if not value:
+        return "unknown"
+    clean = _LABEL_SAFE_RE.sub("_", value[:_LABEL_MAX_LEN])
+    return clean or "unknown"

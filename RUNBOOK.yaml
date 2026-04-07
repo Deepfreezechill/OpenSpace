@@ -1,8 +1,8 @@
 schema_version: '1.0'
 lock:
-  active_claim: '5.11'
+  active_claim: '6.1'
   claimed_by: 2026-04-06-e9b4572b
-  claimed_at: '2026-04-06T21:30:00Z'
+  claimed_at: '2026-04-06T23:24:00Z'
 review:
   max_rounds: 3
   required_gates:
@@ -352,9 +352,9 @@ epics:
 - id: '5.1'
   phase: P5
   title: Extract EvolutionModels
-  status: pending
+  status: done
   branch: null
-  pr: null
+  pr: 39
   review_round: 0
   source_file: openspace/skill_engine/evolver.py
   target_module: openspace/skill_engine/evolution/models.py
@@ -368,9 +368,9 @@ epics:
 - id: '5.2'
   phase: P5
   title: Extract EvolutionOrchestrator
-  status: pending
+  status: done
   branch: null
-  pr: null
+  pr: 40
   review_round: 0
   source_file: openspace/skill_engine/evolver.py
   target_module: openspace/skill_engine/evolution/orchestrator.py
@@ -384,9 +384,9 @@ epics:
 - id: '5.3'
   phase: P5
   title: Extract AnalysisEvolution + ToolDegradation + MetricMonitor
-  status: pending
+  status: done
   branch: null
-  pr: null
+  pr: 41
   review_round: 0
   source_file: openspace/skill_engine/evolver.py
   target_module: openspace/skill_engine/evolution/triggers/
@@ -400,9 +400,9 @@ epics:
 - id: '5.4'
   phase: P5
   title: Extract EvolutionConfirmation
-  status: pending
+  status: done
   branch: null
-  pr: null
+  pr: 42
   review_round: 0
   source_file: openspace/skill_engine/evolver.py
   target_module: openspace/skill_engine/evolution/confirmation.py
@@ -416,9 +416,9 @@ epics:
 - id: '5.5'
   phase: P5
   title: Extract FixEngine + DerivedCapturedEngine
-  status: pending
+  status: done
   branch: null
-  pr: null
+  pr: 43
   review_round: 0
   source_file: openspace/skill_engine/evolver.py
   target_module: openspace/skill_engine/evolution/engines/
@@ -432,9 +432,9 @@ epics:
 - id: '5.6'
   phase: P5
   title: "P5a integration \xE2\u20AC\u201D evolver.py deletion"
-  status: pending
+  status: done
   branch: null
-  pr: null
+  pr: 44
   review_round: 0
   source_file: openspace/skill_engine/evolver.py
   target_module: null
@@ -449,9 +449,9 @@ epics:
 - id: '5.7'
   phase: P5
   title: Extract SkillContextManager + MessageSafety
-  status: pending
+  status: done
   branch: null
-  pr: null
+  pr: 45
   review_round: 0
   source_file: openspace/agents/grounding_agent.py
   target_module: openspace/agents/grounding/
@@ -465,9 +465,9 @@ epics:
 - id: '5.8'
   phase: P5
   title: Extract AgentExecutionLoop + PromptBuilder
-  status: pending
+  status: done
   branch: null
-  pr: null
+  pr: 46
   review_round: 0
   source_file: openspace/agents/grounding_agent.py
   target_module: openspace/agents/grounding/
@@ -481,9 +481,9 @@ epics:
 - id: '5.9'
   phase: P5
   title: Extract ToolCatalog + VisualAnalysis + WorkspaceInspector
-  status: pending
+  status: done
   branch: null
-  pr: null
+  pr: 47
   review_round: 0
   source_file: openspace/agents/grounding_agent.py
   target_module: openspace/agents/grounding/
@@ -497,9 +497,9 @@ epics:
 - id: '5.10'
   phase: P5
   title: Extract ResultFormatter + Telemetry
-  status: pending
+  status: done
   branch: null
-  pr: null
+  pr: 48
   review_round: 0
   source_file: openspace/agents/grounding_agent.py
   target_module: openspace/agents/grounding/result_telemetry.py
@@ -513,9 +513,9 @@ epics:
 - id: '5.11'
   phase: P5
   title: "P5b integration \xE2\u20AC\u201D grounding_agent.py deletion"
-  status: claimed
+  status: done
   branch: null
-  pr: null
+  pr: 49
   review_round: 0
   source_file: openspace/agents/grounding_agent.py
   target_module: null
@@ -531,7 +531,7 @@ epics:
 - id: '6.1'
   phase: P6
   title: Observability (metrics, tracing, health)
-  status: pending
+  status: claimed
   branch: null
   pr: null
   review_round: 0

@@ -143,7 +143,43 @@ def create_mcp_app():
 
     app = FastMCP("OpenSpace", **kwargs)
     register_handlers(app)
+
+    # Register default health probes (Epic 6.1)
+    _register_health_probes()
+
     return app
+
+
+def _register_health_probes() -> None:
+    """Register default health probes for core subsystems."""
+    from openspace.observability.health import HealthProbe, health
+
+    def _probe_skill_store() -> HealthProbe:
+        try:
+            from openspace.skill_engine.store import SkillStore
+
+            if not hasattr(_probe_skill_store, "_cached"):
+                _probe_skill_store._cached = SkillStore()
+            store = _probe_skill_store._cached
+            count = len(store.list_skills()) if hasattr(store, "list_skills") else 0
+            return HealthProbe(ok=True, detail=f"{count} skills")
+        except Exception:
+            return HealthProbe(ok=False, detail="not available")
+
+    def _probe_grounding() -> HealthProbe:
+        try:
+            from openspace.agents.grounding_agent import GroundingAgent
+
+            return HealthProbe(ok=True, detail="module loaded")
+        except Exception:
+            return HealthProbe(ok=False, detail="not available")
+
+    def _probe_mcp_tools() -> HealthProbe:
+        return HealthProbe(ok=True, detail="tools registered")
+
+    health.register("skill_store", _probe_skill_store)
+    health.register("grounding_engine", _probe_grounding)
+    health.register("mcp_tools", _probe_mcp_tools)
 
 
 # ---------------------------------------------------------------------------

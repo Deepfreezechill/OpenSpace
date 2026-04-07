@@ -786,6 +786,50 @@ async def upload_skill(
 
 
 # ---------------------------------------------------------------------------
+# Observability tools (Epic 6.1)
+# ---------------------------------------------------------------------------
+
+
+async def health_check() -> str:
+    """Check OpenSpace system health.
+
+    Returns structured health status including all registered subsystem
+    probes (skill store, LLM connectivity, grounding engine, etc.).
+    """
+    from openspace.observability.health import health
+
+    result = health.check()
+    return json.dumps(result, indent=2)
+
+
+async def get_metrics() -> str:
+    """Get Prometheus-compatible metrics.
+
+    Returns all OpenSpace metrics in Prometheus exposition format, suitable
+    for scraping by Prometheus, Grafana Agent, or similar tools.
+    """
+    from openspace.observability.metrics import metrics
+
+    return metrics.render().decode("utf-8")
+
+
+async def get_execution_traces(limit: int = 5) -> str:
+    """Get recent execution traces for debugging.
+
+    Returns the last N execution traces with span trees, timings, and
+    metadata for debugging multi-step grounding workflows.
+
+    Args:
+        limit: Maximum number of traces to return (default: 5, max: 50)
+    """
+    from openspace.observability.tracing import tracer
+
+    limit = min(max(1, limit), 50)
+    traces = tracer.recent_traces[-limit:]
+    return json.dumps([t.to_dict() for t in traces], indent=2, default=str)
+
+
+# ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
 def register_handlers(mcp) -> None:
@@ -797,3 +841,7 @@ def register_handlers(mcp) -> None:
     mcp.tool()(search_skills)
     mcp.tool()(fix_skill)
     mcp.tool()(upload_skill)
+    # Observability (Epic 6.1)
+    mcp.tool()(health_check)
+    mcp.tool()(get_metrics)
+    mcp.tool()(get_execution_traces)
