@@ -383,3 +383,25 @@ patterns:
       - marshal.load
       - runpy.run_module
       - runpy.run_path
+
+  - name: builtins_bypass
+    description: "builtins.eval/exec/__import__ bypass bare-name blocklist via module prefix"
+    severity: CRITICAL
+    ast_type: Call
+    targets:
+      - builtins.eval
+      - builtins.exec
+      - builtins.__import__
+      - builtins.compile
+      - builtins.getattr
+      - builtins.setattr
+      - builtins.globals
+      - builtins.locals
+      - builtins.open
+
+  - name: builtins_import
+    description: "Importing builtins module enables blocklist bypass via builtins.eval()"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - builtins.*

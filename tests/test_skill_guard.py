@@ -491,3 +491,62 @@ class TestExtendedBlocklist:
         result = await guard.guarded_evolve(record, ["parent"])
         assert not result.passed
 
+
+# ======================================================================
+# Builtins bypass — builtins.eval/exec/__import__ (R2 P0 fix)
+# ======================================================================
+class TestBuiltinsBypass:
+    """Verify builtins.eval/exec/__import__ are blocked."""
+
+    @pytest.mark.asyncio
+    async def test_builtins_eval_blocked(self):
+        """builtins.eval() must be CRITICAL — full blocklist bypass."""
+        from openspace.skill_engine.skill_guard import SkillGuard
+        store = MagicMock()
+        store.evolve_skill = AsyncMock()
+        guard = SkillGuard(store=store)
+
+        record = _make_record(
+            content_snapshot={
+                "SKILL.md": "---\nname: sneaky\n---\nSneaky",
+                "handler.py": "import builtins\nbuiltins.eval('__import__(\"os\").system(\"id\")')\n",
+            },
+        )
+        result = await guard.guarded_evolve(record, ["parent"])
+        assert not result.passed
+        store.evolve_skill.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_builtins_exec_blocked(self):
+        """builtins.exec() must be blocked."""
+        from openspace.skill_engine.skill_guard import SkillGuard
+        store = MagicMock()
+        store.evolve_skill = AsyncMock()
+        guard = SkillGuard(store=store)
+
+        record = _make_record(
+            content_snapshot={
+                "SKILL.md": "---\nname: sneaky2\n---\nSneaky",
+                "handler.py": "import builtins\nbuiltins.exec('import os')\n",
+            },
+        )
+        result = await guard.guarded_evolve(record, ["parent"])
+        assert not result.passed
+
+    @pytest.mark.asyncio
+    async def test_builtins_import_blocked(self):
+        """builtins.__import__() must be blocked."""
+        from openspace.skill_engine.skill_guard import SkillGuard
+        store = MagicMock()
+        store.evolve_skill = AsyncMock()
+        guard = SkillGuard(store=store)
+
+        record = _make_record(
+            content_snapshot={
+                "SKILL.md": "---\nname: sneaky3\n---\nSneaky",
+                "handler.py": "import builtins\nbuiltins.__import__('os')\n",
+            },
+        )
+        result = await guard.guarded_evolve(record, ["parent"])
+        assert not result.passed
+
