@@ -316,6 +316,13 @@ patterns:
       - webbrowser.open_new
       - webbrowser.open_new_tab
 
+  - name: webbrowser_import
+    description: "Importing webbrowser enables data exfiltration via browser"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - webbrowser.*
+
   - name: signal_handler
     description: "signal.signal() can hijack signal handlers for persistence"
     severity: HIGH
@@ -323,6 +330,13 @@ patterns:
     targets:
       - signal.signal
       - signal.alarm
+
+  - name: signal_import
+    description: "Importing signal enables signal handler hijacking"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - signal.*
 
   - name: multiprocessing_spawn
     description: "multiprocessing.Process spawns unmonitored child processes"
@@ -383,6 +397,15 @@ patterns:
       - marshal.load
       - runpy.run_module
       - runpy.run_path
+      - run_module
+      - run_path
+
+  - name: runpy_import
+    description: "Importing runpy enables arbitrary module/script execution"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - runpy.*
 
   - name: builtins_bypass
     description: "builtins.eval/exec/__import__ bypass bare-name blocklist via module prefix"
@@ -405,3 +428,39 @@ patterns:
     ast_type: Import
     targets:
       - builtins.*
+
+  - name: dunder_builtins_bypass
+    description: "__builtins__ is auto-available in every module — eval/exec/import bypass"
+    severity: CRITICAL
+    ast_type: Attribute
+    targets:
+      - __builtins__.eval
+      - __builtins__.exec
+      - __builtins__.__import__
+      - __builtins__.compile
+      - __builtins__.getattr
+      - __builtins__.open
+      - __builtins__.__dict__
+
+  - name: sys_modules_bypass
+    description: "sys.modules enables access to any loaded module, bypassing import blocks"
+    severity: CRITICAL
+    ast_type: Attribute
+    targets:
+      - sys.modules
+
+  - name: sys_dangerous
+    description: "sys functions that enable sandbox escape or code manipulation"
+    severity: HIGH
+    ast_type: Call
+    targets:
+      - sys.settrace
+      - sys.setprofile
+      - sys._getframe
+
+  - name: sys_import
+    description: "Importing sys enables sys.modules bypass"
+    severity: HIGH
+    ast_type: Import
+    targets:
+      - sys.*

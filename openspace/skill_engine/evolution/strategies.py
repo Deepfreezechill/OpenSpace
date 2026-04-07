@@ -78,14 +78,19 @@ async def evolve_fix(evolver, ctx: EvolutionContext) -> Optional[SkillRecord]:
 
     # Snapshot the parent directory BEFORE edits so we can roll back
     # if the guard rejects the result (P0 fix: no dangerous code on disk).
+    # Uses rglob for DEEP snapshot — captures subdirectory files too.
     _pre_edit_snapshot: dict[str, bytes] = {}
+    _pre_edit_dirs: set[str] = set()
     if parent_dir.is_dir():
-        for f in parent_dir.iterdir():
+        for f in parent_dir.rglob("*"):
+            rel = str(f.relative_to(parent_dir))
             if f.is_file():
                 try:
-                    _pre_edit_snapshot[f.name] = f.read_bytes()
+                    _pre_edit_snapshot[rel] = f.read_bytes()
                 except OSError:
                     pass
+            elif f.is_dir():
+                _pre_edit_dirs.add(rel)
 
     # Apply-retry cycle
     edit_result = await evolver._apply_with_retry(
@@ -134,23 +139,32 @@ async def evolve_fix(evolver, ctx: EvolutionContext) -> Optional[SkillRecord]:
 
     if not result.passed:
         # Guard rejected — dangerous code is on disk from _apply_with_retry.
-        # Restore the parent directory from the pre-edit snapshot.
+        # Restore the parent directory from the deep pre-edit snapshot.
         logger.warning(
             f"FIX: guard rejected {new_id} — rolling back disk to pre-edit state"
         )
         if _pre_edit_snapshot and parent_dir.is_dir():
-            for fname, content in _pre_edit_snapshot.items():
-                try:
-                    (parent_dir / fname).write_bytes(content)
-                except OSError:
-                    logger.error(f"FIX: rollback failed for {fname}")
-            # Remove any NEW files that weren't in the original snapshot
-            for f in parent_dir.iterdir():
-                if f.is_file() and f.name not in _pre_edit_snapshot:
+            # Remove any NEW files/dirs that weren't in the original snapshot
+            for f in sorted(parent_dir.rglob("*"), reverse=True):
+                rel = str(f.relative_to(parent_dir))
+                if f.is_file() and rel not in _pre_edit_snapshot:
                     try:
                         f.unlink()
                     except OSError:
                         pass
+                elif f.is_dir() and rel not in _pre_edit_dirs:
+                    try:
+                        f.rmdir()  # only removes if empty
+                    except OSError:
+                        pass
+            # Restore original file contents
+            for rel_path, content in _pre_edit_snapshot.items():
+                target = parent_dir / rel_path
+                try:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(content)
+                except OSError:
+                    logger.error(f"FIX: rollback failed for {rel_path}")
         return None
 
     # Stamp the new skill_id into the sidecar file so next discover()

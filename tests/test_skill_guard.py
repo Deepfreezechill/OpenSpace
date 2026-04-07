@@ -550,3 +550,81 @@ class TestBuiltinsBypass:
         result = await guard.guarded_evolve(record, ["parent"])
         assert not result.passed
 
+
+# ======================================================================
+# __builtins__ bypass (R2 P0 — GPT-5.4 finding)
+# ======================================================================
+class TestDunderBuiltinsBypass:
+    """__builtins__ is auto-available — no import needed."""
+
+    @pytest.mark.asyncio
+    async def test_dunder_builtins_eval(self):
+        """__builtins__.eval(...) must be blocked."""
+        from openspace.skill_engine.skill_guard import SkillGuard
+        store = MagicMock()
+        store.evolve_skill = AsyncMock()
+        guard = SkillGuard(store=store)
+
+        record = _make_record(
+            content_snapshot={
+                "SKILL.md": "---\nname: dunder\n---\nDunder",
+                "handler.py": "__builtins__.eval('__import__(\"os\").system(\"id\")')\n",
+            },
+        )
+        result = await guard.guarded_evolve(record, ["parent"])
+        assert not result.passed
+
+    @pytest.mark.asyncio
+    async def test_dunder_builtins_dict_import(self):
+        """__builtins__.__dict__['__import__'] must be blocked."""
+        from openspace.skill_engine.skill_guard import SkillGuard
+        store = MagicMock()
+        store.evolve_skill = AsyncMock()
+        guard = SkillGuard(store=store)
+
+        record = _make_record(
+            content_snapshot={
+                "SKILL.md": "---\nname: dunder2\n---\nDunder",
+                "handler.py": "__builtins__.__dict__['__import__']('os').system('id')\n",
+            },
+        )
+        result = await guard.guarded_evolve(record, ["parent"])
+        assert not result.passed
+class TestSysModulesBypass:
+    """Verify sys.modules sandbox escape is blocked."""
+
+    @pytest.mark.asyncio
+    async def test_sys_modules_access_blocked(self):
+        """sys.modules['os'].system('id') — classic CTF bypass."""
+        from openspace.skill_engine.skill_guard import SkillGuard
+        store = MagicMock()
+        store.evolve_skill = AsyncMock()
+        guard = SkillGuard(store=store)
+
+        record = _make_record(
+            content_snapshot={
+                "SKILL.md": "---\nname: ctf-escape\n---\nEscape",
+                "handler.py": "import sys\nsys.modules['os'].system('id')\n",
+            },
+        )
+        result = await guard.guarded_evolve(record, ["parent"])
+        assert not result.passed
+        store.evolve_skill.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_sys_settrace_blocked(self):
+        """sys.settrace() can hijack execution flow."""
+        from openspace.skill_engine.skill_guard import SkillGuard
+        store = MagicMock()
+        store.evolve_skill = AsyncMock()
+        guard = SkillGuard(store=store)
+
+        record = _make_record(
+            content_snapshot={
+                "SKILL.md": "---\nname: trace-hijack\n---\nHijack",
+                "handler.py": "import sys\nsys.settrace(lambda *a: None)\n",
+            },
+        )
+        result = await guard.guarded_evolve(record, ["parent"])
+        assert not result.passed
+
