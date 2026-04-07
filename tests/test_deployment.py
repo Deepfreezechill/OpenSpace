@@ -326,11 +326,30 @@ class TestDockerfile:
         user_lines = [l for l in lines if l.strip().startswith("USER ")]
         assert user_lines, "Dockerfile must have USER instruction (not in comment)"
 
+    def test_dockerfile_shutdown_timeout_under_docker_default(self):
+        """Dockerfile OPENSPACE_SHUTDOWN_TIMEOUT must be < Docker's 10s default."""
+        content = (ROOT / "Dockerfile").read_text()
+        import re
+
+        match = re.search(r"OPENSPACE_SHUTDOWN_TIMEOUT=(\d+)", content)
+        assert match, "Dockerfile must set OPENSPACE_SHUTDOWN_TIMEOUT"
+        timeout = int(match.group(1))
+        assert timeout < 10, (
+            f"Shutdown timeout {timeout}s must be < Docker's 10s stop_grace_period"
+        )
+
     def test_dockerfile_healthcheck(self):
         content = (ROOT / "Dockerfile").read_text()
         lines = content.splitlines()
         hc_lines = [l for l in lines if l.strip().startswith("HEALTHCHECK")]
         assert hc_lines, "Dockerfile must have HEALTHCHECK instruction"
+
+    def test_dockerfile_healthcheck_hits_real_endpoint(self):
+        """HEALTHCHECK must hit /health HTTP endpoint, not just import."""
+        content = (ROOT / "Dockerfile").read_text()
+        assert "localhost:8000/health" in content, (
+            "HEALTHCHECK must hit real /health endpoint for accurate checks"
+        )
 
     def test_dockerfile_no_secrets(self):
         """Dockerfile must not contain hardcoded secrets."""
@@ -378,23 +397,37 @@ class TestEntrypoint:
         source = inspect.getsource(run_mcp_server)
         assert "DeployConfig" in source, "DeployConfig must be used in run_mcp_server"
 
-    def test_health_endpoint_wired_into_server(self):
-        """HTTP transports have /health route."""
+    def test_health_endpoint_outside_auth(self):
+        """/health must be accessible WITHOUT bearer auth for K8s probes."""
         import inspect
 
         from openspace.mcp.server import run_mcp_server
 
         source = inspect.getsource(run_mcp_server)
-        assert "/health" in source, "/health route must exist for HTTP transports"
+        # /health route must be mounted BEFORE auth middleware in ASGI chain
+        health_pos = source.find("Route(\"/health\"")
+        bearer_pos = source.find("BearerTokenMiddleware")
+        assert health_pos > 0, "/health route must exist"
+        assert bearer_pos > 0, "BearerTokenMiddleware must exist"
+        # In the code, auth wraps the MCP app; health wraps auth+MCP at top level
+        # So health_endpoint definition comes AFTER protected_app is built
+        assert health_pos > bearer_pos, (
+            "/health must be outside auth — route should wrap protected_app"
+        )
 
-    def test_shutdown_handler_wired_into_server(self):
-        """GracefulShutdownHandler is created in run_mcp_server."""
+    def test_shutdown_runs_after_uvicorn(self):
+        """GracefulShutdownHandler.shutdown() must run after server.serve()."""
         import inspect
 
         from openspace.mcp.server import run_mcp_server
 
         source = inspect.getsource(run_mcp_server)
-        assert "GracefulShutdownHandler" in source
+        assert "serve_with_shutdown" in source, (
+            "Shutdown must be wired via serve_with_shutdown wrapper"
+        )
+        assert "finally:" in source, (
+            "Shutdown must run in finally block to guarantee execution"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════

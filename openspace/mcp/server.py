@@ -250,9 +250,14 @@ def run_mcp_server(mcp=None) -> None:
     else:
         starlette_app = mcp.streamable_http_app()
 
-    # Add /health endpoint for container orchestrators
+    # Auth middleware chain: request → BearerAuth → RateLimit → MCP app
+    rate_limited_app = RateLimitMiddleware(starlette_app)
+    protected_app = BearerTokenMiddleware(rate_limited_app, token)
+
+    # /health is OUTSIDE auth — K8s probes can't send bearer tokens
+    from starlette.applications import Starlette
     from starlette.responses import JSONResponse
-    from starlette.routing import Route
+    from starlette.routing import Mount, Route
 
     from openspace.observability.health import health
 
@@ -261,20 +266,12 @@ def run_mcp_server(mcp=None) -> None:
         status_code = 200 if result.get("status") == "healthy" else 503
         return JSONResponse(result, status_code=status_code)
 
-    # Wrap the MCP app with health route
-    from starlette.applications import Starlette
-    from starlette.routing import Mount
-
-    health_app = Starlette(
+    app = Starlette(
         routes=[
             Route("/health", health_endpoint, methods=["GET"]),
-            Mount("/", app=starlette_app),
+            Mount("/", app=protected_app),
         ]
     )
-
-    # Middleware chain: request → BearerAuth → RateLimit → health+MCP app
-    rate_limited_app = RateLimitMiddleware(health_app)
-    protected_app = BearerTokenMiddleware(rate_limited_app, token)
 
     logger.info(
         "Starting MCP server with bearer auth + rate limiting on %s:%d (%s transport)",
@@ -283,18 +280,29 @@ def run_mcp_server(mcp=None) -> None:
         args.transport,
     )
 
-    # Install graceful shutdown handler
+    # Graceful shutdown: uvicorn handles SIGTERM → drain HTTP → our hooks run after
     from openspace.deploy.shutdown import GracefulShutdownHandler
 
     shutdown_handler = GracefulShutdownHandler(timeout=deploy_cfg.shutdown_timeout)
 
+    # Give uvicorn half the budget for HTTP draining, our handler gets the rest
+    uvicorn_timeout = max(deploy_cfg.shutdown_timeout // 2, 1)
+
     config = uvicorn.Config(
-        protected_app,
+        app,
         host=args.host,
         port=args.port,
         log_level=deploy_cfg.log_level.lower(),
+        timeout_graceful_shutdown=uvicorn_timeout,
     )
     server = uvicorn.Server(config)
+
+    async def serve_with_shutdown():
+        try:
+            await server.serve()
+        finally:
+            await shutdown_handler.shutdown()
+
     import anyio
 
-    anyio.run(server.serve)
+    anyio.run(serve_with_shutdown)

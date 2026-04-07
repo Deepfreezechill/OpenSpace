@@ -63,18 +63,18 @@ ENV OPENSPACE_MCP_HOST=0.0.0.0 \
     OPENSPACE_MCP_PORT=8000 \
     OPENSPACE_MCP_TRANSPORT=streamable-http \
     OPENSPACE_LOG_LEVEL=INFO \
-    OPENSPACE_SHUTDOWN_TIMEOUT=30 \
+    OPENSPACE_SHUTDOWN_TIMEOUT=8 \
     OPENSPACE_METRICS_ENABLED=true \
     OPENSPACE_SKILL_STORE_PATH=/app/skills \
     PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 
-# Health check: Python-based (works for both stdio and HTTP transports)
-# For HTTP transports, /health endpoint is available via Starlette
-# For stdio transport, override with HEALTHCHECK NONE in docker-compose
+# Health check: hits the real /health endpoint (unauthenticated)
+# Default transport is streamable-http, so HTTP check works.
+# For stdio transport, override with HEALTHCHECK NONE in docker-compose.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD python -c "from openspace.observability.health import health; r=health.check(); exit(0 if r.get('status')=='healthy' else 1)" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
 # Graceful shutdown: Docker sends SIGTERM, handler drains in-flight tasks
 STOPSIGNAL SIGTERM
