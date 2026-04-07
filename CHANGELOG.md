@@ -157,3 +157,5 @@ Key security improvements across the v2.0.0 release:
 | Monoliths decomposed | 5 (store.py, tool_layer.py, mcp_server.py, evolver.py, grounding_agent.py) |
 | AST blocklist patterns | 40+ |
 | Security layers | 5 (ReviewGate) + capability leases + auth |
+
+[2.0.0]: https://github.com/Deepfreezechill/OpenSpace/releases/tag/v2.0.0

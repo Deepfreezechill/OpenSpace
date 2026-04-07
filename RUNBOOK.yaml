@@ -646,10 +646,10 @@ epics:
 - id: '7.3'
   phase: P7
   title: Launch checklist
-  status: in_review
+  status: approved
   branch: epic/7.3-launch-checklist
   pr: 56
-  review_round: 2
+  review_round: 4
   description: 'Final security audit, documentation completeness, release notes, changelog,
     license verification, dependency audit clean.
 
