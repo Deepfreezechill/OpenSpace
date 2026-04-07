@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openspace"
-version = "0.1.0"
+version = "2.0.0"
 description = "OpenSpace"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -14,7 +14,7 @@ authors = [
 ]
 
 dependencies = [
-    "litellm>=1.70.0,<1.82.7",  # pinned to avoid PYSEC-2026-2 supply-chain compromise (1.82.7/1.82.8 were malicious)
+    "litellm>=1.83.0,<2",  # >=1.83.0 fixes CVE-2026-35029 + CVE-2026-35030; skips PYSEC-2026-2 (1.82.7/1.82.8 malicious)
     "python-dotenv>=1.0.0,<2",
     "openai>=1.0.0,<3",
     "jsonschema>=4.25.0,<5",

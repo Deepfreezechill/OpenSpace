@@ -1,8 +1,8 @@
 schema_version: '1.0'
 lock:
-  active_claim: null
-  claimed_by: null
-  claimed_at: '2026-04-07T01:20:00Z'
+  active_claim: '7.3'
+  claimed_by: '2026-04-07-copilot-session'
+  claimed_at: '2026-04-07T15:55:00Z'
 review:
   max_rounds: 3
   required_gates:
@@ -646,9 +646,9 @@ epics:
 - id: '7.3'
   phase: P7
   title: Launch checklist
-  status: pending
-  branch: null
-  pr: null
+  status: in_review
+  branch: epic/7.3-launch-checklist
+  pr: 56
   review_round: 0
   description: 'Final security audit, documentation completeness, release notes, changelog,
     license verification, dependency audit clean.
