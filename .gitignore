@@ -84,5 +84,6 @@ pr-*-diff*.txt
 NUL.txt
 scratch_*/
 
-# Internal AI agent state (not user-facing)
+# Internal agent workflow docs (not user-facing)
+.github/AGENTS.md
 RUNBOOK.yaml

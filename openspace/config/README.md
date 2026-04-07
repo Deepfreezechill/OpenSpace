@@ -5,7 +5,7 @@ All configuration applies to both Path A (host agent) and Path B (standalone). C
 ## 1. API Keys (`.env`)
 
 > [!NOTE]
-> Create a `.env` file and add your API keys (refer to [`.env.example`](../../.env.example)). When used via host agent (Path A), LLM keys are auto-detected from your agent's config — `.env` is mainly needed for standalone mode.
+> Create a `.env` file and add your API keys (refer to [`.env.example`](../.env.example)). When used via host agent (Path A), LLM keys are auto-detected from your agent's config — `.env` is mainly needed for standalone mode.
 
 ## 2. Environment Variables
 
