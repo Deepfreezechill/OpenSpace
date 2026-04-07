@@ -185,7 +185,7 @@ def _register_health_probes() -> None:
 # ---------------------------------------------------------------------------
 # 4. CLI argument parser (extracted for testability)
 # ---------------------------------------------------------------------------
-_VERSION = "0.1.0"  # TODO: read from pyproject.toml or importlib.metadata
+_VERSION = "2.0.0"  # keep in sync with pyproject.toml [project] version
 
 _EPILOG = """\
 examples:

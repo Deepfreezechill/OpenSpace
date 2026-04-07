@@ -2,7 +2,7 @@
 
 > **Phase:** 1 (design only — implementation in Phase 6)
 > **Status:** Draft
-> **Version:** 0.1.0
+> **Version:** 2.0.0
 
 ## Overview
 
@@ -297,7 +297,7 @@ Health check.
   "ok": true,
   "data": {
     "status": "healthy",
-    "version": "0.1.0",
+    "version": "2.0.0",
     "initialized": true,
     "backends": ["shell", "mcp", "gui"]
   }

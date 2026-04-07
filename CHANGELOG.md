@@ -7,7 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Overview
 
-OpenSpace v2.0.0 is a ground-up architectural overhaul of the self-evolving skill engine for AI agents. Across 8 phases (P0–P7) and 50+ epics, the project was hardened, decomposed, and extended from a monolithic prototype into a production-grade, security-first platform. The codebase grew from ~500 tests to **2,056 tests with zero failures**. Every epic was reviewed via multi-agent code review (/8eyes + /collab) before merge.
+OpenSpace v2.0.0 is a ground-up architectural overhaul of the self-evolving skill engine for AI agents. Across 8 phases (P0–P7) and 50+ epics, the project was hardened, decomposed, and extended from a monolithic prototype into a production-grade, security-first platform. The codebase grew from ~500 tests to **2,174 tests with zero failures**. Every epic was reviewed via multi-agent code review (/8eyes + /collab) before merge.
 
 ---
 
@@ -28,7 +28,7 @@ _11 epics · PRs #433–#467 (upstream) · Immediate security stabilization_
 - **Dependency pinning** — all deps pinned with `pip-audit` infrastructure; blocked litellm PYSEC-2026-2 supply-chain vector (Epic 0.10)
 
 ### Phase 1 — Foundation Architecture
-_8 epics · PRs #451–#459 (upstream) · Clean architecture layer_
+_8 epics (7 bullets — Epics 1.1 + 1.2 combined) · PRs #451–#459 (upstream) · Clean architecture layer_
 
 - **Domain layer** — Protocol-based interfaces and frozen dataclass types for all core concepts (Epics 1.1 + 1.2)
 - **AppContainer** — composition root with lifecycle hooks, dependency injection, graceful startup/shutdown (Epic 1.3)
@@ -152,8 +152,8 @@ Key security improvements across the v2.0.0 release:
 | Phases | 8 (P0–P7) |
 | Epics completed | 50+ |
 | Pull requests | 55+ |
-| Test count | 2,056 (zero failures) |
+| Test count | 2,174 (zero failures) |
 | Review rounds | Multi-agent (/8eyes + /collab) on every PR |
-| Monoliths decomposed | 4 (store.py, tool_layer.py, mcp_server.py, evolver.py, grounding_agent.py) |
+| Monoliths decomposed | 5 (store.py, tool_layer.py, mcp_server.py, evolver.py, grounding_agent.py) |
 | AST blocklist patterns | 40+ |
 | Security layers | 5 (ReviewGate) + capability leases + auth |
