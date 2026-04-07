@@ -528,7 +528,7 @@ class TestSecurityRegressions:
 
 
 class TestSecurityRegressionsR2:
-    """Regression tests for R2 /8eyes findings (apex rebinding + loopback SSRF)."""
+    """Regression tests for R2 security review findings (apex rebinding + loopback SSRF)."""
 
     # --- Apex DNS rebinding ---
 

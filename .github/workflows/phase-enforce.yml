@@ -7,9 +7,9 @@
 #          fails to report a status, the merge is BLOCKED (fail-closed).
 #
 # PATTERN LINEAGE:
-#   - eight-eyes/circuit_breaker.py  → retry + fail-closed design
-#   - squad-audit/squad-label-enforce.yml → structured PR comments
-#   - squad-audit/squad-promote.yml → prerequisite validation gates
+#   - circuit_breaker pattern → retry + fail-closed design
+#   - label-enforce pattern → structured PR comments
+#   - promote pattern → prerequisite validation gates
 #
 # REQUIRED: Branch protection must require this check ("Phase Gate Enforcement")
 # ============================================================================
@@ -120,7 +120,7 @@ jobs:
             const MAX_RETRIES = 3;
             const RETRY_DELAYS = [1000, 3000, 5000]; // ms
 
-            // Retry wrapper (from eight-eyes circuit breaker pattern)
+            // Retry wrapper (circuit breaker pattern)
             async function withRetry(fn, label) {
               let lastErr;
               for (let i = 0; i <= MAX_RETRIES; i++) {

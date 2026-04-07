@@ -610,7 +610,7 @@ class TestTokenRegistry:
     def test_fifo_flooding_does_not_resurrect_revoked_token(self) -> None:
         """Regression: flooding with revocations must NOT evict unexpired entries.
 
-        PoC from /8eyes R1: revoke stolen admin token, then flood with 10K+
+        PoC from security review R1: revoke stolen admin token, then flood with 10K+
         other revocations — the victim token MUST stay revoked.
         """
         reg = TokenRegistry()

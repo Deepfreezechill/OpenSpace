@@ -111,7 +111,7 @@ class TestSanitizeError:
         result = sanitize_error(exc)
         assert len(result) <= 300
 
-    # ── Regression tests from /collab + /8eyes review ────────────
+    # ── Regression tests from adversarial code review ────────────
 
     def test_windows_path_with_spaces_stripped(self):
         from openspace.errors import sanitize_error

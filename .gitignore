@@ -83,3 +83,6 @@ coverage.xml
 pr-*-diff*.txt
 NUL.txt
 scratch_*/
+
+# Internal AI agent state (not user-facing)
+RUNBOOK.yaml
