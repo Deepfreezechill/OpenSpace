@@ -1,13 +1,15 @@
-"""openspace.observability — Metrics, tracing, and health for OpenSpace.
+"""openspace.observability — Metrics, tracing, health, and SLOs for OpenSpace.
 
 Provides Prometheus-compatible metrics, structured execution traces,
-and aggregated health checks for the MCP server and grounding engine.
+aggregated health checks, and SLO tracking for the MCP server and
+grounding engine.
 
-Epic 6.1 — Phase 6 (Operability).
+Epics 6.1–6.2 — Phase 6 (Operability).
 """
 
 from openspace.observability.health import HealthAggregator, HealthStatus
 from openspace.observability.metrics import MetricsRegistry
+from openspace.observability.slos import SLOEvaluator
 from openspace.observability.tracing import ExecutionTracer, trace_async
 
 __all__ = [
@@ -16,4 +18,5 @@ __all__ = [
     "trace_async",
     "HealthAggregator",
     "HealthStatus",
+    "SLOEvaluator",
 ]

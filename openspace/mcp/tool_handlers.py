@@ -829,6 +829,20 @@ async def get_execution_traces(limit: int = 5) -> str:
     return json.dumps([t.to_dict() for t in traces], indent=2, default=str)
 
 
+async def check_slos() -> str:
+    """Check current SLO (Service Level Objective) compliance.
+
+    Returns current status for all SLO targets including error budget
+    remaining, burn rate, and any active alerts.  Use this to monitor
+    system health against defined reliability targets.
+    """
+    from openspace.observability.metrics import metrics
+    from openspace.observability.slos import SLOEvaluator
+
+    evaluator = SLOEvaluator(registry=metrics)
+    return evaluator.to_json()
+
+
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
@@ -845,3 +859,5 @@ def register_handlers(mcp) -> None:
     mcp.tool()(health_check)
     mcp.tool()(get_metrics)
     mcp.tool()(get_execution_traces)
+    # SLOs (Epic 6.2)
+    mcp.tool()(check_slos)

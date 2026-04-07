@@ -170,8 +170,9 @@ class TestMCPServerIntegration:
         assert tools == {
             "execute_task", "search_skills", "fix_skill", "upload_skill",
             "health_check", "get_metrics", "get_execution_traces",
+            "check_slos",
         }, (
-            f"Expected 7 tools, got: {tools}"
+            f"Expected 8 tools, got: {tools}"
         )
 
     def test_tool_signatures_have_docstrings(self):
@@ -394,7 +395,7 @@ class TestArchitectureSoundness:
         modules = {
             "openspace/mcp_server.py": 65,           # shim, ~51 (+27% headroom)
             "openspace/mcp/server.py": 310,           # ~272 (+14% headroom, health probes added 6.1)
-            "openspace/mcp/tool_handlers.py": 920,    # ~850 (+8% headroom, observability tools added 6.1)
+            "openspace/mcp/tool_handlers.py": 970,    # ~880 (+10% headroom, SLO tool added 6.2)
         }
         base = Path(__file__).parent.parent
         for path, max_lines in modules.items():
