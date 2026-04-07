@@ -1,0 +1,72 @@
+# ============================================
+# Docker build context exclusions
+# ============================================
+
+# Version control
+.git
+.gitignore
+
+# Tests and development
+tests/
+.pytest_cache/
+__pycache__/
+*.pyc
+.coverage
+htmlcov/
+coverage.xml
+
+# Frontend (separate build)
+frontend/
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation and meta
+*.md
+!README.md
+LICENSE
+RUNBOOK.yaml
+docs/
+showcase/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+scion_skills.egg-info/
+
+# Caches
+.mypy_cache/
+.ruff_cache/
+
+# Benchmarks and external
+gdpval_bench/
+scion/
+
+# Local state
+.openspace/
+
+# Logs
+logs/
+*.log
+
+# PR artifacts
+pr-*-diff*.txt
+docker-compose*.yml

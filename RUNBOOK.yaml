@@ -1,8 +1,8 @@
 schema_version: '1.0'
 lock:
-  active_claim: null
-  claimed_by: null
-  claimed_at: null
+  active_claim: '6.3'
+  claimed_by: 2026-04-07-e9b4572b
+  claimed_at: '2026-04-07T01:20:00Z'
 review:
   max_rounds: 3
   required_gates:
@@ -562,8 +562,8 @@ epics:
 - id: '6.3'
   phase: P6
   title: Deployment architecture
-  status: pending
-  branch: null
+  status: claimed
+  branch: epic/6.3-deployment
   pr: null
   review_round: 0
   description: 'Containerization (Dockerfile), config management (env-based), graceful

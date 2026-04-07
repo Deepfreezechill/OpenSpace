@@ -188,11 +188,8 @@ def _register_health_probes() -> None:
 def run_mcp_server(mcp=None) -> None:
     """Console-script entry point for ``openspace-mcp``.
 
-    For HTTP transports (SSE, streamable-http), bearer token auth is
-    REQUIRED.  Set OPENSPACE_MCP_BEARER_TOKEN in the environment.
-    The server refuses to start without it (fail-closed).
-
-    For stdio transport, auth is not applicable (local process IPC).
+    Uses DeployConfig for defaults, with CLI args as overrides.
+    For HTTP transports, bearer token auth is REQUIRED.
 
     Args:
         mcp: Optional pre-created FastMCP instance. If None, creates one
@@ -209,18 +206,22 @@ def run_mcp_server(mcp=None) -> None:
         validate_token_strength,
     )
     from openspace.auth.rate_limit import RateLimitMiddleware
+    from openspace.deploy.config import DeployConfig
 
     if mcp is None:
         mcp = create_mcp_app()
+
+    # Load config from environment, then allow CLI overrides
+    deploy_cfg = DeployConfig.from_env()
 
     parser = argparse.ArgumentParser(description="OpenSpace MCP Server")
     parser.add_argument(
         "--transport",
         choices=["stdio", "sse", "streamable-http"],
-        default="stdio",
+        default=deploy_cfg.mcp_transport,
     )
-    parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--host", type=str, default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=deploy_cfg.mcp_port)
+    parser.add_argument("--host", type=str, default=deploy_cfg.mcp_host)
     args = parser.parse_args()
 
     if args.transport == "stdio":
@@ -249,9 +250,28 @@ def run_mcp_server(mcp=None) -> None:
     else:
         starlette_app = mcp.streamable_http_app()
 
-    # Middleware chain: request → BearerAuth → RateLimit → MCP app
+    # Auth middleware chain: request → BearerAuth → RateLimit → MCP app
     rate_limited_app = RateLimitMiddleware(starlette_app)
     protected_app = BearerTokenMiddleware(rate_limited_app, token)
+
+    # /health is OUTSIDE auth — K8s probes can't send bearer tokens
+    from starlette.applications import Starlette
+    from starlette.responses import JSONResponse
+    from starlette.routing import Mount, Route
+
+    from openspace.observability.health import health
+
+    async def health_endpoint(request):
+        result = health.check()
+        status_code = 200 if result.get("status") == "healthy" else 503
+        return JSONResponse(result, status_code=status_code)
+
+    app = Starlette(
+        routes=[
+            Route("/health", health_endpoint, methods=["GET"]),
+            Mount("/", app=protected_app),
+        ]
+    )
 
     logger.info(
         "Starting MCP server with bearer auth + rate limiting on %s:%d (%s transport)",
@@ -260,13 +280,29 @@ def run_mcp_server(mcp=None) -> None:
         args.transport,
     )
 
+    # Graceful shutdown: uvicorn handles SIGTERM → drain HTTP → our hooks run after
+    from openspace.deploy.shutdown import GracefulShutdownHandler
+
+    shutdown_handler = GracefulShutdownHandler(timeout=deploy_cfg.shutdown_timeout)
+
+    # Give uvicorn half the budget for HTTP draining, our handler gets the rest
+    uvicorn_timeout = max(deploy_cfg.shutdown_timeout // 2, 1)
+
     config = uvicorn.Config(
-        protected_app,
+        app,
         host=args.host,
         port=args.port,
-        log_level="info",
+        log_level=deploy_cfg.log_level.lower(),
+        timeout_graceful_shutdown=uvicorn_timeout,
     )
     server = uvicorn.Server(config)
+
+    async def serve_with_shutdown():
+        try:
+            await server.serve()
+        finally:
+            await shutdown_handler.shutdown()
+
     import anyio
 
-    anyio.run(server.serve)
+    anyio.run(serve_with_shutdown)
