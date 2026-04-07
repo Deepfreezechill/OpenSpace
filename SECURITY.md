@@ -13,7 +13,7 @@ If you discover a security vulnerability in OpenSpace, please report it responsi
 
 1. **Do NOT open a public GitHub issue.**
 2. Email the maintainers at the address listed in the repository's GitHub Security Advisories tab.
-3. Alternatively, use [GitHub's private vulnerability reporting](https://github.com/HKUDS/OpenSpace/security/advisories/new).
+3. Alternatively, use [GitHub's private vulnerability reporting](https://github.com/Deepfreezechill/OpenSpace/security/advisories/new).
 
 ### What to include
 

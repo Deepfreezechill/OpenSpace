@@ -103,7 +103,7 @@ _4 epics · PRs #50–#53 · 1,957 tests passing_
 - **DX polish** — Rich `--help` with examples/env vars, `--version`, preflight checks (bearer token, skill store, port, Python version), platform-aware suggestions (PowerShell on Windows, bash on Unix), errors write to `sys.__stderr__` for console visibility (Epic 6.4, PR #53)
 
 ### Phase 7 — Safety & Launch
-_3 epics · PRs #54–#55 · 2,056 tests passing_
+_3 epics · PRs #54–#56 · 2,174 tests passing_
 
 - **ReviewGate** — 5-layer security gate for skill evolution: path traversal detection, extension allowlist, size limits, HIGH+CRITICAL AST blocking, lineage validation. Windows drive-relative paths and reserved device names handled. 63 tests (45 adversarial), 3 review rounds with 12 agent-reviews (Epic 7.1, PR #54)
 - **SkillGuard** — pre-persist quality gates wrapping ReviewGate + SkillStore. All skill mutations (evolve_fix, evolve_derived, evolve_captured) routed through guard. Deep disk rollback via rglob snapshot on rejection. **40+ AST blocklist patterns** covering: `builtins` bypass, `__builtins__` attribute access, `sys.modules` manipulation, `os.exec*`/`os.spawn*`, `pty`/`code` modules, HTTP exfiltration, `marshal`/`runpy`, `asyncio.subprocess`, `signal`, `webbrowser`, `multiprocessing`, `shutil`, filesystem destructors, `os.chmod`/`os.chown`. Bare-name alias bypass prevention (Epic 7.2, PR #55)
