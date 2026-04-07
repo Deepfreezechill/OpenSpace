@@ -25,9 +25,17 @@ import logging
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 
-from openspace.skill_engine.types import SkillOrigin, SkillRecord
+from openspace.skill_engine.types import SkillOrigin, SkillRecord, ValidationError
 
 logger = logging.getLogger(__name__)
+
+# Executable extensions that must not appear in skill snapshots
+_BLOCKED_EXTENSIONS = frozenset({
+    ".sh", ".bash", ".bat", ".cmd", ".ps1", ".pyw", ".js", ".rb", ".pl",
+})
+
+# Max individual file size (bytes) before AST scan is refused
+_MAX_FILE_SIZE = 512 * 1024  # 512 KB
 
 
 @dataclass
@@ -69,24 +77,45 @@ def check_ast_safety(record: SkillRecord) -> CheckResult:
     """Scan Python files in the skill's content snapshot for dangerous patterns.
 
     Uses the existing AST scanner from openspace.security.
+    Fails-closed: if the scanner is unavailable, the check FAILS (not skips).
+    Also rejects executable non-Python files (.sh, .bat, .ps1, etc.).
     """
     snapshot = record.lineage.content_snapshot or {}
-    py_files = {k: v for k, v in snapshot.items() if k.endswith(".py")}
+
+    # Block executable non-Python files (shell scripts, batch files, etc.)
+    blocked = [
+        k for k in snapshot
+        if any(k.lower().endswith(ext) for ext in _BLOCKED_EXTENSIONS)
+    ]
+    if blocked:
+        return CheckResult(
+            name="ast-safety",
+            verdict="fail",
+            detail=f"Blocked executable files: {', '.join(sorted(blocked))}",
+        )
+
+    py_files = {
+        k: v for k, v in snapshot.items() if k.lower().endswith(".py")
+    }
 
     if not py_files:
         return CheckResult(name="ast-safety", verdict="pass", detail="no Python files")
 
+    # Fail-closed: if scanner unavailable, refuse the skill
     try:
         from openspace.security import check_code_safety
     except ImportError:
         return CheckResult(
             name="ast-safety",
-            verdict="pass",
-            detail="AST scanner not available (skipped)",
+            verdict="fail",
+            detail="AST scanner not available — cannot verify safety",
         )
 
     violations = []
     for filename, source in py_files.items():
+        if len(source) > _MAX_FILE_SIZE:
+            violations.append(f"{filename}: file too large ({len(source)} bytes, max {_MAX_FILE_SIZE})")
+            continue
         is_safe, findings = check_code_safety(source)
         if not is_safe:
             descs = [f.description for f in findings]
@@ -127,23 +156,25 @@ def check_content(record: SkillRecord) -> CheckResult:
 def check_lineage(record: SkillRecord) -> CheckResult:
     """Validate lineage integrity for evolved skills.
 
-    Imported/discovered skills skip lineage validation.
-    Evolved (FIXED/DERIVED/CAPTURED) skills must have valid parent chain.
+    Delegates to SkillLineage.validate() for per-origin cardinality rules,
+    then applies additional ReviewGate-specific checks.
     """
-    origin = record.lineage.origin
-
-    # Non-evolved skills don't need lineage validation
-    if origin in (SkillOrigin.IMPORTED, SkillOrigin.CAPTURED):
-        return CheckResult(
-            name="lineage", verdict="pass", detail="non-evolved skill (skipped)"
-        )
-
-    # Evolved skills must have parent(s)
-    if not record.lineage.parent_skill_ids:
+    # Run the canonical validation from SkillLineage
+    try:
+        record.lineage.validate()
+    except ValidationError as exc:
         return CheckResult(
             name="lineage",
             verdict="fail",
-            detail=f"Evolved skill ({origin.value}) has no parent_skill_ids",
+            detail=f"Lineage validation failed: {exc}",
+        )
+
+    origin = record.lineage.origin
+
+    # Non-evolved skills pass after validate() confirms no parents
+    if origin in (SkillOrigin.IMPORTED, SkillOrigin.CAPTURED):
+        return CheckResult(
+            name="lineage", verdict="pass", detail="non-evolved skill (validated)"
         )
 
     # Evolved skills must have generation > 0
@@ -173,12 +204,12 @@ class ReviewGate:
     ones fail, so the developer gets a complete picture of issues.
     """
 
+    _DEFAULT_CHECKS = [check_ast_safety, check_content, check_lineage]
+
     def __init__(self, checks: Optional[List[Callable]] = None) -> None:
-        self._checks = checks or [
-            check_ast_safety,
-            check_content,
-            check_lineage,
-        ]
+        if checks is not None and len(checks) == 0:
+            raise ValueError("ReviewGate requires at least one check — empty list not allowed")
+        self._checks = checks if checks is not None else list(self._DEFAULT_CHECKS)
 
     def review(self, record: SkillRecord) -> ReviewResult:
         """Run all review checks on a skill record.
@@ -221,7 +252,7 @@ async def quarantine_skill(
         review_result: The review result (quarantine only if failed)
 
     Returns:
-        True if skill was quarantined, False if review passed (no action).
+        True if skill was quarantined, False if review passed or quarantine failed.
     """
     if review_result.passed:
         return False
@@ -237,5 +268,15 @@ async def quarantine_skill(
     for check in failed_checks:
         logger.warning("  [%s] %s", check.name, check.detail)
 
-    await store.deactivate_record(skill_id)
-    return True
+    try:
+        success = await store.deactivate_record(skill_id)
+        if not success:
+            logger.error(
+                "Quarantine FAILED for %s — deactivate_record returned False",
+                skill_id,
+            )
+            return False
+        return True
+    except Exception as exc:
+        logger.error("Quarantine FAILED for %s: %s", skill_id, type(exc).__name__)
+        return False
