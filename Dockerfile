@@ -49,7 +49,7 @@ COPY --from=builder /install /usr/local
 
 # Copy application code
 WORKDIR /app
-COPY scion/ scion/
+COPY --chmod=755 scion/ scion/
 COPY pyproject.toml ./
 
 # Create directories for runtime data

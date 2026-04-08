@@ -12,6 +12,17 @@ license = {text = "MIT"}
 authors = [
     {name = "Scion Team@HKUDS"}
 ]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 
 dependencies = [
     "litellm>=1.83.0,<2",  # >=1.83.0 fixes CVE-2026-35029 + CVE-2026-35030; skips PYSEC-2026-2 (1.82.7/1.82.8 malicious)
@@ -68,6 +79,7 @@ all = [
 ]
 
 [project.urls]
+Homepage = "https://github.com/Deepfreezechill/scion"
 Repository = "https://github.com/Deepfreezechill/scion"
 "Bug Tracker" = "https://github.com/Deepfreezechill/scion/issues"
 

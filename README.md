@@ -199,6 +199,7 @@ Works with any agent that supports skills (`SKILL.md`) — [Claude Code](https:/
   "mcpServers": {
     "scion": {
       "command": "scion-mcp",
+      "toolTimeout": 600,
       "env": {
         "SCION_HOST_SKILL_DIRS": "/path/to/your/agent/skills",
         "SCION_WORKSPACE": "/path/to/Scion"
@@ -214,6 +215,7 @@ Works with any agent that supports skills (`SKILL.md`) — [Claude Code](https:/
   "mcpServers": {
     "scion": {
       "command": "scion-mcp",
+      "toolTimeout": 600,
       "env": {
         "SCION_HOST_SKILL_DIRS": "/path/to/your/agent/skills",
         "SCION_WORKSPACE": "/path/to/Scion"
@@ -223,7 +225,7 @@ Works with any agent that supports skills (`SKILL.md`) — [Claude Code](https:/
 }
 ```
 
-**OpenAI Codex** — Add to your Codex agent config:
+**OpenAI Codex** — Add to `~/.codex/config.json`:
 ```json
 {
   "mcpServers": {
@@ -238,6 +240,10 @@ Works with any agent that supports skills (`SKILL.md`) — [Claude Code](https:/
   }
 }
 ```
+
+> [!NOTE]
+> If `scion-mcp` is not found, use the full path from `which scion-mcp` (Mac/Linux) or `where scion-mcp` (Windows), or use `"command": "python", "args": ["-m", "scion.mcp"]` as a fallback.
+
 </details>
 
 **② Copy skills** into your agent's skills directory:
@@ -496,7 +502,36 @@ A collaborative registry where agents share evolved skills. When one agent evolv
 
 ## 🔧 Advanced Configuration
 
-For most users, [Quick Start](#-quick-start) is all you need. For advanced options (environment variables, execution modes, security policies, etc.), see [`scion/config/README.md`](scion/config/README.md).
+<details>
+<summary><strong>🔑 Environment Variables Reference</strong></summary>
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| **Core** | | |
+| `SCION_WORKSPACE` | `.` | Working directory for task execution |
+| `SCION_HOST_SKILL_DIRS` | — | Comma-separated paths to agent skill directories |
+| `SCION_SKILLS_DIRS` | — | Additional skill search directories |
+| `SCION_SKILL_STORE_PATH` | `skills/` | Path to the skill store directory |
+| `SCION_CONFIG_JSON` | — | Inline JSON config override |
+| `SCION_API_KEY` | — | Cloud community API key ([scion-skills.dev](https://scion-skills.dev)) |
+| `SCION_DEBUG` | `false` | Enable debug mode (`true`/`false`) |
+| `SCION_LOG_LEVEL` | `INFO` | Log level override (DEBUG, INFO, WARNING, ERROR) |
+| **MCP Server** | | |
+| `SCION_MCP_TRANSPORT` | `stdio` | Transport: `stdio`, `sse`, `streamable-http` |
+| `SCION_MCP_HOST` | `0.0.0.0` | Bind address for HTTP transports |
+| `SCION_MCP_PORT` | `8000` | Port for HTTP transports |
+| `SCION_MCP_BEARER_TOKEN` | — | **Required** for HTTP transports (fail-closed) |
+| `SCION_METRICS_ENABLED` | `true` | Enable Prometheus metrics endpoint |
+| `SCION_SHUTDOWN_TIMEOUT` | `30` | Graceful shutdown timeout (seconds) |
+| **Security** | | |
+| `SCION_ALLOW_UNSANDBOXED` | `0` | Set `1` to allow unsandboxed MCP servers (**not recommended**) |
+| `SCION_RATE_LIMIT_PER_TOKEN` | `60` | Max requests per window per identity |
+| `SCION_RATE_LIMIT_PER_IP` | `30` | Max requests per window per IP |
+| `SCION_RATE_LIMIT_WINDOW` | `60` | Rate limit window size (seconds) |
+
+</details>
+
+For most users, [Quick Start](#-quick-start) is all you need. For execution modes, security policies, and more, see [`scion/config/README.md`](scion/config/README.md).
 
 ---
 
@@ -510,7 +545,7 @@ For most users, [Quick Start](#-quick-start) is all you need. For advanced optio
 Scion/
 ├── scion/
 │   ├── tool_layer.py                     # Scion main class & ScionConfig
-│   ├── mcp_server.py                     # MCP Server (4 tools for your agent)
+│   ├── mcp_server.py                     # MCP Server (8 tools for your agent)
 │   ├── __main__.py                       # CLI entry point (python -m scion)
 │   ├── dashboard_server.py               # Web dashboard API server
 │   │

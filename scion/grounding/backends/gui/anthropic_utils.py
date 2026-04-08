@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import List, cast
 
 from scion.utils.logging import Logger
@@ -69,7 +70,7 @@ def get_system_prompt(platform: str = "Ubuntu") -> str:
 * DO NOT ask users for clarification during task execution. DO NOT stop to request more information from users. Always take action using available tools.
 * When using your computer function calls, they take a while to run and send back to you. Where possible/feasible, try to chain multiple of these calls all into one function calls request.
 * The current date is {datetime.today().strftime("%A, %B %d, %Y")}.
-* Home directory of this Windows system is 'C:\\Users\\user'.
+* Home directory of this Windows system is '{Path.home()}'.
 * When you want to open some applications on Windows, please use Double Click on it instead of clicking once.
 * After each action, the system will provide you with a new screenshot showing the result.
 * Continue taking actions until the task is complete.

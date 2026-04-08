@@ -1,0 +1,30 @@
+services:
+  scion:
+    build: .
+    ports:
+      - "${SCION_MCP_PORT:-8000}:8000"
+    environment:
+      - SCION_MCP_HOST=0.0.0.0
+      - SCION_MCP_PORT=8000
+      - SCION_MCP_TRANSPORT=streamable-http
+      - SCION_MCP_BEARER_TOKEN=${SCION_MCP_BEARER_TOKEN:?Set SCION_MCP_BEARER_TOKEN in .env}
+      - SCION_LOG_LEVEL=${SCION_LOG_LEVEL:-INFO}
+      - SCION_METRICS_ENABLED=${SCION_METRICS_ENABLED:-true}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+    volumes:
+      - scion-skills:/app/skills
+      - scion-logs:/app/logs
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  scion-skills:
+  scion-logs:
