@@ -22,14 +22,14 @@ import pytest
 # ── 1. Package completeness ──────────────────────────────────────────
 
 EXPECTED_SUBMODULES = [
-    "openspace.agents.grounding.context",
-    "openspace.agents.grounding.execution",
-    "openspace.agents.grounding.messages",
-    "openspace.agents.grounding.prompts",
-    "openspace.agents.grounding.results",
-    "openspace.agents.grounding.tools",
-    "openspace.agents.grounding.visual",
-    "openspace.agents.grounding.workspace",
+    "scion.agents.grounding.context",
+    "scion.agents.grounding.execution",
+    "scion.agents.grounding.messages",
+    "scion.agents.grounding.prompts",
+    "scion.agents.grounding.results",
+    "scion.agents.grounding.tools",
+    "scion.agents.grounding.visual",
+    "scion.agents.grounding.workspace",
 ]
 
 
@@ -42,7 +42,7 @@ class TestPackageCompleteness:
         assert isinstance(mod, ModuleType)
 
     def test_package_init_exports_all_symbols(self):
-        import openspace.agents.grounding as pkg
+        import scion.agents.grounding as pkg
 
         assert hasattr(pkg, "__all__")
         for name in pkg.__all__:
@@ -50,7 +50,7 @@ class TestPackageCompleteness:
 
     def test_eight_submodules_exist(self):
         """Exactly 8 non-__init__ .py files in the package."""
-        import openspace.agents.grounding as pkg
+        import scion.agents.grounding as pkg
         import pathlib
 
         pkg_dir = pathlib.Path(pkg.__file__).parent
@@ -72,7 +72,7 @@ class TestNoCircularImports:
 
     @pytest.mark.parametrize("module_name", EXPECTED_SUBMODULES)
     def test_independent_import(self, module_name: str):
-        prefix = "openspace.agents.grounding"
+        prefix = "scion.agents.grounding"
         saved = {k: sys.modules.pop(k) for k in list(sys.modules) if k.startswith(prefix)}
         try:
             importlib.import_module(module_name)
@@ -87,25 +87,25 @@ class TestBackwardCompatibility:
     """Callers using the old import path must still work and resolve to the same class."""
 
     def test_import_from_agents_module(self):
-        from openspace.agents import GroundingAgent
+        from scion.agents import GroundingAgent
 
         assert inspect.isclass(GroundingAgent)
 
     def test_import_from_grounding_agent_module(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert inspect.isclass(GroundingAgent)
 
     def test_import_from_top_level(self):
-        from openspace import GroundingAgent
+        from scion import GroundingAgent
 
         assert inspect.isclass(GroundingAgent)
 
     def test_all_import_paths_resolve_to_same_class(self):
         """Identity check — a broken re-export that duplicates the class would fail here."""
-        from openspace import GroundingAgent as GA_top
-        from openspace.agents import GroundingAgent as GA_agents
-        from openspace.agents.grounding_agent import GroundingAgent as GA_module
+        from scion import GroundingAgent as GA_top
+        from scion.agents import GroundingAgent as GA_agents
+        from scion.agents.grounding_agent import GroundingAgent as GA_module
 
         assert GA_top is GA_agents is GA_module
 
@@ -125,9 +125,9 @@ class TestFacadeDelegation:
     """Every public/protected method on GroundingAgent delegates to grounding/ submodule."""
 
     def _make_agent(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
-        with patch("openspace.agents.base.BaseAgent.__init__", return_value=None):
+        with patch("scion.agents.base.BaseAgent.__init__", return_value=None):
             agent = GroundingAgent.__new__(GroundingAgent)
             # BaseAgent attrs
             agent._name = "TestAgent"
@@ -150,7 +150,7 @@ class TestFacadeDelegation:
         return agent
 
     def test_make_agent_covers_all_init_attrs(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         source = inspect.getsource(GroundingAgent.__init__)
         init_attrs = {m.group(1) for m in re.finditer(r"self\.(_\w+)\s*=", source)}
@@ -186,7 +186,7 @@ class TestFacadeDelegation:
         assert agent._skill_registry is mock_reg
 
     def test_cap_message_content_delegates(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         msgs = [{"role": "user", "content": "x" * 500_000}]
         result = GroundingAgent._cap_message_content(msgs)
@@ -216,7 +216,7 @@ class TestFacadeDelegation:
 
     def test_static_methods_are_callable(self):
         """Static method bindings should be callable without self."""
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert callable(GroundingAgent._select_key_screenshots)
         assert callable(GroundingAgent._get_workspace_path)
@@ -235,9 +235,9 @@ class TestAsyncDelegation:
     """Async facade methods must delegate to the correct submodule function."""
 
     def _make_agent(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
-        with patch("openspace.agents.base.BaseAgent.__init__", return_value=None):
+        with patch("scion.agents.base.BaseAgent.__init__", return_value=None):
             agent = GroundingAgent.__new__(GroundingAgent)
             # BaseAgent attrs
             agent._name = "TestAgent"
@@ -264,7 +264,7 @@ class TestAsyncDelegation:
         agent = self._make_agent()
         # Patch the module-level import reference in the facade module
         with patch(
-            "openspace.agents.grounding_agent._process_impl",
+            "scion.agents.grounding_agent._process_impl",
             new_callable=AsyncMock,
         ) as mock_proc:
             mock_proc.return_value = {"status": "success", "response": "done"}
@@ -276,7 +276,7 @@ class TestAsyncDelegation:
     async def test_get_available_tools_delegates(self):
         agent = self._make_agent()
         with patch(
-            "openspace.agents.grounding_agent._get_available_tools_impl",
+            "scion.agents.grounding_agent._get_available_tools_impl",
             new_callable=AsyncMock,
         ) as mock_tools:
             mock_tools.return_value = [{"name": "tool1"}]
@@ -289,7 +289,7 @@ class TestAsyncDelegation:
         agent = self._make_agent()
         mock_gc = MagicMock()
         with patch(
-            "openspace.agents.grounding_agent._load_all_tools_impl",
+            "scion.agents.grounding_agent._load_all_tools_impl",
             new_callable=AsyncMock,
         ) as mock_load:
             mock_load.return_value = [{"name": "fallback_tool"}]
@@ -302,7 +302,7 @@ class TestAsyncDelegation:
         agent = self._make_agent()
         fake_result = MagicMock()
         with patch(
-            "openspace.agents.grounding_agent._visual_analysis_callback_impl",
+            "scion.agents.grounding_agent._visual_analysis_callback_impl",
             new_callable=AsyncMock,
         ) as mock_cb:
             mock_cb.return_value = fake_result
@@ -314,7 +314,7 @@ class TestAsyncDelegation:
         agent = self._make_agent()
         fake_result = MagicMock()
         with patch(
-            "openspace.agents.grounding_agent._enhance_result_with_visual_context_impl",
+            "scion.agents.grounding_agent._enhance_result_with_visual_context_impl",
             new_callable=AsyncMock,
         ) as mock_enh:
             mock_enh.return_value = fake_result
@@ -325,7 +325,7 @@ class TestAsyncDelegation:
     async def test_check_workspace_artifacts_delegates(self):
         agent = self._make_agent()
         with patch(
-            "openspace.agents.grounding_agent._check_workspace_artifacts_impl",
+            "scion.agents.grounding_agent._check_workspace_artifacts_impl",
             new_callable=AsyncMock,
         ) as mock_ws:
             mock_ws.return_value = {"artifacts": []}
@@ -337,7 +337,7 @@ class TestAsyncDelegation:
     async def test_generate_final_summary_delegates(self):
         agent = self._make_agent()
         with patch(
-            "openspace.agents.grounding_agent._generate_final_summary_impl",
+            "scion.agents.grounding_agent._generate_final_summary_impl",
             new_callable=AsyncMock,
         ) as mock_gen:
             mock_gen.return_value = ("summary text", True, [])
@@ -349,7 +349,7 @@ class TestAsyncDelegation:
     async def test_build_final_result_delegates(self):
         agent = self._make_agent()
         with patch(
-            "openspace.agents.grounding_agent._build_final_result_impl",
+            "scion.agents.grounding_agent._build_final_result_impl",
             new_callable=AsyncMock,
         ) as mock_build:
             mock_build.return_value = {"status": "complete"}
@@ -363,7 +363,7 @@ class TestAsyncDelegation:
     async def test_record_agent_execution_delegates(self):
         agent = self._make_agent()
         with patch(
-            "openspace.agents.grounding_agent._record_agent_execution_impl",
+            "scion.agents.grounding_agent._record_agent_execution_impl",
             new_callable=AsyncMock,
         ) as mock_rec:
             await agent._record_agent_execution({"status": "ok"}, "test task")
@@ -379,7 +379,7 @@ class TestFacadeSize:
     def test_facade_under_250_lines(self):
         import pathlib
 
-        facade = pathlib.Path(__file__).resolve().parent.parent / "openspace" / "agents" / "grounding_agent.py"
+        facade = pathlib.Path(__file__).resolve().parent.parent / "scion" / "agents" / "grounding_agent.py"
         line_count = len(facade.read_text(encoding="utf-8").splitlines())
         assert line_count < 250, (
             f"grounding_agent.py is {line_count} lines — should be < 250 as a thin facade"
@@ -389,7 +389,7 @@ class TestFacadeSize:
         """The package modules should collectively hold > 800 lines."""
         import pathlib
 
-        pkg_dir = pathlib.Path(__file__).resolve().parent.parent / "openspace" / "agents" / "grounding"
+        pkg_dir = pathlib.Path(__file__).resolve().parent.parent / "scion" / "agents" / "grounding"
         total = sum(
             len(f.read_text(encoding="utf-8").splitlines())
             for f in pkg_dir.glob("*.py")

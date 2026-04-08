@@ -1,4 +1,4 @@
-"""Tests for RecordingService — extracted recording factory/wiring from OpenSpace."""
+"""Tests for RecordingService — extracted recording factory/wiring from Scion."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 try:
-    from openspace.tool_layer import OpenSpace, OpenSpaceConfig
-    from openspace.recording_service import RecordingService
+    from scion.tool_layer import Scion, ScionConfig
+    from scion.recording_service import RecordingService
 
     _HAS_TOOL_LAYER = True
 except Exception:
@@ -22,7 +22,7 @@ pytestmark = pytest.mark.skipif(not _HAS_TOOL_LAYER, reason="tool_layer deps una
 
 @pytest.fixture
 def config():
-    return OpenSpaceConfig(
+    return ScionConfig(
         enable_recording=True,
         recording_backends=["json"],
         recording_log_dir="/tmp/recordings",
@@ -34,7 +34,7 @@ def config():
 
 @pytest.fixture
 def disabled_config():
-    return OpenSpaceConfig(enable_recording=False)
+    return ScionConfig(enable_recording=False)
 
 
 @pytest.fixture
@@ -83,7 +83,7 @@ class TestRecordingServiceCreate:
         assert svc.manager is None
 
     def test_passes_config_fields_to_manager(self, config, mock_llm_client):
-        with patch("openspace.recording_service.RecordingManager") as MockRM:
+        with patch("scion.recording_service.RecordingManager") as MockRM:
             mock_instance = MagicMock()
             MockRM.return_value = mock_instance
 
@@ -98,11 +98,11 @@ class TestRecordingServiceCreate:
                 enable_screenshot=False,
                 enable_video=False,
                 enable_conversation_log=True,
-                agent_name="OpenSpace",
+                agent_name="Scion",
             )
 
     def test_registers_to_llm(self, config, mock_llm_client):
-        with patch("openspace.recording_service.RecordingManager") as MockRM:
+        with patch("scion.recording_service.RecordingManager") as MockRM:
             mock_instance = MagicMock()
             MockRM.return_value = mock_instance
 
@@ -112,7 +112,7 @@ class TestRecordingServiceCreate:
 
     def test_create_twice_replaces_manager(self, config, mock_llm_client):
         """Second create() silently replaces manager."""
-        with patch("openspace.recording_service.RecordingManager") as MockRM:
+        with patch("scion.recording_service.RecordingManager") as MockRM:
             first = MagicMock()
             second = MagicMock()
             MockRM.side_effect = [first, second]
@@ -132,7 +132,7 @@ class TestRecordingServiceCreate:
 class TestRecordingServiceWire:
 
     def test_injects_manager_into_grounding_client(self, config, mock_llm_client, mock_grounding_client):
-        with patch("openspace.recording_service.RecordingManager") as MockRM:
+        with patch("scion.recording_service.RecordingManager") as MockRM:
             mock_instance = MagicMock()
             MockRM.return_value = mock_instance
 
@@ -162,7 +162,7 @@ class TestRecordingServiceCleanup:
 
     @pytest.mark.asyncio
     async def test_stops_active_recording_and_nulls_manager(self, config, mock_llm_client):
-        with patch("openspace.recording_service.RecordingManager") as MockRM:
+        with patch("scion.recording_service.RecordingManager") as MockRM:
             mock_instance = MagicMock()
             mock_instance.recording_status = True
             mock_instance.stop = AsyncMock()
@@ -176,7 +176,7 @@ class TestRecordingServiceCleanup:
 
     @pytest.mark.asyncio
     async def test_noop_when_not_recording(self, config, mock_llm_client):
-        with patch("openspace.recording_service.RecordingManager") as MockRM:
+        with patch("scion.recording_service.RecordingManager") as MockRM:
             mock_instance = MagicMock()
             mock_instance.recording_status = False
             mock_instance.stop = AsyncMock()
@@ -195,8 +195,8 @@ class TestRecordingServiceCleanup:
 
     @pytest.mark.asyncio
     async def test_stop_exception_swallowed_and_logged(self, config, mock_llm_client):
-        with patch("openspace.recording_service.RecordingManager") as MockRM, \
-             patch("openspace.recording_service.logger") as mock_logger:
+        with patch("scion.recording_service.RecordingManager") as MockRM, \
+             patch("scion.recording_service.logger") as mock_logger:
             mock_instance = MagicMock()
             mock_instance.recording_status = True
             mock_instance.stop = AsyncMock(side_effect=RuntimeError("stop boom"))
@@ -211,7 +211,7 @@ class TestRecordingServiceCleanup:
     @pytest.mark.asyncio
     async def test_cleanup_twice_only_stops_once(self, config, mock_llm_client):
         """Double cleanup is safe — second call is noop after manager nulled."""
-        with patch("openspace.recording_service.RecordingManager") as MockRM:
+        with patch("scion.recording_service.RecordingManager") as MockRM:
             mock_instance = MagicMock()
             mock_instance.recording_status = True
             mock_instance.stop = AsyncMock()
@@ -225,16 +225,16 @@ class TestRecordingServiceCleanup:
 
 
 # ---------------------------------------------------------------------------
-# OpenSpace backward compatibility
+# Scion backward compatibility
 # ---------------------------------------------------------------------------
 
-class TestOpenSpaceDelegation:
+class TestScionDelegation:
 
-    def test_openspace_has_recording_service_attr(self):
-        os_instance = OpenSpace()
+    def test_scion_has_recording_service_attr(self):
+        os_instance = Scion()
         assert hasattr(os_instance, "_recording_service")
 
     def test_recording_manager_still_accessible(self):
-        os_instance = OpenSpace()
+        os_instance = Scion()
         assert hasattr(os_instance, "_recording_manager")
         assert os_instance._recording_manager is None

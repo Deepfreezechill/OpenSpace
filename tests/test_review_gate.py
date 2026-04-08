@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from openspace.skill_engine.types import (
+from scion.skill_engine.types import (
     SkillCategory,
     SkillLineage,
     SkillOrigin,
@@ -60,25 +60,25 @@ def _make_record(
 # ======================================================================
 class TestReviewResult:
     def test_review_result_pass(self):
-        from openspace.skill_engine.review_gate import ReviewResult
+        from scion.skill_engine.review_gate import ReviewResult
 
         result = ReviewResult(verdict="pass", checks=[])
         assert result.passed
 
     def test_review_result_fail(self):
-        from openspace.skill_engine.review_gate import ReviewResult
+        from scion.skill_engine.review_gate import ReviewResult
 
         result = ReviewResult(verdict="fail", checks=[])
         assert not result.passed
 
     def test_review_result_quarantine(self):
-        from openspace.skill_engine.review_gate import ReviewResult
+        from scion.skill_engine.review_gate import ReviewResult
 
         result = ReviewResult(verdict="quarantine", checks=[])
         assert not result.passed
 
     def test_review_result_aggregates_check_verdicts(self):
-        from openspace.skill_engine.review_gate import CheckResult, ReviewResult
+        from scion.skill_engine.review_gate import CheckResult, ReviewResult
 
         checks = [
             CheckResult(name="ast-safety", verdict="pass", detail="clean"),
@@ -89,7 +89,7 @@ class TestReviewResult:
         assert len(result.checks) == 2
 
     def test_review_result_all_pass_means_pass(self):
-        from openspace.skill_engine.review_gate import CheckResult, ReviewResult
+        from scion.skill_engine.review_gate import CheckResult, ReviewResult
 
         checks = [
             CheckResult(name="ast-safety", verdict="pass", detail="clean"),
@@ -105,7 +105,7 @@ class TestReviewResult:
 # ======================================================================
 class TestASTSafetyCheck:
     def test_safe_skill_passes(self):
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(
             content_snapshot={"SKILL.md": "name: safe\n", "handler.py": "x = 1 + 2\n"}
@@ -114,14 +114,14 @@ class TestASTSafetyCheck:
         assert result.verdict == "pass"
 
     def test_no_python_files_passes(self):
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={"SKILL.md": "name: safe\n"})
         result = check_ast_safety(record)
         assert result.verdict == "pass"
 
     def test_dangerous_code_fails(self):
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(
             content_snapshot={
@@ -135,7 +135,7 @@ class TestASTSafetyCheck:
 
 class TestContentValidation:
     def test_valid_content_passes(self):
-        from openspace.skill_engine.review_gate import check_content
+        from scion.skill_engine.review_gate import check_content
 
         record = _make_record(
             name="valid-skill",
@@ -146,7 +146,7 @@ class TestContentValidation:
         assert result.verdict == "pass"
 
     def test_empty_description_fails(self):
-        from openspace.skill_engine.review_gate import check_content
+        from scion.skill_engine.review_gate import check_content
 
         record = _make_record(description="")
         result = check_content(record)
@@ -154,14 +154,14 @@ class TestContentValidation:
         assert "description" in result.detail.lower()
 
     def test_empty_name_fails(self):
-        from openspace.skill_engine.review_gate import check_content
+        from scion.skill_engine.review_gate import check_content
 
         record = _make_record(name="")
         result = check_content(record)
         assert result.verdict == "fail"
 
     def test_missing_skill_md_fails(self):
-        from openspace.skill_engine.review_gate import check_content
+        from scion.skill_engine.review_gate import check_content
 
         record = _make_record(content_snapshot={})
         result = check_content(record)
@@ -171,7 +171,7 @@ class TestContentValidation:
 
 class TestLineageValidation:
     def test_valid_lineage_passes(self):
-        from openspace.skill_engine.review_gate import check_lineage
+        from scion.skill_engine.review_gate import check_lineage
 
         record = _make_record(
             origin=SkillOrigin.FIXED,
@@ -182,7 +182,7 @@ class TestLineageValidation:
         assert result.verdict == "pass"
 
     def test_evolved_without_parent_fails(self):
-        from openspace.skill_engine.review_gate import check_lineage
+        from scion.skill_engine.review_gate import check_lineage
 
         record = _make_record(
             origin=SkillOrigin.FIXED,
@@ -194,7 +194,7 @@ class TestLineageValidation:
         assert "parent" in result.detail.lower()
 
     def test_generation_zero_evolved_fails(self):
-        from openspace.skill_engine.review_gate import check_lineage
+        from scion.skill_engine.review_gate import check_lineage
 
         record = _make_record(
             origin=SkillOrigin.FIXED,
@@ -205,7 +205,7 @@ class TestLineageValidation:
         assert result.verdict == "fail"
 
     def test_imported_skill_skips_lineage_check(self):
-        from openspace.skill_engine.review_gate import check_lineage
+        from scion.skill_engine.review_gate import check_lineage
 
         record = _make_record(
             origin=SkillOrigin.IMPORTED,
@@ -216,7 +216,7 @@ class TestLineageValidation:
         assert result.verdict == "pass"
 
     def test_captured_skill_skips_lineage_check(self):
-        from openspace.skill_engine.review_gate import check_lineage
+        from scion.skill_engine.review_gate import check_lineage
 
         record = _make_record(
             origin=SkillOrigin.CAPTURED,
@@ -232,7 +232,7 @@ class TestLineageValidation:
 # ======================================================================
 class TestReviewGate:
     def test_gate_passes_safe_skill(self):
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         gate = ReviewGate()
         record = _make_record(
@@ -243,7 +243,7 @@ class TestReviewGate:
         assert result.verdict == "pass"
 
     def test_gate_fails_dangerous_skill(self):
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         gate = ReviewGate()
         record = _make_record(
@@ -256,7 +256,7 @@ class TestReviewGate:
         assert not result.passed
 
     def test_gate_fails_missing_description(self):
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         gate = ReviewGate()
         record = _make_record(description="")
@@ -264,7 +264,7 @@ class TestReviewGate:
         assert not result.passed
 
     def test_gate_returns_all_check_results(self):
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         gate = ReviewGate()
         record = _make_record()
@@ -274,7 +274,7 @@ class TestReviewGate:
 
     def test_gate_continues_after_first_failure(self):
         """Gate should run ALL checks, not stop at first failure."""
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         gate = ReviewGate()
         record = _make_record(
@@ -297,7 +297,7 @@ class TestQuarantine:
     @pytest.mark.asyncio
     async def test_failed_review_quarantines_skill(self):
         """Skills that fail review must be deactivated (quarantined)."""
-        from openspace.skill_engine.review_gate import ReviewGate, quarantine_skill
+        from scion.skill_engine.review_gate import ReviewGate, quarantine_skill
 
         store = AsyncMock()
         store.deactivate_record = AsyncMock(return_value=True)
@@ -319,7 +319,7 @@ class TestQuarantine:
     @pytest.mark.asyncio
     async def test_passed_review_does_not_quarantine(self):
         """Skills that pass review stay active."""
-        from openspace.skill_engine.review_gate import ReviewGate, quarantine_skill
+        from scion.skill_engine.review_gate import ReviewGate, quarantine_skill
 
         store = AsyncMock()
         store.deactivate_record = AsyncMock()
@@ -335,7 +335,7 @@ class TestQuarantine:
     @pytest.mark.asyncio
     async def test_quarantine_logs_findings(self):
         """Quarantine must log which checks failed."""
-        from openspace.skill_engine.review_gate import ReviewGate, quarantine_skill
+        from scion.skill_engine.review_gate import ReviewGate, quarantine_skill
 
         store = AsyncMock()
         store.deactivate_record = AsyncMock(return_value=True)
@@ -344,7 +344,7 @@ class TestQuarantine:
         gate = ReviewGate()
         result = gate.review(record)
 
-        with patch("openspace.skill_engine.review_gate.logger") as mock_logger:
+        with patch("scion.skill_engine.review_gate.logger") as mock_logger:
             await quarantine_skill(store, record.skill_id, result)
             mock_logger.warning.assert_called()
 
@@ -354,13 +354,13 @@ class TestQuarantine:
 # ======================================================================
 class TestWiring:
     def test_review_gate_importable(self):
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         assert callable(ReviewGate)
 
     def test_review_gate_in_skill_engine_init(self):
         """ReviewGate should be exported from skill_engine package."""
-        import openspace.skill_engine.review_gate as rg
+        import scion.skill_engine.review_gate as rg
 
         assert hasattr(rg, "ReviewGate")
         assert hasattr(rg, "quarantine_skill")
@@ -376,7 +376,7 @@ class TestAdversarialBypass:
 
     def test_shell_script_in_snapshot_blocked(self):
         """A skill with clean .py but malicious .sh must fail (not in allowlist)."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: trojan\n",
@@ -389,7 +389,7 @@ class TestAdversarialBypass:
 
     def test_bat_file_blocked(self):
         """Windows batch files must be blocked (not in allowlist)."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -400,7 +400,7 @@ class TestAdversarialBypass:
 
     def test_ps1_file_blocked(self):
         """PowerShell scripts must be blocked."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -411,7 +411,7 @@ class TestAdversarialBypass:
 
     def test_pyw_file_blocked(self):
         """.pyw (Windows Python GUI) must be blocked."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -422,7 +422,7 @@ class TestAdversarialBypass:
 
     def test_pth_file_blocked(self):
         """.pth files auto-execute imports — must be blocked by allowlist."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -435,7 +435,7 @@ class TestAdversarialBypass:
 
     def test_pyc_binary_blocked(self):
         """.pyc bytecode files must be blocked — can't AST scan binary."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -446,7 +446,7 @@ class TestAdversarialBypass:
 
     def test_so_shared_lib_blocked(self):
         """.so native libraries must be blocked."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -457,7 +457,7 @@ class TestAdversarialBypass:
 
     def test_makefile_blocked(self):
         """Makefile (no extension) must be blocked unless in known-safe list."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -468,7 +468,7 @@ class TestAdversarialBypass:
 
     def test_mjs_file_blocked(self):
         """.mjs (ES module) must be blocked."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -479,7 +479,7 @@ class TestAdversarialBypass:
 
     def test_vbs_file_blocked(self):
         """.vbs (VBScript) must be blocked."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -490,7 +490,7 @@ class TestAdversarialBypass:
 
     def test_case_insensitive_py_scan(self):
         """handler.PY and handler.Py must both be scanned."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -501,7 +501,7 @@ class TestAdversarialBypass:
 
     def test_oversized_file_rejected(self):
         """Files exceeding _MAX_FILE_SIZE must be rejected."""
-        from openspace.skill_engine.review_gate import check_ast_safety, _MAX_FILE_SIZE
+        from scion.skill_engine.review_gate import check_ast_safety, _MAX_FILE_SIZE
 
         huge_source = "x = 1\n" * (_MAX_FILE_SIZE // 6 + 1)
         assert len(huge_source.encode("utf-8")) > _MAX_FILE_SIZE
@@ -516,7 +516,7 @@ class TestAdversarialBypass:
 
     def test_total_snapshot_size_limit(self):
         """Total snapshot exceeding _MAX_TOTAL_SIZE must be rejected."""
-        from openspace.skill_engine.review_gate import check_ast_safety, _MAX_TOTAL_SIZE
+        from scion.skill_engine.review_gate import check_ast_safety, _MAX_TOTAL_SIZE
 
         # Create many files just under per-file limit but exceeding total
         file_size = 400 * 1024  # 400KB each
@@ -532,7 +532,7 @@ class TestAdversarialBypass:
 
     def test_allowed_extensions_pass(self):
         """Files with allowed extensions (.py, .md, .json, .yaml, .txt) pass."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -551,7 +551,7 @@ class TestPathTraversal:
 
     def test_dot_dot_slash_blocked(self):
         """../../.bashrc path traversal must be caught."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -563,7 +563,7 @@ class TestPathTraversal:
 
     def test_absolute_path_blocked(self):
         """Absolute paths in snapshot keys must be blocked."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -575,7 +575,7 @@ class TestPathTraversal:
 
     def test_windows_absolute_path_blocked(self):
         """Windows absolute paths must be blocked."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -586,7 +586,7 @@ class TestPathTraversal:
 
     def test_windows_drive_relative_path_blocked(self):
         """Windows drive-relative paths (C:..\\evil.py) must be blocked."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -598,7 +598,7 @@ class TestPathTraversal:
 
     def test_windows_reserved_device_name_blocked(self):
         """CON.py, NUL.txt, AUX.json etc. hang Windows — must block."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         for name in ["CON.py", "NUL.txt", "AUX.json", "COM1.py", "LPT1.cfg"]:
             record = _make_record(content_snapshot={
@@ -610,7 +610,7 @@ class TestPathTraversal:
 
     def test_jinja_template_blocked(self):
         """Jinja templates removed from allowlist — SSTI risk."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         for ext in [".jinja", ".jinja2", ".j2", ".tmpl"]:
             record = _make_record(content_snapshot={
@@ -626,7 +626,7 @@ class TestHighSeverityBlocking:
 
     def test_socket_usage_blocked(self):
         """socket.socket() is HIGH severity — ReviewGate must block it."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -637,7 +637,7 @@ class TestHighSeverityBlocking:
 
     def test_ctypes_usage_blocked(self):
         """ctypes is HIGH severity — ReviewGate must block it."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -648,7 +648,7 @@ class TestHighSeverityBlocking:
 
     def test_env_exfiltration_blocked(self):
         """os.getenv() for secret exfil is HIGH — must block."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
@@ -662,22 +662,22 @@ class TestVerdictValidation:
     """Verify CheckResult only accepts valid verdict values."""
 
     def test_valid_pass_verdict(self):
-        from openspace.skill_engine.review_gate import CheckResult
+        from scion.skill_engine.review_gate import CheckResult
         r = CheckResult(name="test", verdict="pass")
         assert r.verdict == "pass"
 
     def test_valid_fail_verdict(self):
-        from openspace.skill_engine.review_gate import CheckResult
+        from scion.skill_engine.review_gate import CheckResult
         r = CheckResult(name="test", verdict="fail")
         assert r.verdict == "fail"
 
     def test_invalid_verdict_rejected(self):
-        from openspace.skill_engine.review_gate import CheckResult
+        from scion.skill_engine.review_gate import CheckResult
         with pytest.raises(ValueError, match="must be 'pass' or 'fail'"):
             CheckResult(name="test", verdict="skip")
 
     def test_typo_verdict_rejected(self):
-        from openspace.skill_engine.review_gate import CheckResult
+        from scion.skill_engine.review_gate import CheckResult
         with pytest.raises(ValueError, match="must be 'pass' or 'fail'"):
             CheckResult(name="test", verdict="fial")
 
@@ -687,16 +687,16 @@ class TestFailClosed:
 
     def test_import_error_fails_closed(self):
         """If security module can't import, AST check must FAIL (not skip)."""
-        from openspace.skill_engine.review_gate import check_ast_safety
+        from scion.skill_engine.review_gate import check_ast_safety
 
         record = _make_record(content_snapshot={
             "SKILL.md": "name: test\n",
             "handler.py": "x = 1\n",
         })
-        with patch.dict("sys.modules", {"openspace.security": None}):
+        with patch.dict("sys.modules", {"scion.security": None}):
             # Force ImportError by poisoning the module cache
             with patch(
-                "openspace.skill_engine.review_gate.check_ast_safety",
+                "scion.skill_engine.review_gate.check_ast_safety",
                 side_effect=None,
             ):
                 # Direct test: mock the import to fail
@@ -704,7 +704,7 @@ class TestFailClosed:
                 original_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
 
                 def failing_import(name, *args, **kwargs):
-                    if name == "openspace.security":
+                    if name == "scion.security":
                         raise ImportError("mocked")
                     return original_import(name, *args, **kwargs)
 
@@ -715,7 +715,7 @@ class TestFailClosed:
 
     def test_gate_handles_check_exception(self):
         """If a check function raises, gate must produce fail — not crash."""
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         def exploding_check(record):
             raise RuntimeError("kaboom")
@@ -727,7 +727,7 @@ class TestFailClosed:
 
     def test_empty_checks_list_rejected(self):
         """ReviewGate(checks=[]) must raise — empty gate passes everything."""
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         with pytest.raises(ValueError, match="at least one check"):
             ReviewGate(checks=[])
@@ -738,7 +738,7 @@ class TestOriginSpoofing:
 
     def test_captured_with_parents_fails(self):
         """CAPTURED origin with parents = spoofing attempt, caught by validate()."""
-        from openspace.skill_engine.review_gate import check_lineage
+        from scion.skill_engine.review_gate import check_lineage
 
         record = _make_record(
             origin=SkillOrigin.CAPTURED,
@@ -751,7 +751,7 @@ class TestOriginSpoofing:
 
     def test_imported_with_parents_fails(self):
         """IMPORTED origin with parents = spoofing, caught by validate()."""
-        from openspace.skill_engine.review_gate import check_lineage
+        from scion.skill_engine.review_gate import check_lineage
 
         record = _make_record(
             origin=SkillOrigin.IMPORTED,
@@ -763,7 +763,7 @@ class TestOriginSpoofing:
 
     def test_fixed_with_multiple_parents_fails(self):
         """FIXED must have exactly 1 parent — 2 parents caught by validate()."""
-        from openspace.skill_engine.review_gate import check_lineage
+        from scion.skill_engine.review_gate import check_lineage
 
         record = _make_record(
             origin=SkillOrigin.FIXED,
@@ -776,7 +776,7 @@ class TestOriginSpoofing:
 
     def test_negative_generation_fails(self):
         """Negative generation must be caught by validate()."""
-        from openspace.skill_engine.review_gate import check_lineage
+        from scion.skill_engine.review_gate import check_lineage
 
         record = _make_record(
             origin=SkillOrigin.FIXED,
@@ -793,7 +793,7 @@ class TestQuarantineRobustness:
     @pytest.mark.asyncio
     async def test_quarantine_handles_store_exception(self):
         """If store.deactivate_record raises, quarantine returns False."""
-        from openspace.skill_engine.review_gate import (
+        from scion.skill_engine.review_gate import (
             ReviewGate,
             ReviewResult,
             CheckResult,
@@ -813,7 +813,7 @@ class TestQuarantineRobustness:
     @pytest.mark.asyncio
     async def test_quarantine_handles_false_return(self):
         """If store.deactivate_record returns False, quarantine returns False."""
-        from openspace.skill_engine.review_gate import (
+        from scion.skill_engine.review_gate import (
             ReviewResult,
             CheckResult,
             quarantine_skill,

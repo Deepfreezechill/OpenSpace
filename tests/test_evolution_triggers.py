@@ -1,4 +1,4 @@
-"""Tests for openspace.skill_engine.evolution.triggers (Epic 5.3).
+"""Tests for scion.skill_engine.evolution.triggers (Epic 5.3).
 
 Verifies:
   1. process_analysis — dispatches suggestions → contexts → execution
@@ -77,7 +77,7 @@ class _FakeToolQualityRecord:
 # Import trigger functions
 # ---------------------------------------------------------------------------
 
-from openspace.skill_engine.evolution.triggers import (
+from scion.skill_engine.evolution.triggers import (
     _ANALYSIS_CONTEXT_MAX,
     _FALLBACK_THRESHOLD,
     _HIGH_APPLIED_FOR_FIX,
@@ -109,7 +109,7 @@ class TestDiagnoseSkillHealth:
 
     def test_high_fallback_returns_fix(self):
         record = _FakeSkillRecord(fallback_rate=0.5)
-        with patch("openspace.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType):
+        with patch("scion.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType):
             evo_type, direction = diagnose_skill_health(record)
         assert evo_type == _FakeEvolutionType.FIX
         assert "fallback" in direction.lower()
@@ -118,7 +118,7 @@ class TestDiagnoseSkillHealth:
         record = _FakeSkillRecord(
             applied_rate=0.5, completion_rate=0.2, fallback_rate=0.1,
         )
-        with patch("openspace.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType):
+        with patch("scion.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType):
             evo_type, direction = diagnose_skill_health(record)
         assert evo_type == _FakeEvolutionType.FIX
         assert "completion" in direction.lower()
@@ -128,7 +128,7 @@ class TestDiagnoseSkillHealth:
             effective_rate=0.4, applied_rate=0.3,
             fallback_rate=0.1, completion_rate=0.8,
         )
-        with patch("openspace.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType):
+        with patch("scion.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType):
             evo_type, direction = diagnose_skill_health(record)
         assert evo_type == _FakeEvolutionType.DERIVED
         assert "effectiveness" in direction.lower()
@@ -182,8 +182,8 @@ class TestBuildContextFromAnalysis:
             target_skill_ids=[],
         )
 
-        with patch("openspace.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType), \
-             patch("openspace.skill_engine.evolution.triggers.EvolutionTrigger", _FakeTrigger):
+        with patch("scion.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType), \
+             patch("scion.skill_engine.evolution.triggers.EvolutionTrigger", _FakeTrigger):
             ctx = build_context_from_analysis(evolver, analysis, suggestion)
 
         assert ctx is not None
@@ -198,7 +198,7 @@ class TestBuildContextFromAnalysis:
             target_skill_ids=[],
         )
 
-        with patch("openspace.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType):
+        with patch("scion.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType):
             ctx = build_context_from_analysis(evolver, analysis, suggestion)
 
         assert ctx is None
@@ -215,8 +215,8 @@ class TestBuildContextFromAnalysis:
             target_skill_ids=["skill-1"],
         )
 
-        with patch("openspace.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType), \
-             patch("openspace.skill_engine.evolution.triggers.EvolutionTrigger", _FakeTrigger):
+        with patch("scion.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType), \
+             patch("scion.skill_engine.evolution.triggers.EvolutionTrigger", _FakeTrigger):
             ctx = build_context_from_analysis(evolver, analysis, suggestion)
 
         assert ctx is not None
@@ -367,9 +367,9 @@ class TestProcessMetricCheck:
         evolver._llm_confirm_evolution = AsyncMock(return_value=True)
         evolver._execute_contexts = AsyncMock(return_value=[_FakeSkillRecord(name="improved")])
 
-        with patch("openspace.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType), \
-             patch("openspace.skill_engine.evolution.triggers.EvolutionTrigger", _FakeTrigger), \
-             patch("openspace.skill_engine.evolution.triggers.EvolutionSuggestion", _FakeSuggestion):
+        with patch("scion.skill_engine.evolution.triggers.EvolutionType", _FakeEvolutionType), \
+             patch("scion.skill_engine.evolution.triggers.EvolutionTrigger", _FakeTrigger), \
+             patch("scion.skill_engine.evolution.triggers.EvolutionSuggestion", _FakeSuggestion):
             result = await process_metric_check(evolver, min_selections=5)
 
         assert len(result) == 1
@@ -396,7 +396,7 @@ class TestConstants:
     def test_constants_no_longer_in_evolver(self):
         """Constants should be imported, not defined, in evolver.py."""
         import inspect
-        from openspace.skill_engine import evolver as mod
+        from scion.skill_engine import evolver as mod
         source = inspect.getsource(mod)
         # Should not have the original assignment (but import is fine)
         assert "_FALLBACK_THRESHOLD = 0.4" not in source
@@ -407,7 +407,7 @@ class TestConstants:
 # ---------------------------------------------------------------------------
 
 try:
-    from openspace.skill_engine.evolver import SkillEvolver
+    from scion.skill_engine.evolver import SkillEvolver
     _HAS_EVOLVER = True
 except ImportError:
     _HAS_EVOLVER = False
@@ -432,7 +432,7 @@ class TestSizeGuard:
     def test_triggers_module_size(self):
         mod_path = (
             Path(__file__).resolve().parent.parent
-            / "openspace" / "skill_engine" / "evolution" / "triggers.py"
+            / "scion" / "skill_engine" / "evolution" / "triggers.py"
         )
         assert mod_path.exists(), f"triggers.py not found at {mod_path}"
         lines = mod_path.read_text(encoding="utf-8").splitlines()

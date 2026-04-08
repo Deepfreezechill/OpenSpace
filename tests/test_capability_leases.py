@@ -23,9 +23,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from pydantic import ValidationError
 
-from openspace.domain.ports import CapabilityLeaseResolverPort
-from openspace.domain.types import CapabilityLease, SandboxPolicy
-from openspace.sandbox.leases import (
+from scion.domain.ports import CapabilityLeaseResolverPort
+from scion.domain.types import CapabilityLease, SandboxPolicy
+from scion.sandbox.leases import (
     REQUIRED_BLOCKED_COMMANDS,
     REQUIRED_BLOCKED_DOMAINS,
     REQUIRED_DENIED_PATHS,

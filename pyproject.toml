@@ -3,14 +3,14 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "openspace"
+name = "scion-skills"
 version = "2.0.0"
-description = "OpenSpace"
+description = "Scion — Self-Evolving AI Skill Engine"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
 authors = [
-    {name = "OpenSpace Team@HKUDS"}
+    {name = "Scion Team@HKUDS"}
 ]
 
 dependencies = [
@@ -61,20 +61,20 @@ dev = [
 ]
 
 all = [
-    "openspace[macos,linux,windows,dev]",
+    "scion-skills[macos,linux,windows,dev]",
 ]
 
 [project.urls]
-Repository = "https://github.com/Deepfreezechill/OpenSpace"
-"Bug Tracker" = "https://github.com/Deepfreezechill/OpenSpace/issues"
+Repository = "https://github.com/Deepfreezechill/scion"
+"Bug Tracker" = "https://github.com/Deepfreezechill/scion/issues"
 
 [project.scripts]
-openspace = "openspace.__main__:run_main"
-openspace-server = "openspace.local_server.main:main"
-openspace-mcp = "openspace.mcp_server:run_mcp_server"
-openspace-download-skill = "openspace.cloud.cli.download_skill:main"
-openspace-upload-skill = "openspace.cloud.cli.upload_skill:main"
-openspace-dashboard = "openspace.dashboard_server:main"
+scion = "scion.__main__:run_main"
+scion-server = "scion.local_server.main:main"
+scion-mcp = "scion.mcp_server:run_mcp_server"
+scion-download-skill = "scion.cloud.cli.download_skill:main"
+scion-upload-skill = "scion.cloud.cli.upload_skill:main"
+scion-dashboard = "scion.dashboard_server:main"
 
 [tool.ruff]
 target-version = "py312"
@@ -102,10 +102,10 @@ ignore = [
 "gdpval_bench/*" = ["E", "F", "W"]  # benchmark scripts — upstream code
 
 [tool.setuptools]
-packages = {find = {where = ["."], include = ["openspace*"]}}
+packages = {find = {where = ["."], include = ["scion*"]}}
 
 [tool.setuptools.package-data]
-openspace = [
+scion = [
     "config/*.json",
     "config/*.json.example",
     "local_server/config.json",
@@ -142,13 +142,13 @@ markers = [
 # ---------------------------------------------------------------------------
 
 [tool.coverage.run]
-source = ["openspace"]
+source = ["scion"]
 omit = [
-    "openspace/__main__.py",
-    "openspace/dashboard_server.py",
-    "openspace/local_server/*",
-    "openspace/platforms/*",
-    "openspace/recording/*",
+    "scion/__main__.py",
+    "scion/dashboard_server.py",
+    "scion/local_server/*",
+    "scion/platforms/*",
+    "scion/recording/*",
     "tests/*",
 ]
 

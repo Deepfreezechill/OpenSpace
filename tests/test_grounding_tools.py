@@ -1,4 +1,4 @@
-"""Tests for openspace.agents.grounding.tools — tool retrieval helpers.
+"""Tests for scion.agents.grounding.tools — tool retrieval helpers.
 
 Epic 5.9 extraction: _get_available_tools, _load_all_tools.
 """
@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from openspace.agents.grounding.tools import _get_available_tools, _load_all_tools
+from scion.agents.grounding.tools import _get_available_tools, _load_all_tools
 
 
 class _FakeAgent:
@@ -31,7 +31,7 @@ class _FakeAgent:
 
     async def _load_all_tools(self, grounding_client):
         """Delegate for MRO — calls module function."""
-        from openspace.agents.grounding.tools import _load_all_tools
+        from scion.agents.grounding.tools import _load_all_tools
         return await _load_all_tools(self, grounding_client)
 
 
@@ -70,7 +70,7 @@ class TestGetAvailableTools:
 
         call_kwargs = mock_gc.get_tools_with_auto_search.call_args
         backends = call_kwargs.kwargs.get("backend") or call_kwargs[1].get("backend")
-        from openspace.grounding.core.types import BackendType
+        from scion.grounding.core.types import BackendType
 
         assert BackendType.SHELL in backends
 
@@ -96,15 +96,15 @@ class TestGetAvailableTools:
         mock_registry.list_skills.return_value = ["skill_a"]
         agent._skill_registry = mock_registry
 
-        with patch("openspace.agents.grounding.tools.RetrieveSkillTool", create=True) as MockRST:
+        with patch("scion.agents.grounding.tools.RetrieveSkillTool", create=True) as MockRST:
             # Patch the lazy import inside the function
             mock_tool = MagicMock()
             MockRST.return_value = mock_tool
 
             # Need to patch the import inside the function
-            import openspace.agents.grounding.tools as tools_mod
+            import scion.agents.grounding.tools as tools_mod
 
-            with patch.dict("sys.modules", {"openspace.skill_engine.retrieve_tool": MagicMock(RetrieveSkillTool=MockRST)}):
+            with patch.dict("sys.modules", {"scion.skill_engine.retrieve_tool": MagicMock(RetrieveSkillTool=MockRST)}):
                 result = await _get_available_tools(agent, "task")
                 assert mock_tool in result
 
@@ -165,14 +165,14 @@ class TestToolsDelegationSeams:
     """Verify grounding_agent.py properly delegates to tools module."""
 
     def test_get_available_tools_delegates(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert "_get_available_tools" in dir(GroundingAgent)
         method = getattr(GroundingAgent, "_get_available_tools")
         assert callable(method)
 
     def test_load_all_tools_delegates(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert "_load_all_tools" in dir(GroundingAgent)
         method = getattr(GroundingAgent, "_load_all_tools")

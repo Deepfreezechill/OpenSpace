@@ -13,13 +13,13 @@ import textwrap
 
 import pytest
 
-from openspace.security import check_code_safety
-from openspace.security.ast_scanner import (
+from scion.security import check_code_safety
+from scion.security.ast_scanner import (
     Severity,
     load_blocklist,
     scan_code,
 )
-from openspace.security.env_filter import (
+from scion.security.env_filter import (
     ENV_ALLOWLIST,
     get_safe_env,
     is_sensitive_key,
@@ -50,7 +50,7 @@ class TestGetSafeEnv:
         mock_env.set("PATH", "/usr/bin")
         mock_env.set("HOME", "/home/test")
         mock_env.set("LANG", "en_US.UTF-8")
-        mock_env.set("OPENSPACE_LOG_LEVEL", "DEBUG")
+        mock_env.set("SCION_LOG_LEVEL", "DEBUG")
         mock_env.set("AWS_SECRET_ACCESS_KEY", "supersecret")
         mock_env.set("DATABASE_URL", "postgres://...")
 
@@ -70,9 +70,9 @@ class TestGetSafeEnv:
             assert safe[key] == f"val-{key}"
 
     def test_missing_allowlist_var_is_omitted(self, mock_env):
-        mock_env.delete("OPENSPACE_LOG_LEVEL")
+        mock_env.delete("SCION_LOG_LEVEL")
         safe = get_safe_env()
-        assert "OPENSPACE_LOG_LEVEL" not in safe
+        assert "SCION_LOG_LEVEL" not in safe
 
     @pytest.mark.parametrize(
         "dangerous_key",
@@ -150,7 +150,7 @@ class TestIsSensitiveKey:
             "TERM",
             "USER",
             "HOSTNAME",
-            "OPENSPACE_LOG_LEVEL",
+            "SCION_LOG_LEVEL",
             "PYTHONPATH",
             "NODE_ENV",
         ],
@@ -243,7 +243,7 @@ class TestSandboxSecretIsolation:
         mock_env.set("PATH", "/usr/local/bin:/usr/bin")
         mock_env.set("HOME", "/home/dev")
         mock_env.set("LANG", "en_US.UTF-8")
-        mock_env.set("OPENSPACE_LOG_LEVEL", "INFO")
+        mock_env.set("SCION_LOG_LEVEL", "INFO")
         # Secrets that MUST NOT leak
         mock_env.set("E2B_API_KEY", "e2b-test-key")
         mock_env.set("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG")
@@ -298,7 +298,7 @@ class TestSandboxSecretIsolation:
         """Lock down the exact allowlist to prevent accidental expansion."""
         assert ENV_ALLOWLIST == frozenset(
             {
-                "OPENSPACE_LOG_LEVEL",
+                "SCION_LOG_LEVEL",
                 "PATH",
                 "HOME",
                 "LANG",
@@ -309,7 +309,7 @@ class TestSandboxSecretIsolation:
         """SandboxConnector must strip secrets from env before passing to sandbox."""
         from unittest.mock import MagicMock
 
-        from openspace.grounding.backends.mcp.transport.connectors.sandbox import SandboxConnector
+        from scion.grounding.backends.mcp.transport.connectors.sandbox import SandboxConnector
 
         mock_sandbox = MagicMock()
         hostile_env = {
@@ -318,7 +318,7 @@ class TestSandboxSecretIsolation:
             "AWS_SECRET_ACCESS_KEY": "AKIAIOSFODNN7EXAMPLE",
             "GITHUB_TOKEN": "ghp_xxxx",
             "DATABASE_URL": "postgres://user:pass@host/db",
-            "OPENSPACE_LOG_LEVEL": "DEBUG",
+            "SCION_LOG_LEVEL": "DEBUG",
         }
 
         connector = SandboxConnector(
@@ -330,7 +330,7 @@ class TestSandboxSecretIsolation:
 
         assert "PATH" in connector.user_env
         assert "HOME" in connector.user_env
-        assert "OPENSPACE_LOG_LEVEL" in connector.user_env
+        assert "SCION_LOG_LEVEL" in connector.user_env
         assert "AWS_SECRET_ACCESS_KEY" not in connector.user_env
         assert "GITHUB_TOKEN" not in connector.user_env
         assert "DATABASE_URL" not in connector.user_env

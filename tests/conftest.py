@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the OpenSpace test suite.
+"""Shared pytest fixtures for the Scion test suite.
 
 Provides:
   - ``mock_llm_client`` — deterministic LLM mock (no real API calls)
@@ -50,9 +50,9 @@ def in_memory_store(tmp_path: Path):
     class can open its own connection with the path it expects.
     The file is cleaned up automatically by pytest's ``tmp_path``.
     """
-    from openspace.skill_engine.store import SkillStore
+    from scion.skill_engine.store import SkillStore
 
-    db_path = tmp_path / "test_openspace.db"
+    db_path = tmp_path / "test_scion.db"
     store = SkillStore(db_path=db_path)
     yield store
     store.close()

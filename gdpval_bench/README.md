@@ -1,6 +1,6 @@
 # GDPVal Benchmark
 
-Benchmark for evaluating OpenSpace on [GDPVal](https://huggingface.co/datasets/openai/gdpval) (220 occupational tasks across 44 occupations and 9 sectors). Measures token savings from skill accumulation by running each task twice:
+Benchmark for evaluating Scion on [GDPVal](https://huggingface.co/datasets/openai/gdpval) (220 occupational tasks across 44 occupations and 9 sectors). Measures token savings from skill accumulation by running each task twice:
 
 - **Phase 1** — Cold start. Skills accumulate as tasks run sequentially.
 - **Phase 2** — Warm start. Re-run all tasks with the full Phase 1 skill library.
@@ -11,7 +11,7 @@ Evaluation uses [ClawWork](https://github.com/HKUDS/ClawWork)'s LLM evaluator (s
 
 ```
 parent/
-├── OpenSpace/                   ← this repo
+├── Scion/                   ← this repo
 │   └── gdpval_bench/            ← this directory
 └── ClawWork/                    ← required
     ├── eval/meta_prompts/       ← evaluation rubrics
@@ -45,10 +45,10 @@ Key flags: `--phase1-only`, `--phase2-only`, `--no-eval`, `--concurrency N`, `--
 
 ```
 skills/                        # evolved skills
-.openspace/openspace.db        # skill & tool quality DB (auto-generated during evolution)
+.scion/scion.db        # skill & tool quality DB (auto-generated during evolution)
 ```
 
-`skills/` contains the full skill library produced by evolution — each subdirectory holds a `SKILL.md`. `.openspace/openspace.db` tracks skill lineage, tool quality records, and execution analyses accumulated across benchmark runs.
+`skills/` contains the full skill library produced by evolution — each subdirectory holds a `SKILL.md`. `.scion/scion.db` tracks skill lineage, tool quality records, and execution analyses accumulated across benchmark runs.
 
 ## Output
 
@@ -70,7 +70,7 @@ results/<run_name>/
 python -m gdpval_bench.calc_subset_performance
 ```
 
-Produces leaderboard (OpenSpace vs ClawWork agents), head-to-head comparison, and token savings breakdown.
+Produces leaderboard (Scion vs ClawWork agents), head-to-head comparison, and token savings breakdown.
 
 ## Task List
 

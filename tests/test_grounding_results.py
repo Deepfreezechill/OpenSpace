@@ -1,4 +1,4 @@
-"""Tests for openspace.agents.grounding.results — results & telemetry helpers.
+"""Tests for scion.agents.grounding.results — results & telemetry helpers.
 
 Epic 5.10 extraction: build_iteration_feedback, remove_previous_guidance,
 format_tool_executions, check_task_completion, extract_last_assistant_message,
@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from openspace.agents.grounding.results import (
+from scion.agents.grounding.results import (
     build_final_result,
     build_iteration_feedback,
     check_task_completion,
@@ -22,7 +22,7 @@ from openspace.agents.grounding.results import (
     record_agent_execution,
     remove_previous_guidance,
 )
-from openspace.prompts import GroundingAgentPrompts
+from scion.prompts import GroundingAgentPrompts
 
 
 # ── helpers ────────────────────────────────────────────────────────
@@ -407,7 +407,7 @@ class TestGroundingAgentDelegation:
 
     def _make_agent(self):
         """Build a GroundingAgent with mocked dependencies."""
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         agent = GroundingAgent.__new__(GroundingAgent)
         # Minimal state to avoid __init__ side-effects
@@ -488,7 +488,7 @@ class TestGroundingAgentDelegation:
     async def test_mro_override_respected_in_build_final_result(self):
         """Adversarial MRO test: subclass overrides _check_task_completion
         and _build_final_result MUST call the override, not the module function."""
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         SENTINEL = "SUBCLASS_OVERRIDE_SENTINEL"
 

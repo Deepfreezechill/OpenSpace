@@ -1,6 +1,6 @@
 """Tests for EPIC 0.9 — Benchmark extraction from production code.
 
-Verifies that production ``openspace/`` modules have no runtime coupling
+Verifies that production ``scion/`` modules have no runtime coupling
 to ``gdpval_bench`` (the benchmark harness).  The benchmark package is
 CLI-only and must never be imported during MCP server startup or
 tool execution.
@@ -17,7 +17,7 @@ from typing import List, Set
 import pytest
 
 # Production package root
-_OPENSPACE_ROOT = Path(__file__).resolve().parent.parent / "openspace"
+_SCION_ROOT = Path(__file__).resolve().parent.parent / "scion"
 
 # Files that are explicitly allowed to reference gdpval_bench
 # (dashboard is not part of the MCP server)
@@ -55,15 +55,15 @@ class TestNoBenchmarkImports:
     """Production code must not import gdpval_bench."""
 
     def test_no_gdpval_imports_in_production(self):
-        """Scan all .py files under openspace/ for gdpval_bench imports."""
+        """Scan all .py files under scion/ for gdpval_bench imports."""
         violations: List[str] = []
-        for py_file in _find_python_files(_OPENSPACE_ROOT):
+        for py_file in _find_python_files(_SCION_ROOT):
             if py_file.name in _ALLOWED_FILES:
                 continue
             source = py_file.read_text(encoding="utf-8", errors="replace")
             findings = _has_gdpval_import(source)
             if findings:
-                rel = py_file.relative_to(_OPENSPACE_ROOT.parent)
+                rel = py_file.relative_to(_SCION_ROOT.parent)
                 for f in findings:
                     violations.append(f"{rel}: {f}")
 
@@ -74,21 +74,21 @@ class TestNoBenchmarkImports:
     def test_allowed_files_list_is_minimal(self):
         """Ensure _ALLOWED_FILES only contains files that actually exist."""
         for name in _ALLOWED_FILES:
-            assert (_OPENSPACE_ROOT / name).exists(), f"{name} is in _ALLOWED_FILES but doesn't exist"
+            assert (_SCION_ROOT / name).exists(), f"{name} is in _ALLOWED_FILES but doesn't exist"
 
     @pytest.mark.parametrize(
         "module_path",
         [
-            "openspace.llm.client",
-            "openspace.skill_engine.registry",
-            "openspace.skill_engine.evolver",
-            "openspace.skill_engine.analyzer",
-            "openspace.grounding.core.quality.manager",
+            "scion.llm.client",
+            "scion.skill_engine.registry",
+            "scion.skill_engine.evolver",
+            "scion.skill_engine.analyzer",
+            "scion.grounding.core.quality.manager",
         ],
     )
     def test_previously_coupled_modules_clean(self, module_path):
         """Verify the 5 modules that previously imported gdpval_bench are clean."""
-        py_file = _OPENSPACE_ROOT.parent / module_path.replace(".", "/")
+        py_file = _SCION_ROOT.parent / module_path.replace(".", "/")
         py_file = py_file.with_suffix(".py")
         assert py_file.exists(), f"{module_path} not found at {py_file}"
 
@@ -98,10 +98,10 @@ class TestNoBenchmarkImports:
 
 
 class TestBenchmarkIsolation:
-    """gdpval_bench must be completely separate from openspace runtime."""
+    """gdpval_bench must be completely separate from scion runtime."""
 
-    def test_gdpval_bench_not_in_sys_modules_after_openspace_import(self):
-        """Importing openspace modules must not pull in gdpval_bench."""
+    def test_gdpval_bench_not_in_sys_modules_after_scion_import(self):
+        """Importing scion modules must not pull in gdpval_bench."""
         # Clear any cached gdpval_bench modules
         gdpval_mods = [k for k in sys.modules if k.startswith("gdpval_bench")]
         saved = {k: sys.modules.pop(k) for k in gdpval_mods}
@@ -109,9 +109,9 @@ class TestBenchmarkIsolation:
         try:
             # Force reimport of the previously-coupled modules
             for mod_name in [
-                "openspace.skill_engine.registry",
-                "openspace.skill_engine.evolver",
-                "openspace.skill_engine.analyzer",
+                "scion.skill_engine.registry",
+                "scion.skill_engine.evolver",
+                "scion.skill_engine.analyzer",
             ]:
                 try:
                     if mod_name in sys.modules:
@@ -131,10 +131,10 @@ class TestBenchmarkIsolation:
 
     def test_token_tracker_not_referenced_in_strings(self):
         """No string references to token_tracker in production code."""
-        for py_file in _find_python_files(_OPENSPACE_ROOT):
+        for py_file in _find_python_files(_SCION_ROOT):
             if py_file.name in _ALLOWED_FILES:
                 continue
             source = py_file.read_text(encoding="utf-8", errors="replace")
             if "token_tracker" in source:
-                rel = py_file.relative_to(_OPENSPACE_ROOT.parent)
+                rel = py_file.relative_to(_SCION_ROOT.parent)
                 pytest.fail(f"{rel} still references 'token_tracker' — benchmark coupling not fully removed")

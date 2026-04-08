@@ -4,10 +4,10 @@
 
 ### **Your Entire Day on One Live Screen — with an AI Agent That Works for You**
 
-**Fully generated & evolved by [OpenSpace](https://github.com/Deepfreezechill/OpenSpace) — zero human code**
+**Fully generated & evolved by [Scion](https://github.com/Deepfreezechill/scion) — zero human code**
 
 <p>
-<a href="https://github.com/Deepfreezechill/OpenSpace"><img src="https://img.shields.io/badge/Built_with-OpenSpace-99C9BF.svg" alt="Built with OpenSpace" /></a>
+<a href="https://github.com/Deepfreezechill/scion"><img src="https://img.shields.io/badge/Built_with-Scion-99C9BF.svg" alt="Built with Scion" /></a>
 <img src="https://img.shields.io/badge/TypeScript-Vanilla_TS-FCE7D6.svg" alt="TypeScript" />
 <img src="https://img.shields.io/badge/Bundler-Vite-C1E5F5.svg" alt="Vite" />
 </p>
@@ -27,7 +27,7 @@
 
 - [What is My Daily Monitor?](#-what-is-my-daily-monitor)
 - [Quick Start](#-quick-start)
-- [How Was It Generated?](#-how-was-it-generated--openspace-skill-evolution)
+- [How Was It Generated?](#-how-was-it-generated--scion-skill-evolution)
 - [Project Structure](#%EF%B8%8F-project-structure)
 - [Related](#-related)
 
@@ -143,15 +143,15 @@ Open the dashboard and click **⚙ Settings** in the top-right corner. Add your 
 
 ---
 
-## 🧬 How Was It Generated? — OpenSpace Skill Evolution
+## 🧬 How Was It Generated? — Scion Skill Evolution
 
-> **Zero human code was written.** The entire project — every panel, service, style, and API route — was generated and iteratively evolved by [OpenSpace](https://github.com/Deepfreezechill/OpenSpace) with no manual coding involved.
+> **Zero human code was written.** The entire project — every panel, service, style, and API route — was generated and iteratively evolved by [Scion](https://github.com/Deepfreezechill/scion) with no manual coding involved.
 
 ### The Process
 
-1. **Seed Reference**: OpenSpace started by analyzing the open-source project [WorldMonitor](https://github.com/koala73/worldmonitor) — a real-time global intelligence dashboard built with vanilla TypeScript.
+1. **Seed Reference**: Scion started by analyzing the open-source project [WorldMonitor](https://github.com/koala73/worldmonitor) — a real-time global intelligence dashboard built with vanilla TypeScript.
 
-2. **Skill Extraction**: OpenSpace extracted an initial set of **6 skills** from WorldMonitor's codebase:
+2. **Skill Extraction**: Scion extracted an initial set of **6 skills** from WorldMonitor's codebase:
    - `codebase-pattern-analyzer` — How to analyze a codebase and identify reusable patterns
    - `skill-template-generator` — How to generate skill templates from identified patterns
    - `worldmonitor-reference` — Architecture index: Panel class hierarchy, service layer, CSS grid, API edge functions
@@ -159,23 +159,23 @@ Open the dashboard and click **⚙ Settings** in the top-right corner. Add your 
    - `data-service` — Service module conventions
    - `panel-grid-layout` — Responsive CSS grid system
 
-3. **Domain Adaptation**: Using the `personal-monitor-domain` skill, OpenSpace defined the target panels, data sources, APIs, and priority ordering for a **personal** daily monitor (as opposed to WorldMonitor's global scope).
+3. **Domain Adaptation**: Using the `personal-monitor-domain` skill, Scion defined the target panels, data sources, APIs, and priority ordering for a **personal** daily monitor (as opposed to WorldMonitor's global scope).
 
-4. **Iterative Evolution**: OpenSpace evolved the project step-by-step — each iteration added new panels, refined existing ones, fixed bugs, and extracted new skills from the evolving codebase. The skills themselves self-evolved, becoming more specific and battle-tested over time.
+4. **Iterative Evolution**: Scion evolved the project step-by-step — each iteration added new panels, refined existing ones, fixed bugs, and extracted new skills from the evolving codebase. The skills themselves self-evolved, becoming more specific and battle-tested over time.
 
 ### 📈 Evolution Graph
 
-The following graph shows the skill evolution path — how OpenSpace progressively built and refined the dashboard through multiple iterations:
+The following graph shows the skill evolution path — how Scion progressively built and refined the dashboard through multiple iterations:
 
 <div align="center">
 <img src="../assets/my_daily_monitor_evograph.png" width="800px" alt="My Daily Monitor - Skill Evolution Graph" />
 </div>
 
-> Each node represents a skill that OpenSpace learned, extracted, or refined during the development process. The graph illustrates how initial reference patterns from WorldMonitor branched into specialized skills for panel creation, data services, full-stack feature authoring, and more.
+> Each node represents a skill that Scion learned, extracted, or refined during the development process. The graph illustrates how initial reference patterns from WorldMonitor branched into specialized skills for panel creation, data services, full-stack feature authoring, and more.
 
 ### 📂 Evolved Skills & Evolution DB
 
-Through iterative evolution, OpenSpace accumulated **60+ skills** spanning multiple categories. Examples:
+Through iterative evolution, Scion accumulated **60+ skills** spanning multiple categories. Examples:
 
 - **Panel patterns**: `panel-component`, `panel-base-advanced`, `panel-visual-badges`, ...
 - **Data services**: `data-service`, `data-service-circuit-breaker-aware`, `data-service-proxy-direct`, ...
@@ -183,7 +183,7 @@ Through iterative evolution, OpenSpace accumulated **60+ skills** spanning multi
 - **Infrastructure**: `refresh-scheduler`, `api-proxy-endpoint`, `project-scaffold`, ...
 - **Reliability**: `typescript-compile-check-resilient`, `unicode-safe-file-writing`, `idempotent-file-replace`, ...
 
-The full evolution history — every skill version, derivation chain, and quality score — is stored in the open-sourced [`showcase/.openspace/openspace.db`](.openspace/openspace.db) SQLite database.
+The full evolution history — every skill version, derivation chain, and quality score — is stored in the open-sourced [`showcase/.scion/scion.db`](.scion/scion.db) SQLite database.
 
 ---
 
@@ -231,5 +231,5 @@ my-daily-monitor/
 
 ## 🔗 Related
 
-- **[OpenSpace](https://github.com/Deepfreezechill/OpenSpace)** — Self-evolving skill worker & community for AI agents, the engine that generated this entire project.
+- **[Scion](https://github.com/Deepfreezechill/scion)** — Self-evolving skill worker & community for AI agents, the engine that generated this entire project.
 - **[WorldMonitor](https://github.com/koala73/worldmonitor)** — Real-time global intelligence dashboard that served as the seed reference for initial skills extraction.

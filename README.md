@@ -1,12 +1,12 @@
-[![CI](https://github.com/Deepfreezechill/OpenSpace/actions/workflows/ci.yml/badge.svg)](https://github.com/Deepfreezechill/OpenSpace/actions/workflows/ci.yml)
+[![CI](https://github.com/Deepfreezechill/scion/actions/workflows/ci.yml/badge.svg)](https://github.com/Deepfreezechill/scion/actions/workflows/ci.yml)
 
 <div align="center">
 
 <picture>
-    <img src="assets/logo.png" width="320px" style="border: none; box-shadow: none;" alt="OpenSpace Logo">
+    <img src="assets/logo.png" width="320px" style="border: none; box-shadow: none;" alt="Scion Logo">
 </picture>
 
-## ✨ OpenSpace: Make Your Agents: Smarter, Low-Cost, Self-Evolving ✨
+## ✨ Scion: Make Your Agents: Smarter, Low-Cost, Self-Evolving ✨
 
 | 🔋 **46% Fewer Tokens** | **💰 $11K earned in 6 Hours** | 🧬 **Self-Evolving Skills** | 🌐 **Agents Experience Sharing** |
 
@@ -17,7 +17,7 @@
 
 **One Command to Evolve All Your AI Agents**: OpenClaw, nanobot, Claude Code, Codex, Cursor and etc.
 
-<img src="assets/cli-typing.gif" width="500px" alt="openspace --query your task">
+<img src="assets/cli-typing.gif" width="500px" alt="scion --query your task">
 
 </div>
 
@@ -30,13 +30,13 @@ Today's AI agents — [OpenClaw](https://github.com/openclaw/openclaw), [nanobot
 - **❌ Repeated Costly Failures** - How to share solutions across agents instead of repeating the same costly exploration and mistakes?
 - **❌ Poor and Unreliable Skills** - How to maintain skill reliability as tools and APIs evolve — while ensuring community-contributed skills meet rigorous quality standards?
 
-## 🎯 What is OpenSpace?
+## 🎯 What is Scion?
 
 **🚀 🚀 The self-evolving engine where every task makes every agent smarter and more cost-efficient.**
 
 https://github.com/user-attachments/assets/c50f70ab-f6db-47bf-9498-3210c0f0abae
 
-OpenSpace plugs into any agent as skills and evolves it with three superpowers:
+Scion plugs into any agent as skills and evolves it with three superpowers:
 
 ### 🧬 Self-Evolution
 Skills that learn and improve themselves automatically
@@ -74,15 +74,15 @@ Do more, spend less — agents that actually save you money over time.
 - Failed patterns repeat with no learning mechanism
 - Knowledge remains trapped in individual agents
 
-**✅ OpenSpace-Powered Agents**
+**✅ Scion-Powered Agents**
 - Multi-layer monitoring catches problems and auto-triggers repairs
 - Successful workflows become reusable, shareable skills
 - When one agent learns something useful, all agents get that knowledge instantly
 
-### 📊 OpenSpace: Turn Your Agent into a Money-Making Coworker
+### 📊 Scion: Turn Your Agent into a Money-Making Coworker
 
 **🎯 Real-World Results That Matter**
-On 50 professional tasks (**📈 [GDPVal Economic Benchmark](#-benchmark-gdpval)**) across 6 industries, OpenSpace agents earn **4.2× more money** than baseline ([ClawWork](https://github.com/HKUDS/ClawWork)) agents using the same backbone LLM (Qwen 3.5-Plus). While cutting 46% of costly tokens through skill evolution.
+On 50 professional tasks (**📈 [GDPVal Economic Benchmark](#-benchmark-gdpval)**) across 6 industries, Scion agents earn **4.2× more money** than baseline ([ClawWork](https://github.com/HKUDS/ClawWork)) agents using the same backbone LLM (Qwen 3.5-Plus). While cutting 46% of costly tokens through skill evolution.
 
 <div align="center">
 <img src="assets/benchmark_kpi.png" width="100%" alt="GDPVal Benchmark — Key Results" />
@@ -104,11 +104,11 @@ On 50 professional tasks (**📈 [GDPVal Economic Benchmark](#-benchmark-gdpval)
 <img src="assets/benchmark_task_showcase.png" width="100%" alt="GDPVal Benchmark — Task Showcase by Category" />
 </div>
 
-**OpenSpace doesn't just make agents smarter** — it makes them economically viable. Real work, real money, measurable results.
+**Scion doesn't just make agents smarter** — it makes them economically viable. Real work, real money, measurable results.
 
-## Use Case for Autonomous System Development with OpenSpace
+## Use Case for Autonomous System Development with Scion
 
-**🖥️ [My Daily Monitor](showcase/README.md)** — OpenSpace empowers your agent to complete large-scale system development. This personal behavior monitoring system with 20+ live dashboard panels was built entirely by the agent — 60+ skills evolved from scratch through OpenSpace, demonstrating autonomous end-to-end software development capabilities.
+**🖥️ [My Daily Monitor](showcase/README.md)** — Scion empowers your agent to complete large-scale system development. This personal behavior monitoring system with 20+ live dashboard panels was built entirely by the agent — 60+ skills evolved from scratch through Scion, demonstrating autonomous end-to-end software development capabilities.
 
 <div align="center">
 <img src="assets/my_daily_monitor_dark.png" width="100%" alt="My Daily Monitor – Dark Mode" />
@@ -124,7 +124,7 @@ On 50 professional tasks (**📈 [GDPVal Economic Benchmark](#-benchmark-gdpval)
   - [📊 Local Dashboard](#-local-dashboard)
 - [📈 Benchmark: GDPVal](#-benchmark-gdpval)
 - [📊 Showcase: My Daily Monitor](#-showcase-my-daily-monitor)
-- [🏗️ OpenSpace's Framework](#️-openspaces-framework)
+- [🏗️ Scion's Framework](#️-scions-framework)
   - [🧬 Self-Evolution Engine](#-self-evolution-engine)
   - [🌐 Collaborative Skill Community](#-collaborative-skill-community)
 - [🔧 Advanced Configuration](#-advanced-configuration)
@@ -136,19 +136,19 @@ On 50 professional tasks (**📈 [GDPVal Economic Benchmark](#-benchmark-gdpval)
 
 ## ⚡ Quick Start
 
-🌐 **Just want to explore?** Browse community skills, evolution lineage at **[open-space.cloud](https://open-space.cloud)** — no installation needed.
+🌐 **Just want to explore?** Browse community skills, evolution lineage at **[scion-skills.dev](https://scion-skills.dev)** — no installation needed.
 
 ```bash
-git clone https://github.com/Deepfreezechill/OpenSpace.git && cd OpenSpace
+git clone https://github.com/Deepfreezechill/scion.git && cd Scion
 pip install -e .
-openspace-mcp --help   # verify installation
+scion-mcp --help   # verify installation
 ```
 
 > [!TIP]
 > **Slow clone?** The `assets/` folder (~50 MB of images) makes the default clone large. Use this lightweight alternative to skip it:
 > ```bash
-> git clone --filter=blob:none --sparse https://github.com/Deepfreezechill/OpenSpace.git
-> cd OpenSpace
+> git clone --filter=blob:none --sparse https://github.com/Deepfreezechill/scion.git
+> cd Scion
 > git sparse-checkout set '/*' '!assets/'
 > pip install -e .
 > ```
@@ -162,25 +162,25 @@ openspace-mcp --help   # verify installation
 > This is a one-time Windows configuration. Linux and macOS are unaffected.
 
 **Choose your path:**
-- **[Path A](#-path-a-for-your-agent)** — Plug OpenSpace into your agent
-- **[Path B](#-path-b-as-your-co-worker)** — Use OpenSpace directly as your AI co-worker
+- **[Path A](#-path-a-for-your-agent)** — Plug Scion into your agent
+- **[Path B](#-path-b-as-your-co-worker)** — Use Scion directly as your AI co-worker
 
 ### 🤖 Path A: For Your Agent
 
 Works with any agent that supports skills (`SKILL.md`) — [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), [OpenClaw](https://github.com/openclaw/openclaw), [nanobot](https://github.com/HKUDS/nanobot), etc.
 
-**① Add OpenSpace to your agent's MCP config:**
+**① Add Scion to your agent's MCP config:**
 
 ```json
 {
   "mcpServers": {
-    "openspace": {
-      "command": "openspace-mcp",
+    "scion": {
+      "command": "scion-mcp",
       "toolTimeout": 600,
       "env": {
-        "OPENSPACE_HOST_SKILL_DIRS": "/path/to/your/agent/skills",
-        "OPENSPACE_WORKSPACE": "/path/to/OpenSpace",
-        "OPENSPACE_API_KEY": "sk-xxx (optional, for cloud)"
+        "SCION_HOST_SKILL_DIRS": "/path/to/your/agent/skills",
+        "SCION_WORKSPACE": "/path/to/Scion",
+        "SCION_API_KEY": "sk-xxx (optional, for cloud)"
       }
     }
   }
@@ -193,39 +193,39 @@ Works with any agent that supports skills (`SKILL.md`) — [Claude Code](https:/
 **② Copy skills** into your agent's skills directory:
 
 ```bash
-cp -r OpenSpace/openspace/host_skills/delegate-task/ /path/to/your/agent/skills/
-cp -r OpenSpace/openspace/host_skills/skill-discovery/ /path/to/your/agent/skills/
+cp -r Scion/scion/host_skills/delegate-task/ /path/to/your/agent/skills/
+cp -r Scion/scion/host_skills/skill-discovery/ /path/to/your/agent/skills/
 ```
 
-Done. These two skills teach your agent when and how to use OpenSpace — no additional prompting needed. Your agent can now self-evolve skills, execute complex tasks, and access the cloud skill community. You can also add your own custom skills — see [`openspace/skills/README.md`](openspace/skills/README.md).
+Done. These two skills teach your agent when and how to use Scion — no additional prompting needed. Your agent can now self-evolve skills, execute complex tasks, and access the cloud skill community. You can also add your own custom skills — see [`scion/skills/README.md`](scion/skills/README.md).
 
 > [!NOTE]
-> **Cloud community (optional):** Register at **[open-space.cloud](https://open-space.cloud)** to get a `OPENSPACE_API_KEY`, then add it to the `env` block above. Without it, all local capabilities (task execution, evolution, local skill search) work normally.
+> **Cloud community (optional):** Register at **[scion-skills.dev](https://scion-skills.dev)** to get a `SCION_API_KEY`, then add it to the `env` block above. Without it, all local capabilities (task execution, evolution, local skill search) work normally.
 
-📖 Per-agent config (OpenClaw / nanobot), all env vars, advanced settings: [`openspace/host_skills/README.md`](openspace/host_skills/README.md)
+📖 Per-agent config (OpenClaw / nanobot), all env vars, advanced settings: [`scion/host_skills/README.md`](scion/host_skills/README.md)
 
 ### 👤 Path B: As Your Co-Worker
 
-Use OpenSpace directly — coding, search, tool use, and more — with self-evolving skills and cloud community built in.
+Use Scion directly — coding, search, tool use, and more — with self-evolving skills and cloud community built in.
 
 > [!NOTE]
-> Create a `.env` file with your LLM API key and optionally `OPENSPACE_API_KEY` for cloud community access (refer to [`openspace/.env.example`](openspace/.env.example)).
+> Create a `.env` file with your LLM API key and optionally `SCION_API_KEY` for cloud community access (refer to [`scion/.env.example`](scion/.env.example)).
 
 ```bash
 # Interactive mode
-openspace
+scion
 
 # Execute task
-openspace --model "anthropic/claude-sonnet-4-5" --query "Create a monitoring dashboard for my Docker containers"
+scion --model "anthropic/claude-sonnet-4-5" --query "Create a monitoring dashboard for my Docker containers"
 ```
 
-Add your own custom skills: [`openspace/skills/README.md`](openspace/skills/README.md).
+Add your own custom skills: [`scion/skills/README.md`](scion/skills/README.md).
 
 **Cloud CLI** — manage skills from the command line:
 
 ```bash
-openspace-download-skill <skill_id>         # download a skill from the cloud
-openspace-upload-skill /path/to/skill/dir   # upload a skill to the cloud
+scion-download-skill <skill_id>         # download a skill from the cloud
+scion-upload-skill /path/to/skill/dir   # upload a skill to the cloud
 ```
 
 <details>
@@ -233,10 +233,10 @@ openspace-upload-skill /path/to/skill/dir   # upload a skill to the cloud
 
 ```python
 import asyncio
-from openspace import OpenSpace
+from scion import Scion
 
 async def main():
-    async with OpenSpace() as cs:
+    async with Scion() as cs:
         result = await cs.execute("Analyze GitHub trending repos and create a report")
         print(result["response"])
 
@@ -256,7 +256,7 @@ See how your skills evolve — browse skills, track lineage, compare diffs.
 
 ```bash
 # Terminal 1. Start backend API
-openspace-dashboard --port 7788
+scion-dashboard --port 7788
 
 # Terminal 2: Start frontend dev server
 cd frontend
@@ -291,9 +291,9 @@ npm run dev
 
 ## 📈 Benchmark: GDPVal
 
-We evaluate OpenSpace on [GDPVal](https://huggingface.co/datasets/openai/gdpval) — 220 real-world professional tasks spanning 44 occupations — using the [ClawWork](https://github.com/HKUDS/ClawWork) evaluation protocol with identical productivity tools and LLM-based scoring. Our two-phase design (Cold Start → Warm Rerun) demonstrates how accumulated skills reduce token consumption over time.
+We evaluate Scion on [GDPVal](https://huggingface.co/datasets/openai/gdpval) — 220 real-world professional tasks spanning 44 occupations — using the [ClawWork](https://github.com/HKUDS/ClawWork) evaluation protocol with identical productivity tools and LLM-based scoring. Our two-phase design (Cold Start → Warm Rerun) demonstrates how accumulated skills reduce token consumption over time.
 
-Fair Benchmark: OpenSpace uses Qwen 3.5-Plus as its backbone LLM — identical to a ClawWork baseline agent — ensuring that performance differences stem purely from skill evolution, not model capabilities.
+Fair Benchmark: Scion uses Qwen 3.5-Plus as its backbone LLM — identical to a ClawWork baseline agent — ensuring that performance differences stem purely from skill evolution, not model capabilities.
 
 Real Economic Value: Tasks range from building payroll calculators to preparing tax returns to drafting legal memoranda — the same professional work that generates actual GDP, evaluated on both quality and cost efficiency.
 
@@ -310,7 +310,7 @@ Real Economic Value: Tasks range from building payroll calculators to preparing 
 <img src="assets/benchmark_quality_tokens.png" width="100%" alt="GDPVal Benchmark — Quality & Token Efficiency" />
 </div>
 
-### What Real-World Tasks Can OpenSpace Handle?
+### What Real-World Tasks Can Scion Handle?
 
 The 50 GDPVal tasks span 6 real-world work categories. 
 - **Phase 1 (Cold Start)** runs all 50 tasks sequentially — skills accumulate in a shared database as each task completes.
@@ -335,7 +335,7 @@ Income Capture = actual payment earned ÷ maximum possible task value
 
 ### What Did Evolution Produce? (165 Skills)
 
-Across 50 Phase 1 tasks, OpenSpace autonomously evolved **165 skills**. The breakthrough insight: these aren't just domain knowledge — they're **resilient execution patterns** and **quality assurance workflows**. The agent learned how to reliably deliver results in an imperfect, real-world environment.
+Across 50 Phase 1 tasks, Scion autonomously evolved **165 skills**. The breakthrough insight: these aren't just domain knowledge — they're **resilient execution patterns** and **quality assurance workflows**. The agent learned how to reliably deliver results in an imperfect, real-world environment.
 
 **Key Discovery**: Most skills focus on tool reliability and error recovery, not task-specific knowledge.
 
@@ -367,7 +367,7 @@ Across 50 Phase 1 tasks, OpenSpace autonomously evolved **165 skills**. The brea
 <img src="assets/my_daily_monitor_light.png" width="90%" alt="My Daily Monitor – Light Mode" />
 </div>
 
-### How OpenSpace Built It (From Zero)
+### How Scion Built It (From Zero)
 
 | Phase | What Happened | Skills |
 |-------|--------------|--------|
@@ -384,25 +384,25 @@ Across 50 Phase 1 tasks, OpenSpace autonomously evolved **165 skills**. The brea
 <img src="assets/my_daily_monitor_evograph.png" width="90%" alt="Skill Evolution Graph" />
 </div>
 
-> Each node is a skill that OpenSpace learned, extracted, or refined. The full evolution history is open-sourced in [`showcase/.openspace/openspace.db`](showcase/.openspace/openspace.db) — load it in any SQLite browser to explore lineage, diffs, and quality metrics.
+> Each node is a skill that Scion learned, extracted, or refined. The full evolution history is open-sourced in [`showcase/.scion/scion.db`](showcase/.scion/scion.db) — load it in any SQLite browser to explore lineage, diffs, and quality metrics.
 
 **Full details**: [`showcase/README.md`](showcase/README.md)
 
 ---
 
-## 🏗️ OpenSpace's Framework
+## 🏗️ Scion's Framework
 
 <div align="center">
-<img src="assets/framework.png" width="90%" alt="OpenSpace Framework" />
+<img src="assets/framework.png" width="90%" alt="Scion Framework" />
 </div>
 
 ### 🧬 Self-Evolution Engine
 
-The core of OpenSpace. Skills aren't static files — they're living entities that automatically select, apply, monitor, analyze, and evolve themselves.
+The core of Scion. Skills aren't static files — they're living entities that automatically select, apply, monitor, analyze, and evolve themselves.
 
 #### 🔄 Autonomous & Continuous Evolution
 
-- **Full Lifecycle Management**: From discovery to application to evolution — all without human intervention. OpenSpace completes tasks regardless of whether matching skills exist.
+- **Full Lifecycle Management**: From discovery to application to evolution — all without human intervention. Scion completes tasks regardless of whether matching skills exist.
 
 **Three Evolution Modes**:
 - 🔧 FIX — Repair broken or outdated instructions in-place. Same skill, new version.
@@ -440,13 +440,13 @@ A collaborative registry where agents share evolved skills. When one agent evolv
 
 - **🔐 Flexible Sharing**: Share skills publicly, within groups, or keep them private. Smart search finds what you need and auto-imports it. Every evolution is lineage-tracked with full diffs.
 
-- **☁️ Collaborative Platform**: open-space.cloud — register for an API key, browse community skills, and manage your groups.
+- **☁️ Collaborative Platform**: scion-skills.dev — register for an API key, browse community skills, and manage your groups.
 
 ---
 
 ## 🔧 Advanced Configuration
 
-For most users, [Quick Start](#-quick-start) is all you need. For advanced options (environment variables, execution modes, security policies, etc.), see [`openspace/config/README.md`](openspace/config/README.md).
+For most users, [Quick Start](#-quick-start) is all you need. For advanced options (environment variables, execution modes, security policies, etc.), see [`scion/config/README.md`](scion/config/README.md).
 
 ---
 
@@ -457,11 +457,11 @@ For most users, [Quick Start](#-quick-start) is all you need. For advanced optio
 > **Legend**: ⚡ Core modules &nbsp;|&nbsp; 🧬 Skill evolution &nbsp;|&nbsp; 🌐 Cloud &nbsp;|&nbsp; 🔧 Supporting modules
 
 ```
-OpenSpace/
-├── openspace/
-│   ├── tool_layer.py                     # OpenSpace main class & OpenSpaceConfig
+Scion/
+├── scion/
+│   ├── tool_layer.py                     # Scion main class & ScionConfig
 │   ├── mcp_server.py                     # MCP Server (4 tools for your agent)
-│   ├── __main__.py                       # CLI entry point (python -m openspace)
+│   ├── __main__.py                       # CLI entry point (python -m scion)
 │   ├── dashboard_server.py               # Web dashboard API server
 │   │
 │   ├── ⚡ agents/                         # Agent System
@@ -521,7 +521,7 @@ OpenSpace/
 ├── showcase/                             # My Daily Monitor (60+ evolved skills)
 │   ├── my-daily-monitor/                 # The full app (zero human code)
 │   └── skills/                           # 60+ evolved skills with full lineage
-├── .openspace/                           # Runtime: embedding cache + skill DB
+├── .scion/                           # Runtime: embedding cache + skill DB
 └── logs/                                 # Execution logs & recordings
 ```
 
@@ -531,7 +531,7 @@ OpenSpace/
 
 ## 🤝 Contribute & Roadmap
 
-We welcome contributions! OpenSpace today evolves *how to do X*. The next frontier: **evolving how agents organize doing X together**. 
+We welcome contributions! Scion today evolves *how to do X*. The next frontier: **evolving how agents organize doing X together**. 
 
 Group infrastructure (visibility, sharing, permissions) is already live. What comes next:
 
@@ -544,7 +544,7 @@ Group infrastructure (visibility, sharing, permissions) is already live. What co
 
 ## 🔗 Related Projects
 
-OpenSpace builds upon the following open-source projects. We sincerely thank their authors and contributors:
+Scion builds upon the following open-source projects. We sincerely thank their authors and contributors:
 
 - **[AnyTool](https://github.com/HKUDS/AnyTool)** — Plug-and-play universal tool-use layer for any AI agent
 - **[ClawWork](https://github.com/HKUDS/ClawWork)** - Transforms AI assistants into true AI coworkers
@@ -556,14 +556,14 @@ OpenSpace builds upon the following open-source projects. We sincerely thank the
 
 ## ⭐ Star History
 
-If you find OpenSpace helpful, please consider giving us a star! ⭐
+If you find Scion helpful, please consider giving us a star! ⭐
 
 <div align="center">
-  <a href="https://star-history.com/#Deepfreezechill/OpenSpace&Date">
+  <a href="https://star-history.com/#Deepfreezechill/scion&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Deepfreezechill/OpenSpace&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Deepfreezechill/OpenSpace&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Deepfreezechill/OpenSpace&type=Date" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Deepfreezechill/scion&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Deepfreezechill/scion&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Deepfreezechill/scion&type=Date" />
     </picture>
   </a>
 </div>
@@ -575,7 +575,7 @@ If you find OpenSpace helpful, please consider giving us a star! ⭐
 ---
 
 <p align="center">
-  <em> ❤️ Thanks for visiting ✨ OpenSpace!</em><br><br>
-  <img src="https://visitor-badge.laobi.icu/badge?page_id=Deepfreezechill.OpenSpace&style=for-the-badge&color=00d4ff"
+  <em> ❤️ Thanks for visiting ✨ Scion!</em><br><br>
+  <img src="https://visitor-badge.laobi.icu/badge?page_id=Deepfreezechill.Scion&style=for-the-badge&color=00d4ff"
   alt="Views">
 </p>

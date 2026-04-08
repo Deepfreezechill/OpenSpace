@@ -1,4 +1,4 @@
-"""Tests for openspace.agents.grounding.messages — message safety helpers.
+"""Tests for scion.agents.grounding.messages — message safety helpers.
 
 Epic 5.7 extraction: cap_message_content, truncate_messages.
 """
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from openspace.agents.grounding.messages import (
+from scion.agents.grounding.messages import (
     _MAX_SINGLE_CONTENT_CHARS,
     cap_message_content,
     truncate_messages,
@@ -162,18 +162,18 @@ class TestDelegationSeams:
     """Verify grounding_agent.py properly delegates to messages module."""
 
     def test_cap_message_content_is_classmethod(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert isinstance(
             GroundingAgent.__dict__.get("_cap_message_content"), classmethod
         )
 
     def test_max_single_content_chars_matches(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert GroundingAgent._MAX_SINGLE_CONTENT_CHARS == _MAX_SINGLE_CONTENT_CHARS
 
     def test_truncate_messages_exists(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert callable(getattr(GroundingAgent, "_truncate_messages", None))

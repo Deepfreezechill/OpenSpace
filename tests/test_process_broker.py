@@ -1,4 +1,4 @@
-"""Tests for openspace.sandbox.process_broker — EPIC 2.4.
+"""Tests for scion.sandbox.process_broker — EPIC 2.4.
 
 Covers:
 - #99: Command allow/deny enforcement
@@ -14,8 +14,8 @@ import threading
 
 import pytest
 
-from openspace.sandbox.leases import REQUIRED_BLOCKED_COMMANDS, ProcessCapability
-from openspace.sandbox.process_broker import (
+from scion.sandbox.leases import REQUIRED_BLOCKED_COMMANDS, ProcessCapability
+from scion.sandbox.process_broker import (
     _DANGEROUS_SYSCALLS,
     _LINK_COMMANDS,
     _SHELL_BINARIES,

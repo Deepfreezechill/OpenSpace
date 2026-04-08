@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
 # ---------------------------------------------------------------------------
-# SDK envelope helpers (will become openspace.sdk.envelope in Phase 6)
+# SDK envelope helpers (will become scion.sdk.envelope in Phase 6)
 # ---------------------------------------------------------------------------
 
 
@@ -57,7 +57,7 @@ class APIEnvelope:
 
 
 # ---------------------------------------------------------------------------
-# SDK request/response types (will become openspace.sdk.types in Phase 6)
+# SDK request/response types (will become scion.sdk.types in Phase 6)
 # ---------------------------------------------------------------------------
 
 

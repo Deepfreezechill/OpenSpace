@@ -28,14 +28,14 @@ class TestDeployConfig:
     """Centralized env-based configuration."""
 
     def test_config_importable(self):
-        from openspace.deploy.config import DeployConfig
+        from scion.deploy.config import DeployConfig
 
         assert DeployConfig is not None
 
     def test_defaults_without_env(self):
         """Config provides sane defaults when no env vars set."""
         with patch.dict(os.environ, {}, clear=True):
-            from openspace.deploy.config import DeployConfig
+            from scion.deploy.config import DeployConfig
 
             cfg = DeployConfig()
             assert cfg.mcp_host == "0.0.0.0"
@@ -48,15 +48,15 @@ class TestDeployConfig:
     def test_env_override(self):
         """Environment variables override defaults."""
         env = {
-            "OPENSPACE_MCP_HOST": "127.0.0.1",
-            "OPENSPACE_MCP_PORT": "9090",
-            "OPENSPACE_MCP_TRANSPORT": "sse",
-            "OPENSPACE_LOG_LEVEL": "DEBUG",
-            "OPENSPACE_SHUTDOWN_TIMEOUT": "60",
-            "OPENSPACE_METRICS_ENABLED": "false",
+            "SCION_MCP_HOST": "127.0.0.1",
+            "SCION_MCP_PORT": "9090",
+            "SCION_MCP_TRANSPORT": "sse",
+            "SCION_LOG_LEVEL": "DEBUG",
+            "SCION_SHUTDOWN_TIMEOUT": "60",
+            "SCION_METRICS_ENABLED": "false",
         }
         with patch.dict(os.environ, env, clear=True):
-            from openspace.deploy.config import DeployConfig
+            from scion.deploy.config import DeployConfig
 
             cfg = DeployConfig.from_env()
             assert cfg.mcp_host == "127.0.0.1"
@@ -68,40 +68,40 @@ class TestDeployConfig:
 
     def test_invalid_port_rejected(self):
         """Port outside valid range raises ValueError."""
-        from openspace.deploy.config import DeployConfig
+        from scion.deploy.config import DeployConfig
 
         with pytest.raises(ValueError, match="port"):
             DeployConfig(mcp_port=99999)
 
     def test_invalid_transport_rejected(self):
         """Unknown transport raises ValueError."""
-        from openspace.deploy.config import DeployConfig
+        from scion.deploy.config import DeployConfig
 
         with pytest.raises(ValueError, match="transport"):
             DeployConfig(mcp_transport="websocket")
 
     def test_invalid_log_level_rejected(self):
         """Invalid log level raises ValueError."""
-        from openspace.deploy.config import DeployConfig
+        from scion.deploy.config import DeployConfig
 
         with pytest.raises(ValueError, match="log_level"):
             DeployConfig(log_level="VERBOSE")
 
     def test_negative_shutdown_timeout_rejected(self):
-        from openspace.deploy.config import DeployConfig
+        from scion.deploy.config import DeployConfig
 
         with pytest.raises(ValueError, match="shutdown_timeout"):
             DeployConfig(shutdown_timeout=-1)
 
     def test_zero_shutdown_timeout_rejected(self):
         """timeout=0 would cause instant task cancellation."""
-        from openspace.deploy.config import DeployConfig
+        from scion.deploy.config import DeployConfig
 
         with pytest.raises(ValueError, match="shutdown_timeout"):
             DeployConfig(shutdown_timeout=0)
 
     def test_port_boundary_values(self):
-        from openspace.deploy.config import DeployConfig
+        from scion.deploy.config import DeployConfig
 
         # Valid boundaries
         assert DeployConfig(mcp_port=1).mcp_port == 1
@@ -113,42 +113,42 @@ class TestDeployConfig:
             DeployConfig(mcp_port=65536)
 
     def test_log_level_normalized_to_upper(self):
-        from openspace.deploy.config import DeployConfig
+        from scion.deploy.config import DeployConfig
 
         cfg = DeployConfig(log_level="debug")
         assert cfg.log_level == "DEBUG"
 
     def test_non_integer_port_env_raises(self):
-        from openspace.deploy.config import DeployConfig
+        from scion.deploy.config import DeployConfig
 
-        with patch.dict(os.environ, {"OPENSPACE_MCP_PORT": "abc"}, clear=True):
-            with pytest.raises(ValueError, match="OPENSPACE_MCP_PORT"):
+        with patch.dict(os.environ, {"SCION_MCP_PORT": "abc"}, clear=True):
+            with pytest.raises(ValueError, match="SCION_MCP_PORT"):
                 DeployConfig.from_env()
 
     def test_empty_port_env_uses_default(self):
-        from openspace.deploy.config import DeployConfig
+        from scion.deploy.config import DeployConfig
 
-        with patch.dict(os.environ, {"OPENSPACE_MCP_PORT": ""}, clear=True):
+        with patch.dict(os.environ, {"SCION_MCP_PORT": ""}, clear=True):
             cfg = DeployConfig.from_env()
             assert cfg.mcp_port == 8000
 
     def test_boolean_env_parsing_variants(self):
         """All boolean truthy values should work."""
-        from openspace.deploy.config import DeployConfig
+        from scion.deploy.config import DeployConfig
 
         for val in ("true", "True", "TRUE", "1", "yes"):
-            with patch.dict(os.environ, {"OPENSPACE_METRICS_ENABLED": val}, clear=True):
+            with patch.dict(os.environ, {"SCION_METRICS_ENABLED": val}, clear=True):
                 cfg = DeployConfig.from_env()
                 assert cfg.metrics_enabled is True, f"Failed for {val!r}"
 
         for val in ("false", "0", "no", ""):
-            with patch.dict(os.environ, {"OPENSPACE_METRICS_ENABLED": val}, clear=True):
+            with patch.dict(os.environ, {"SCION_METRICS_ENABLED": val}, clear=True):
                 cfg = DeployConfig.from_env()
                 assert cfg.metrics_enabled is False, f"Failed for {val!r}"
 
     def test_to_dict_excludes_secrets(self):
         """Serialization must not leak API keys."""
-        from openspace.deploy.config import DeployConfig
+        from scion.deploy.config import DeployConfig
 
         cfg = DeployConfig()
         d = cfg.to_safe_dict()
@@ -160,7 +160,7 @@ class TestDeployConfig:
 
     def test_frozen_config(self):
         """Config should be immutable after creation."""
-        from openspace.deploy.config import DeployConfig
+        from scion.deploy.config import DeployConfig
 
         cfg = DeployConfig()
         with pytest.raises((AttributeError, TypeError)):
@@ -176,14 +176,14 @@ class TestGracefulShutdown:
     """Signal-aware graceful shutdown handler."""
 
     def test_shutdown_handler_importable(self):
-        from openspace.deploy.shutdown import GracefulShutdownHandler
+        from scion.deploy.shutdown import GracefulShutdownHandler
 
         assert GracefulShutdownHandler is not None
 
     @pytest.mark.asyncio
     async def test_shutdown_runs_hooks(self):
         """Shutdown must execute all registered hooks."""
-        from openspace.deploy.shutdown import GracefulShutdownHandler
+        from scion.deploy.shutdown import GracefulShutdownHandler
 
         handler = GracefulShutdownHandler(timeout=5)
         hook1 = AsyncMock()
@@ -198,7 +198,7 @@ class TestGracefulShutdown:
     @pytest.mark.asyncio
     async def test_shutdown_respects_timeout(self):
         """Hooks exceeding timeout must be cancelled."""
-        from openspace.deploy.shutdown import GracefulShutdownHandler
+        from scion.deploy.shutdown import GracefulShutdownHandler
 
         handler = GracefulShutdownHandler(timeout=1)
 
@@ -212,7 +212,7 @@ class TestGracefulShutdown:
     @pytest.mark.asyncio
     async def test_shutdown_continues_on_hook_failure(self):
         """One failing hook must not prevent others from running."""
-        from openspace.deploy.shutdown import GracefulShutdownHandler
+        from scion.deploy.shutdown import GracefulShutdownHandler
 
         handler = GracefulShutdownHandler(timeout=5)
 
@@ -229,7 +229,7 @@ class TestGracefulShutdown:
     @pytest.mark.asyncio
     async def test_shutdown_idempotent(self):
         """Multiple shutdown calls must not re-run hooks."""
-        from openspace.deploy.shutdown import GracefulShutdownHandler
+        from scion.deploy.shutdown import GracefulShutdownHandler
 
         handler = GracefulShutdownHandler(timeout=5)
         hook = AsyncMock()
@@ -242,7 +242,7 @@ class TestGracefulShutdown:
     @pytest.mark.asyncio
     async def test_shutdown_drains_in_flight(self):
         """Shutdown must wait for tracked in-flight tasks."""
-        from openspace.deploy.shutdown import GracefulShutdownHandler
+        from scion.deploy.shutdown import GracefulShutdownHandler
 
         handler = GracefulShutdownHandler(timeout=5)
         completed = False
@@ -259,7 +259,7 @@ class TestGracefulShutdown:
     @pytest.mark.asyncio
     async def test_drain_survives_task_exception(self):
         """A throwing in-flight task must not crash shutdown."""
-        from openspace.deploy.shutdown import GracefulShutdownHandler
+        from scion.deploy.shutdown import GracefulShutdownHandler
 
         handler = GracefulShutdownHandler(timeout=5)
         success_hook = AsyncMock()
@@ -275,7 +275,7 @@ class TestGracefulShutdown:
     @pytest.mark.asyncio
     async def test_track_task_during_shutdown_auto_cancels(self):
         """Tasks tracked after shutdown starts are auto-cancelled."""
-        from openspace.deploy.shutdown import GracefulShutdownHandler
+        from scion.deploy.shutdown import GracefulShutdownHandler
 
         handler = GracefulShutdownHandler(timeout=5)
         await handler.shutdown()
@@ -289,14 +289,14 @@ class TestGracefulShutdown:
     @pytest.mark.asyncio
     async def test_shutdown_with_no_hooks_no_tasks(self):
         """Empty shutdown completes without error."""
-        from openspace.deploy.shutdown import GracefulShutdownHandler
+        from scion.deploy.shutdown import GracefulShutdownHandler
 
         handler = GracefulShutdownHandler(timeout=5)
         await handler.shutdown()  # should not raise
 
     def test_shutdown_timeout_minimum(self):
         """timeout < 1 is rejected."""
-        from openspace.deploy.shutdown import GracefulShutdownHandler
+        from scion.deploy.shutdown import GracefulShutdownHandler
 
         with pytest.raises(ValueError, match="timeout"):
             GracefulShutdownHandler(timeout=0)
@@ -327,12 +327,12 @@ class TestDockerfile:
         assert user_lines, "Dockerfile must have USER instruction (not in comment)"
 
     def test_dockerfile_shutdown_timeout_under_docker_default(self):
-        """Dockerfile OPENSPACE_SHUTDOWN_TIMEOUT must be < Docker's 10s default."""
+        """Dockerfile SCION_SHUTDOWN_TIMEOUT must be < Docker's 10s default."""
         content = (ROOT / "Dockerfile").read_text()
         import re
 
-        match = re.search(r"OPENSPACE_SHUTDOWN_TIMEOUT=(\d+)", content)
-        assert match, "Dockerfile must set OPENSPACE_SHUTDOWN_TIMEOUT"
+        match = re.search(r"SCION_SHUTDOWN_TIMEOUT=(\d+)", content)
+        assert match, "Dockerfile must set SCION_SHUTDOWN_TIMEOUT"
         timeout = int(match.group(1))
         assert timeout < 10, (
             f"Shutdown timeout {timeout}s must be < Docker's 10s stop_grace_period"
@@ -374,13 +374,13 @@ class TestEntrypoint:
     """Application entrypoint wiring."""
 
     def test_deploy_package_importable(self):
-        import openspace.deploy
+        import scion.deploy
 
-        assert hasattr(openspace.deploy, "__name__")
+        assert hasattr(scion.deploy, "__name__")
 
     def test_config_from_env_integration(self):
         """Config → server wiring."""
-        from openspace.deploy.config import DeployConfig
+        from scion.deploy.config import DeployConfig
 
         cfg = DeployConfig()
         assert hasattr(cfg, "mcp_host")
@@ -392,7 +392,7 @@ class TestEntrypoint:
         """run_mcp_server imports DeployConfig (not dead code)."""
         import inspect
 
-        from openspace.mcp.server import run_mcp_server
+        from scion.mcp.server import run_mcp_server
 
         source = inspect.getsource(run_mcp_server)
         assert "DeployConfig" in source, "DeployConfig must be used in run_mcp_server"
@@ -401,7 +401,7 @@ class TestEntrypoint:
         """/health must be accessible WITHOUT bearer auth for K8s probes."""
         import inspect
 
-        from openspace.mcp.server import run_mcp_server
+        from scion.mcp.server import run_mcp_server
 
         source = inspect.getsource(run_mcp_server)
         # /health route must be mounted BEFORE auth middleware in ASGI chain
@@ -419,7 +419,7 @@ class TestEntrypoint:
         """GracefulShutdownHandler.shutdown() must run after server.serve()."""
         import inspect
 
-        from openspace.mcp.server import run_mcp_server
+        from scion.mcp.server import run_mcp_server
 
         source = inspect.getsource(run_mcp_server)
         assert "serve_with_shutdown" in source, (
@@ -437,8 +437,8 @@ class TestEntrypoint:
 
 class TestDeployPackageCompleteness:
     def test_all_modules_importable(self):
-        import openspace.deploy.config
-        import openspace.deploy.shutdown
+        import scion.deploy.config
+        import scion.deploy.shutdown
 
         assert True
 
@@ -446,7 +446,7 @@ class TestDeployPackageCompleteness:
         """Deployment must not change MCP tool count."""
         from unittest.mock import MagicMock
 
-        from openspace.mcp.tool_handlers import register_handlers
+        from scion.mcp.tool_handlers import register_handlers
 
         mock_mcp = MagicMock()
         register_handlers(mock_mcp)

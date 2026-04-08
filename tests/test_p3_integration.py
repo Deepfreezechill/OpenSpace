@@ -24,8 +24,8 @@ from typing import Dict, List
 
 import pytest
 
-from openspace.skill_engine.store import SkillStore
-from openspace.skill_engine.types import (
+from scion.skill_engine.store import SkillStore
+from scion.skill_engine.types import (
     EvolutionSuggestion,
     EvolutionType,
     ExecutionAnalysis,

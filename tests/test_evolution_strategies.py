@@ -1,4 +1,4 @@
-"""Tests for openspace.skill_engine.evolution.strategies (Epic 5.5).
+"""Tests for scion.skill_engine.evolution.strategies (Epic 5.5).
 
 Verifies:
   1. evolve_fix — builds prompt, calls loop, applies, persists, registers
@@ -17,13 +17,13 @@ from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
 
-from openspace.skill_engine.evolution.strategies import (
+from scion.skill_engine.evolution.strategies import (
     evolve_captured,
     evolve_derived,
     evolve_fix,
 )
-from openspace.skill_engine.review_gate import CheckResult, ReviewResult
-from openspace.skill_engine.skill_guard import SkillGuard
+from scion.skill_engine.review_gate import CheckResult, ReviewResult
+from scion.skill_engine.skill_guard import SkillGuard
 
 
 # ---------------------------------------------------------------------------
@@ -131,8 +131,8 @@ class TestEvolveFix:
         evolver = _FakeEvolver()
         ctx = _FakeCtx()
 
-        with patch("openspace.skill_engine.evolution.strategies.write_skill_id"), \
-             patch("openspace.skill_engine.registry.SkillMeta"):
+        with patch("scion.skill_engine.evolution.strategies.write_skill_id"), \
+             patch("scion.skill_engine.registry.SkillMeta"):
             result = await evolve_fix(evolver, ctx)
 
         assert result is not None
@@ -183,8 +183,8 @@ class TestEvolveFix:
         evolver._format_analysis_context = MagicMock(return_value="(context)")
         ctx = _FakeCtx()
 
-        with patch("openspace.skill_engine.evolution.strategies.write_skill_id"), \
-             patch("openspace.skill_engine.registry.SkillMeta"):
+        with patch("scion.skill_engine.evolution.strategies.write_skill_id"), \
+             patch("scion.skill_engine.registry.SkillMeta"):
             await evolve_fix(evolver, ctx)
 
         evolver._format_skill_dir_content.assert_called_once()
@@ -202,8 +202,8 @@ class TestEvolveDerived:
         evolver = _FakeEvolver()
         ctx = _FakeCtx()
 
-        with patch("openspace.skill_engine.evolution.strategies.write_skill_id"), \
-             patch("openspace.skill_engine.registry.SkillMeta"):
+        with patch("scion.skill_engine.evolution.strategies.write_skill_id"), \
+             patch("scion.skill_engine.registry.SkillMeta"):
             result = await evolve_derived(evolver, ctx)
 
         assert result is not None
@@ -245,8 +245,8 @@ class TestEvolveCaptured:
         ctx.skill_contents = []
         ctx.skill_dirs = []
 
-        with patch("openspace.skill_engine.evolution.strategies.write_skill_id"), \
-             patch("openspace.skill_engine.registry.SkillMeta"):
+        with patch("scion.skill_engine.evolution.strategies.write_skill_id"), \
+             patch("scion.skill_engine.registry.SkillMeta"):
             result = await evolve_captured(evolver, ctx)
 
         assert result is not None
@@ -315,7 +315,7 @@ class TestGuardRejectionFix:
         evolver._guard = SkillGuard(store=evolver._store, gate=_make_reject_gate())
         ctx = _FakeCtx()
 
-        with patch("openspace.skill_engine.evolution.strategies.write_skill_id") as ws:
+        with patch("scion.skill_engine.evolution.strategies.write_skill_id") as ws:
             result = await evolve_fix(evolver, ctx)
 
         assert result is None
@@ -334,7 +334,7 @@ class TestGuardRejectionDerived:
         ctx = _FakeCtx()
         ctx.skill_records = [_FakeRecord()]
 
-        with patch("openspace.skill_engine.evolution.strategies.write_skill_id") as ws:
+        with patch("scion.skill_engine.evolution.strategies.write_skill_id") as ws:
             result = await evolve_derived(evolver, ctx)
 
         assert result is None
@@ -355,7 +355,7 @@ class TestGuardRejectionCaptured:
         ctx.skill_contents = []
         ctx.skill_dirs = []
 
-        with patch("openspace.skill_engine.evolution.strategies.write_skill_id") as ws:
+        with patch("scion.skill_engine.evolution.strategies.write_skill_id") as ws:
             result = await evolve_captured(evolver, ctx)
 
         assert result is None
@@ -371,15 +371,15 @@ class TestGuardRejectionCaptured:
 class TestDelegationSeam:
     def test_evolve_fix_delegate(self):
         """SkillEvolver._evolve_fix exists and is async."""
-        from openspace.skill_engine.evolver import SkillEvolver
+        from scion.skill_engine.evolver import SkillEvolver
         assert asyncio.iscoroutinefunction(SkillEvolver._evolve_fix)
 
     def test_evolve_derived_delegate(self):
-        from openspace.skill_engine.evolver import SkillEvolver
+        from scion.skill_engine.evolver import SkillEvolver
         assert asyncio.iscoroutinefunction(SkillEvolver._evolve_derived)
 
     def test_evolve_captured_delegate(self):
-        from openspace.skill_engine.evolver import SkillEvolver
+        from scion.skill_engine.evolver import SkillEvolver
         assert asyncio.iscoroutinefunction(SkillEvolver._evolve_captured)
 
 
@@ -390,7 +390,7 @@ class TestDelegationSeam:
 class TestSizeGuard:
     def test_strategies_module_size(self):
         """strategies.py should stay under 400 lines."""
-        import openspace.skill_engine.evolution.strategies as mod
+        import scion.skill_engine.evolution.strategies as mod
         src = Path(mod.__file__)
         lines = src.read_text(encoding="utf-8").splitlines()
         assert len(lines) <= 460, f"strategies.py has {len(lines)} lines (limit 460)"

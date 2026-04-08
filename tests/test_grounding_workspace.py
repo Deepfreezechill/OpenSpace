@@ -1,4 +1,4 @@
-"""Tests for openspace.agents.grounding.workspace — workspace helpers.
+"""Tests for scion.agents.grounding.workspace — workspace helpers.
 
 Epic 5.9 extraction: _get_workspace_path, _scan_workspace_files,
 _check_workspace_artifacts.
@@ -12,7 +12,7 @@ import time
 
 import pytest
 
-from openspace.agents.grounding.workspace import (
+from scion.agents.grounding.workspace import (
     _check_workspace_artifacts,
     _get_workspace_path,
     _scan_workspace_files,
@@ -121,12 +121,12 @@ class _FakeAgent:
 
     @staticmethod
     def _get_workspace_path(context):
-        from openspace.agents.grounding.workspace import _get_workspace_path
+        from scion.agents.grounding.workspace import _get_workspace_path
         return _get_workspace_path(context)
 
     @staticmethod
     def _scan_workspace_files(workspace_path, recent_threshold=600):
-        from openspace.agents.grounding.workspace import _scan_workspace_files
+        from scion.agents.grounding.workspace import _scan_workspace_files
         return _scan_workspace_files(workspace_path, recent_threshold)
 
 
@@ -190,19 +190,19 @@ class TestWorkspaceDelegationSeams:
     """Verify grounding_agent.py properly delegates to workspace module."""
 
     def test_get_workspace_path_is_static(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert callable(GroundingAgent._get_workspace_path)
         assert GroundingAgent._get_workspace_path is _get_workspace_path
 
     def test_scan_workspace_files_is_static(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert callable(GroundingAgent._scan_workspace_files)
         assert GroundingAgent._scan_workspace_files is _scan_workspace_files
 
     def test_check_workspace_artifacts_delegates(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert "_check_workspace_artifacts" in dir(GroundingAgent)
         method = getattr(GroundingAgent, "_check_workspace_artifacts")

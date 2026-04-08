@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from unittest.mock import patch
 
-from openspace.skill_engine.migration_manager import MigrationManager, CURRENT_VERSION
+from scion.skill_engine.migration_manager import MigrationManager, CURRENT_VERSION
 
 
 @pytest.fixture
@@ -283,7 +283,7 @@ class TestSchemaMigration:
             migration_manager.set_schema_version(5)
         
         # Should log warning but not fail
-        with patch('openspace.skill_engine.migration_manager.logger') as mock_logger:
+        with patch('scion.skill_engine.migration_manager.logger') as mock_logger:
             migration_manager.ensure_current_schema(3)
             mock_logger.warning.assert_called_once_with(
                 "Database schema version 5 is newer than expected 3"
@@ -371,7 +371,7 @@ class TestSkillStoreFacadeIntegration:
 
     def test_skill_store_initializes_with_migration_manager(self, temp_db_path):
         """Test that SkillStore creates and uses MigrationManager."""
-        from openspace.skill_engine.store import SkillStore
+        from scion.skill_engine.store import SkillStore
         
         store = SkillStore(db_path=temp_db_path)
         
@@ -386,7 +386,7 @@ class TestSkillStoreFacadeIntegration:
 
     def test_skill_store_facade_methods(self, temp_db_path):
         """Test that SkillStore facade methods work correctly."""
-        from openspace.skill_engine.store import SkillStore
+        from scion.skill_engine.store import SkillStore
         
         store = SkillStore(db_path=temp_db_path)
         
@@ -444,7 +444,7 @@ class TestSecurityAndRobustness:
         assert migration_manager.get_schema_version() == 0
         
         # Patch the DDL statements to include a failing statement
-        with patch('openspace.skill_engine.migration_manager._DDL_STATEMENTS') as mock_statements:
+        with patch('scion.skill_engine.migration_manager._DDL_STATEMENTS') as mock_statements:
             mock_statements.__iter__ = lambda x: iter([
                 "CREATE TABLE test_table (id INTEGER PRIMARY KEY)",
                 "INVALID SQL THAT WILL FAIL",  # This will cause the migration to fail
@@ -476,9 +476,9 @@ class TestDDLSingleSourceOfTruth:
 
     def test_ddl_single_source_of_truth(self):
         """Verify no other module has CREATE TABLE strings (architecture invariant)."""
-        import openspace.skill_engine.skill_repository as repo_module
-        import openspace.skill_engine.analysis_store as analysis_module
-        import openspace.skill_engine.tag_search as tag_module
+        import scion.skill_engine.skill_repository as repo_module
+        import scion.skill_engine.analysis_store as analysis_module
+        import scion.skill_engine.tag_search as tag_module
         import inspect
         
         # Check module source code for CREATE TABLE strings
@@ -495,9 +495,9 @@ class TestDDLSingleSourceOfTruth:
 
     def test_standalone_modules_use_migration_manager(self, temp_db_path):
         """Verify SkillRepository/AnalysisStore/TagSearch standalone mode delegates DDL to MigrationManager."""
-        from openspace.skill_engine.skill_repository import SkillRepository
-        from openspace.skill_engine.analysis_store import AnalysisStore
-        from openspace.skill_engine.tag_search import TagSearch
+        from scion.skill_engine.skill_repository import SkillRepository
+        from scion.skill_engine.analysis_store import AnalysisStore
+        from scion.skill_engine.tag_search import TagSearch
         
         # Each module should create schema via MigrationManager in standalone mode
         modules = [
@@ -528,9 +528,9 @@ class TestDDLSingleSourceOfTruth:
 
     def test_schema_consistency_across_modules(self, temp_db_path):
         """Verify that all modules create identical schemas."""
-        from openspace.skill_engine.skill_repository import SkillRepository
-        from openspace.skill_engine.analysis_store import AnalysisStore
-        from openspace.skill_engine.tag_search import TagSearch
+        from scion.skill_engine.skill_repository import SkillRepository
+        from scion.skill_engine.analysis_store import AnalysisStore
+        from scion.skill_engine.tag_search import TagSearch
         
         modules = [SkillRepository, AnalysisStore, TagSearch]
         schemas = []

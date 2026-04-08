@@ -1,4 +1,4 @@
-"""End-to-end OUTCOME tests for OpenSpace v2.0.0.
+"""End-to-end OUTCOME tests for Scion v2.0.0.
 
 These tests validate that the system DOES WHAT USERS EXPECT, not just
 that individual functions return correct types.  Real objects are used
@@ -35,7 +35,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 # Canonical version — single source of truth for all version assertions
-from openspace import __version__ as EXPECTED_VERSION
+from scion import __version__ as EXPECTED_VERSION
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -75,7 +75,7 @@ def _make_skill_record(
     tags=None,
 ):
     """Build a SkillRecord with sensible defaults."""
-    from openspace.skill_engine.types import (
+    from scion.skill_engine.types import (
         SkillCategory,
         SkillLineage,
         SkillOrigin,
@@ -120,7 +120,7 @@ class TestHealthCheckOutcome:
 
     def test_health_returns_ok_status(self):
         """OUTCOME: Health endpoint says the system is operational."""
-        from openspace.local_server.main import app
+        from scion.local_server.main import app
 
         client = app.test_client()
         resp = client.get("/")
@@ -128,11 +128,11 @@ class TestHealthCheckOutcome:
 
         assert resp.status_code == 200
         assert data["status"] == "ok"
-        assert data["service"] == "OpenSpace Desktop Server"
+        assert data["service"] == "Scion Desktop Server"
 
     def test_health_reports_correct_version(self):
         """OUTCOME: Reported version matches the release we shipped."""
-        from openspace.local_server.main import app
+        from scion.local_server.main import app
 
         client = app.test_client()
         resp = client.get("/")
@@ -144,7 +144,7 @@ class TestHealthCheckOutcome:
 
     def test_health_includes_features(self):
         """OUTCOME: User can see what capabilities are available."""
-        from openspace.local_server.main import app
+        from scion.local_server.main import app
 
         client = app.test_client()
         resp = client.get("/")
@@ -158,7 +158,7 @@ class TestHealthCheckOutcome:
 
     def test_health_includes_fresh_timestamp(self):
         """OUTCOME: User can verify the response is fresh, not cached stale."""
-        from openspace.local_server.main import app
+        from scion.local_server.main import app
 
         client = app.test_client()
         resp = client.get("/")
@@ -180,7 +180,7 @@ class TestPlatformInfoOutcome:
 
     def test_platform_returns_system_info(self):
         """OUTCOME: User gets real, actionable platform information."""
-        from openspace.local_server.main import app
+        from scion.local_server.main import app
 
         client = app.test_client()
         resp = client.get("/platform")
@@ -338,7 +338,7 @@ class TestReviewGateSecurityOutcome:
 
     def test_safe_skill_passes_review(self):
         """OUTCOME: A well-formed, safe skill is approved by the gate."""
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         record = _make_skill_record(
             name="safe_skill",
@@ -358,7 +358,7 @@ class TestReviewGateSecurityOutcome:
 
     def test_dangerous_code_blocked(self):
         """OUTCOME: A skill with dangerous AST patterns is REJECTED."""
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         record = _make_skill_record(
             name="evil_skill",
@@ -381,7 +381,7 @@ class TestReviewGateSecurityOutcome:
 
     def test_path_traversal_blocked(self):
         """OUTCOME: A skill trying to escape its directory is REJECTED."""
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         record = _make_skill_record(
             name="traversal_skill",
@@ -398,7 +398,7 @@ class TestReviewGateSecurityOutcome:
 
     def test_disallowed_file_types_blocked(self):
         """OUTCOME: A skill containing forbidden file types is REJECTED."""
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         record = _make_skill_record(
             name="template_skill",
@@ -415,7 +415,7 @@ class TestReviewGateSecurityOutcome:
 
     def test_missing_skill_md_blocked(self):
         """OUTCOME: A skill without SKILL.md is incomplete and REJECTED."""
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         record = _make_skill_record(
             name="incomplete_skill",
@@ -434,7 +434,7 @@ class TestReviewGateSecurityOutcome:
 
     def test_windows_reserved_names_blocked(self):
         """OUTCOME: Skills with Windows reserved device names are REJECTED."""
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         record = _make_skill_record(
             name="windows_exploit",
@@ -475,7 +475,7 @@ class TestExecutionEngineOutcome:
     @pytest.fixture
     def engine(self, fake_grounding_agent, tmp_path):
         """Real ExecutionEngine with a fake grounding agent."""
-        from openspace.execution_engine import ExecutionEngine
+        from scion.execution_engine import ExecutionEngine
 
         config = MagicMock()
         config.grounding_max_iterations = 10
@@ -527,7 +527,7 @@ class TestExecutionEngineOutcome:
 
     def test_no_grounding_agent_raises(self, tmp_path):
         """OUTCOME: System clearly tells user it's not ready if not initialized."""
-        from openspace.execution_engine import ExecutionEngine
+        from scion.execution_engine import ExecutionEngine
 
         config = MagicMock()
         config.grounding_max_iterations = 10
@@ -548,20 +548,20 @@ class TestExecutionEngineOutcome:
 
 
 class TestMCPServerOutcome:
-    """User expectation: Connect my agent to OpenSpace via MCP and the
+    """User expectation: Connect my agent to Scion via MCP and the
     expected tools are available."""
 
     def test_mcp_app_creates_successfully(self):
         """OUTCOME: MCP server can be instantiated without errors."""
-        from openspace.mcp.server import create_mcp_app
+        from scion.mcp.server import create_mcp_app
 
         app = create_mcp_app()
         assert app is not None
-        assert app.name == "OpenSpace"
+        assert app.name == "Scion"
 
     def test_mcp_has_expected_tools(self):
         """OUTCOME: All documented tools are registered and discoverable."""
-        from openspace.mcp.server import create_mcp_app
+        from scion.mcp.server import create_mcp_app
 
         app = create_mcp_app()
 
@@ -593,7 +593,7 @@ class TestMCPServerOutcome:
 
     def test_multiple_mcp_apps_are_independent(self):
         """OUTCOME: Creating multiple instances doesn't cause cross-contamination."""
-        from openspace.mcp.server import create_mcp_app
+        from scion.mcp.server import create_mcp_app
 
         app1 = create_mcp_app()
         app2 = create_mcp_app()
@@ -618,7 +618,7 @@ class TestEvolutionPipelineOutcome:
     def test_evolution_with_review_gate_pass(self, in_memory_store):
         """OUTCOME: A skill evolves, passes review, and the new version
         is stored with correct lineage."""
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         # Save the parent skill
         parent = _make_skill_record(name="data_fetcher", tags=["data"])
@@ -661,7 +661,7 @@ class TestEvolutionPipelineOutcome:
     def test_evolution_with_review_gate_block(self, in_memory_store):
         """OUTCOME: If an evolved skill contains dangerous code, it's blocked
         and the original skill remains active."""
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         parent = _make_skill_record(name="safe_processor")
         _run(in_memory_store.save_record(parent))
@@ -690,7 +690,7 @@ class TestEvolutionPipelineOutcome:
 
     def test_evolution_quarantine_after_save(self, in_memory_store):
         """OUTCOME: Even if a bad skill was persisted, quarantine deactivates it."""
-        from openspace.skill_engine.review_gate import ReviewResult, quarantine_skill, CheckResult
+        from scion.skill_engine.review_gate import ReviewResult, quarantine_skill, CheckResult
 
         record = _make_skill_record(name="bad_skill")
         _run(in_memory_store.save_record(record))
@@ -708,7 +708,7 @@ class TestEvolutionPipelineOutcome:
 
     def test_derived_skill_multi_parent_evolution(self, in_memory_store):
         """OUTCOME: A DERIVED skill merges two parents and both remain active."""
-        from openspace.skill_engine.review_gate import ReviewGate
+        from scion.skill_engine.review_gate import ReviewGate
 
         parent_a = _make_skill_record(name="weather_skill", tags=["weather"])
         parent_b = _make_skill_record(name="geocoding_skill", tags=["geo"])
@@ -745,7 +745,7 @@ class TestEvolutionPipelineOutcome:
 
     def test_lineage_validation_catches_invalid_evolution(self):
         """OUTCOME: System rejects evolution attempts with broken lineage."""
-        from openspace.skill_engine.types import SkillLineage, SkillOrigin, ValidationError
+        from scion.skill_engine.types import SkillLineage, SkillOrigin, ValidationError
 
         # FIXED must have exactly 1 parent
         bad_lineage = SkillLineage(
@@ -785,7 +785,7 @@ class TestCommandExecutionOutcome:
 
     def test_execute_returns_output(self):
         """OUTCOME: User sends a command and gets stdout back."""
-        from openspace.local_server.main import app
+        from scion.local_server.main import app
 
         client = app.test_client()
         resp = client.post(
@@ -800,7 +800,7 @@ class TestCommandExecutionOutcome:
 
     def test_execute_captures_returncode(self):
         """OUTCOME: User can check if the command succeeded or failed."""
-        from openspace.local_server.main import app
+        from scion.local_server.main import app
 
         client = app.test_client()
         resp = client.post(
@@ -813,7 +813,7 @@ class TestCommandExecutionOutcome:
 
     def test_execute_reports_errors(self):
         """OUTCOME: Failed commands report stderr and non-zero exit code."""
-        from openspace.local_server.main import app
+        from scion.local_server.main import app
 
         client = app.test_client()
         if _platform_mod.system() == "Windows":
@@ -835,7 +835,7 @@ class TestCommandExecutionOutcome:
 
     def test_execute_timeout_enforcement(self):
         """OUTCOME: A long-running command is killed after the timeout."""
-        from openspace.local_server.main import app
+        from scion.local_server.main import app
 
         client = app.test_client()
         if _platform_mod.system() == "Windows":
@@ -863,7 +863,7 @@ class TestCommandExecutionOutcome:
         shell commands and does NOT have auth middleware.  It must only bind
         to localhost.
         """
-        from openspace.local_server import main as local_main
+        from scion.local_server import main as local_main
 
         # Verify run_server defaults to 127.0.0.1
         import inspect
@@ -886,17 +886,17 @@ class TestVersionConsistencyOutcome:
     def test_package_version(self):
         """OUTCOME: Python package reports correct version."""
         assert EXPECTED_VERSION == "2.0.0", (
-            f"Canonical version from openspace.__version__ is {EXPECTED_VERSION}"
+            f"Canonical version from scion.__version__ is {EXPECTED_VERSION}"
         )
 
     def test_mcp_server_version(self):
         """OUTCOME: MCP server advertises correct version."""
-        from openspace.mcp.server import _VERSION
+        from scion.mcp.server import _VERSION
         assert _VERSION == EXPECTED_VERSION
 
     def test_local_server_health_version(self):
         """OUTCOME: Local HTTP server health endpoint reports correct version."""
-        from openspace.local_server.main import app
+        from scion.local_server.main import app
 
         client = app.test_client()
         resp = client.get("/")
@@ -906,7 +906,7 @@ class TestVersionConsistencyOutcome:
     def test_pyproject_version(self):
         """OUTCOME: pyproject.toml (packaging source of truth) matches."""
         import tomllib
-        from openspace.config.constants import PROJECT_ROOT
+        from scion.config.constants import PROJECT_ROOT
 
         pyproject = PROJECT_ROOT / "pyproject.toml"
         if pyproject.exists():
@@ -929,7 +929,7 @@ class TestExecutionAnalysisOutcome:
 
     def test_record_and_retrieve_analysis(self, in_memory_store):
         """OUTCOME: An execution analysis is persisted and retrievable."""
-        from openspace.skill_engine.types import ExecutionAnalysis, SkillJudgment
+        from scion.skill_engine.types import ExecutionAnalysis, SkillJudgment
 
         # Save a skill first
         record = _make_skill_record(name="analyzer_test")
@@ -959,7 +959,7 @@ class TestExecutionAnalysisOutcome:
 
     def test_analysis_with_failed_skill(self, in_memory_store):
         """OUTCOME: When a skill fails, the system records the failure for learning."""
-        from openspace.skill_engine.types import ExecutionAnalysis, SkillJudgment
+        from scion.skill_engine.types import ExecutionAnalysis, SkillJudgment
 
         record = _make_skill_record(name="flaky_skill")
         _run(in_memory_store.save_record(record))

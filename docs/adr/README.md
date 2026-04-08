@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-This directory contains Architecture Decision Records (ADRs) for the OpenSpace upgrade project.
+This directory contains Architecture Decision Records (ADRs) for the Scion upgrade project.
 
 ## What is an ADR?
 A short document capturing a significant architecture decision and its context.

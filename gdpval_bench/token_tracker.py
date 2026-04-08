@@ -1,7 +1,7 @@
 """
 Token Tracker — intercepts ALL litellm calls via CustomLogger to track token usage.
 
-Captures every LLM call made by OpenSpace internals:
+Captures every LLM call made by Scion internals:
   - Agent main loop (grounding_agent)        → source="agent"
   - Skill selection (skill_registry)         → source="skill_select"
   - Post-execution analysis (execution_analyzer) → source="analyzer"
@@ -14,7 +14,7 @@ The TokenStats class tracks agent-only and overhead tokens separately.
 Usage (serial mode — one task at a time):
     tracker = TokenTracker()
     tracker.start()
-    # ... run OpenSpace task ...
+    # ... run Scion task ...
     stats = tracker.stop()
     print(f"Agent tokens: {stats.agent_prompt_tokens}")
 

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from openspace.skill_engine.types import (
+from scion.skill_engine.types import (
     SkillCategory,
     SkillLineage,
     SkillOrigin,
@@ -57,7 +57,7 @@ def _make_record(
 @pytest.fixture
 def tracker(tmp_path: Path):
     """Create a LineageTracker backed by a temp SQLite database."""
-    from openspace.skill_engine.lineage_tracker import LineageTracker
+    from scion.skill_engine.lineage_tracker import LineageTracker
 
     db_path = tmp_path / "test_lineage.db"
     lt = LineageTracker(db_path=db_path)
@@ -68,7 +68,7 @@ def tracker(tmp_path: Path):
 @pytest.fixture
 def seeded_tracker(tracker):
     """Tracker pre-seeded with a 3-generation chain: root → child → grandchild."""
-    from openspace.skill_engine.lineage_tracker import LineageTracker
+    from scion.skill_engine.lineage_tracker import LineageTracker
 
     lt: LineageTracker = tracker
 
@@ -379,8 +379,8 @@ class TestEdgeCases:
         import sqlite3
         import threading
 
-        from openspace.skill_engine.lineage_tracker import LineageTracker
-        from openspace.skill_engine.skill_repository import SkillRepository
+        from scion.skill_engine.lineage_tracker import LineageTracker
+        from scion.skill_engine.skill_repository import SkillRepository
 
         db_path = tmp_path / "shared.db"
         conn = sqlite3.connect(str(db_path), check_same_thread=False)
@@ -503,8 +503,8 @@ class TestSharedConnIsolation:
         import sqlite3
         import threading
 
-        from openspace.skill_engine.lineage_tracker import LineageTracker
-        from openspace.skill_engine.skill_repository import SkillRepository
+        from scion.skill_engine.lineage_tracker import LineageTracker
+        from scion.skill_engine.skill_repository import SkillRepository
 
         db_path = tmp_path / "isolation_test.db"
         
@@ -544,7 +544,7 @@ class TestSkillStoreFacade:
 
     def test_find_children_facade(self, tmp_path):
         """Test SkillStore.find_children delegates properly."""
-        from openspace.skill_engine.store import SkillStore
+        from scion.skill_engine.store import SkillStore
 
         store = SkillStore(db_path=tmp_path / "facade_test.db")
 
@@ -565,7 +565,7 @@ class TestSkillStoreFacade:
 
     def test_get_versions_facade_hydration(self, tmp_path):
         """Test SkillStore.get_versions returns fully hydrated records."""
-        from openspace.skill_engine.store import SkillStore
+        from scion.skill_engine.store import SkillStore
 
         store = SkillStore(db_path=tmp_path / "hydration_test.db")
 
@@ -591,7 +591,7 @@ class TestSkillStoreFacade:
 
     def test_get_ancestry_facade_hydration(self, tmp_path):
         """Test SkillStore.get_ancestry returns fully hydrated records."""
-        from openspace.skill_engine.store import SkillStore
+        from scion.skill_engine.store import SkillStore
 
         store = SkillStore(db_path=tmp_path / "ancestry_test.db")
 

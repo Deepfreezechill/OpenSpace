@@ -3,7 +3,7 @@
 Outcome-focused tests verifying the decomposed modules work together
 as a system. These test OUTCOMES, not implementation details:
 
-1. Can OpenSpace be configured and initialized through the facade?
+1. Can Scion be configured and initialized through the facade?
 2. Does the MCP server serve all 4 tools with correct signatures?
 3. Do cross-module interactions (facade → registry → engine) work?
 4. Are backward-compat import paths still functional?
@@ -24,15 +24,15 @@ import pytest
 # Guards: skip per-section if dependencies aren't importable
 # ---------------------------------------------------------------------------
 try:
-    from openspace.tool_layer import OpenSpace, OpenSpaceConfig
+    from scion.tool_layer import Scion, ScionConfig
 
     _HAS_CORE = True
 except (ImportError, ModuleNotFoundError):
     _HAS_CORE = False
 
 try:
-    from openspace.mcp.server import create_mcp_app
-    from openspace.mcp.tool_handlers import (
+    from scion.mcp.server import create_mcp_app
+    from scion.mcp.tool_handlers import (
         _format_task_result,
         _json_error,
         _json_ok,
@@ -44,28 +44,28 @@ except (ImportError, ModuleNotFoundError):
     _HAS_MCP = False
 
 try:
-    from openspace.tool_registry import ToolRegistry
+    from scion.tool_registry import ToolRegistry
 
     _HAS_REGISTRY = True
 except (ImportError, ModuleNotFoundError):
     _HAS_REGISTRY = False
 
 try:
-    from openspace.execution_engine import ExecutionEngine
+    from scion.execution_engine import ExecutionEngine
 
     _HAS_ENGINE = True
 except (ImportError, ModuleNotFoundError):
     _HAS_ENGINE = False
 
 try:
-    from openspace.recording_service import RecordingService
+    from scion.recording_service import RecordingService
 
     _HAS_RECORDING = True
 except (ImportError, ModuleNotFoundError):
     _HAS_RECORDING = False
 
 try:
-    from openspace.llm_factory import LLMFactory
+    from scion.llm_factory import LLMFactory
 
     _HAS_LLM = True
 except (ImportError, ModuleNotFoundError):
@@ -80,15 +80,15 @@ _skip_llm = pytest.mark.skipif(not _HAS_LLM, reason="LLMFactory not importable")
 
 
 # ---------------------------------------------------------------------------
-# 1. OpenSpace Facade Integration
+# 1. Scion Facade Integration
 # ---------------------------------------------------------------------------
 @_skip_core
-class TestOpenSpaceFacadeIntegration:
+class TestScionFacadeIntegration:
     """Verify the facade properly delegates to all extracted modules."""
 
     def test_config_dataclass_complete(self):
-        """OpenSpaceConfig has all fields needed by extracted modules."""
-        cfg = OpenSpaceConfig(
+        """ScionConfig has all fields needed by extracted modules."""
+        cfg = ScionConfig(
             llm_model="test-model",
             llm_kwargs={"api_key": "test"},
             workspace_dir="/tmp/test",
@@ -100,32 +100,32 @@ class TestOpenSpaceFacadeIntegration:
         assert cfg.llm_model == "test-model"
         assert cfg.enable_recording is True
 
-    def test_openspace_constructor_accepts_config(self):
-        """OpenSpace can be instantiated with config (no initialization)."""
-        cfg = OpenSpaceConfig(llm_model="m", llm_kwargs={})
-        os_inst = OpenSpace(config=cfg)
+    def test_scion_constructor_accepts_config(self):
+        """Scion can be instantiated with config (no initialization)."""
+        cfg = ScionConfig(llm_model="m", llm_kwargs={})
+        os_inst = Scion(config=cfg)
         assert os_inst.config is cfg
         assert os_inst.is_initialized() is False
 
-    def test_openspace_has_extracted_module_attributes(self):
-        """After construction, OpenSpace has slots for all extracted modules."""
-        cfg = OpenSpaceConfig(llm_model="m", llm_kwargs={})
-        os_inst = OpenSpace(config=cfg)
+    def test_scion_has_extracted_module_attributes(self):
+        """After construction, Scion has slots for all extracted modules."""
+        cfg = ScionConfig(llm_model="m", llm_kwargs={})
+        os_inst = Scion(config=cfg)
         # These are set to None before initialize()
         assert hasattr(os_inst, "_skill_registry")
         assert hasattr(os_inst, "_execution_engine")
 
-    def test_openspace_repr_works(self):
+    def test_scion_repr_works(self):
         """__repr__ doesn't crash after extraction."""
-        cfg = OpenSpaceConfig(llm_model="m", llm_kwargs={})
-        os_inst = OpenSpace(config=cfg)
+        cfg = ScionConfig(llm_model="m", llm_kwargs={})
+        os_inst = Scion(config=cfg)
         r = repr(os_inst)
-        assert "OpenSpace" in r
+        assert "Scion" in r
 
-    def test_openspace_execute_delegates_to_engine(self):
+    def test_scion_execute_delegates_to_engine(self):
         """execute() delegates to ExecutionEngine with correct args."""
-        cfg = OpenSpaceConfig(llm_model="m", llm_kwargs={})
-        os_inst = OpenSpace(config=cfg)
+        cfg = ScionConfig(llm_model="m", llm_kwargs={})
+        os_inst = Scion(config=cfg)
         mock_engine = AsyncMock()
         mock_engine.execute.return_value = {"status": "success", "response": "done"}
         os_inst._execution_engine = mock_engine
@@ -137,10 +137,10 @@ class TestOpenSpaceFacadeIntegration:
         assert call_kwargs is not None, "execute() not called with expected args"
         assert result["status"] == "success"
 
-    def test_openspace_cleanup_delegates(self):
+    def test_scion_cleanup_delegates(self):
         """cleanup() delegates to engine and recording service."""
-        cfg = OpenSpaceConfig(llm_model="m", llm_kwargs={})
-        os_inst = OpenSpace(config=cfg)
+        cfg = ScionConfig(llm_model="m", llm_kwargs={})
+        os_inst = Scion(config=cfg)
         mock_engine = MagicMock()
         mock_engine._running = False
         mock_engine._task_done = None
@@ -257,7 +257,7 @@ class TestCrossModuleInteraction:
     @_skip_mcp
     def test_mcp_tool_handlers_import_chain(self):
         """Tool handlers module exports all expected functions."""
-        from openspace.mcp import tool_handlers
+        from scion.mcp import tool_handlers
 
         assert callable(tool_handlers.execute_task)
         assert callable(tool_handlers.search_skills)
@@ -268,7 +268,7 @@ class TestCrossModuleInteraction:
     @_skip_mcp
     def test_mcp_server_import_chain(self):
         """Server module exports expected functions."""
-        from openspace.mcp import server
+        from scion.mcp import server
 
         assert callable(server.create_mcp_app)
         assert callable(server.run_mcp_server)
@@ -282,41 +282,41 @@ class TestBackwardCompatibility:
     """Verify old import paths still work after extraction."""
 
     def test_mcp_server_shim_exports_run(self):
-        """from openspace.mcp_server import run_mcp_server still works."""
-        from openspace.mcp_server import run_mcp_server
+        """from scion.mcp_server import run_mcp_server still works."""
+        from scion.mcp_server import run_mcp_server
 
         assert callable(run_mcp_server)
 
     def test_mcp_server_shim_exports_mcp(self):
-        """openspace.mcp_server.mcp lazy proxy actually delegates to FastMCP."""
-        import openspace.mcp_server as srv
+        """scion.mcp_server.mcp lazy proxy actually delegates to FastMCP."""
+        import scion.mcp_server as srv
 
         assert hasattr(srv, "mcp")
         # Exercise __getattr__ — forces the proxy to create the real app
         assert hasattr(srv.mcp, "name"), "Lazy proxy failed to delegate .name to FastMCP"
 
     def test_mcp_server_shim_exports_create_app(self):
-        """from openspace.mcp_server import create_mcp_app still works."""
-        from openspace.mcp_server import create_mcp_app
+        """from scion.mcp_server import create_mcp_app still works."""
+        from scion.mcp_server import create_mcp_app
 
         assert callable(create_mcp_app)
 
     def test_package_level_mcp_imports(self):
-        """openspace.mcp package exports expected public API."""
-        from openspace.mcp.server import create_mcp_app, run_mcp_server
-        from openspace.mcp.tool_handlers import register_handlers
+        """scion.mcp package exports expected public API."""
+        from scion.mcp.server import create_mcp_app, run_mcp_server
+        from scion.mcp.tool_handlers import register_handlers
 
         assert callable(create_mcp_app)
         assert callable(run_mcp_server)
         assert callable(register_handlers)
 
     @_skip_core
-    def test_tool_layer_exports_openspace_class(self):
-        """from openspace.tool_layer import OpenSpace still works."""
-        from openspace.tool_layer import OpenSpace, OpenSpaceConfig
+    def test_tool_layer_exports_scion_class(self):
+        """from scion.tool_layer import Scion still works."""
+        from scion.tool_layer import Scion, ScionConfig
 
-        assert callable(OpenSpace)
-        assert callable(OpenSpaceConfig)
+        assert callable(Scion)
+        assert callable(ScionConfig)
 
 
 # ---------------------------------------------------------------------------
@@ -331,7 +331,7 @@ class TestArchitectureSoundness:
         result = subprocess.run(
             [
                 sys.executable, "-c",
-                "import openspace.mcp.server; import openspace.mcp.tool_handlers; import openspace.mcp_server",
+                "import scion.mcp.server; import scion.mcp.tool_handlers; import scion.mcp_server",
             ],
             capture_output=True,
             timeout=30,
@@ -347,9 +347,9 @@ class TestArchitectureSoundness:
             [
                 sys.executable, "-c",
                 (
-                    "import openspace.tool_layer; import openspace.tool_registry; "
-                    "import openspace.execution_engine; import openspace.recording_service; "
-                    "import openspace.llm_factory"
+                    "import scion.tool_layer; import scion.tool_registry; "
+                    "import scion.execution_engine; import scion.recording_service; "
+                    "import scion.llm_factory"
                 ),
             ],
             capture_output=True,
@@ -360,26 +360,26 @@ class TestArchitectureSoundness:
         )
 
     def test_mcp_package_is_self_contained(self):
-        """openspace/mcp/ package doesn't import from openspace.mcp_server."""
-        import openspace.mcp.server as srv_mod
-        import openspace.mcp.tool_handlers as th_mod
+        """scion/mcp/ package doesn't import from scion.mcp_server."""
+        import scion.mcp.server as srv_mod
+        import scion.mcp.tool_handlers as th_mod
 
         srv_source = Path(srv_mod.__file__).read_text(encoding="utf-8")
         th_source = Path(th_mod.__file__).read_text(encoding="utf-8")
 
-        assert "from openspace.mcp_server" not in srv_source, "server.py imports from shim"
-        assert "from openspace.mcp_server" not in th_source, "tool_handlers.py imports from shim"
-        assert "import openspace.mcp_server" not in srv_source, "server.py imports from shim"
-        assert "import openspace.mcp_server" not in th_source, "tool_handlers.py imports from shim"
+        assert "from scion.mcp_server" not in srv_source, "server.py imports from shim"
+        assert "from scion.mcp_server" not in th_source, "tool_handlers.py imports from shim"
+        assert "import scion.mcp_server" not in srv_source, "server.py imports from shim"
+        assert "import scion.mcp_server" not in th_source, "tool_handlers.py imports from shim"
 
     def test_tool_layer_decomposition_sizes(self):
         """Verify no single module exceeds the original monolith size."""
         modules = {
-            "openspace/tool_layer.py": 530,       # was 788, now ~476 (+11% headroom)
-            "openspace/tool_registry.py": 280,     # ~245 (+14% headroom)
-            "openspace/execution_engine.py": 590,  # ~537 (+10% headroom)
-            "openspace/recording_service.py": 100, # ~71 (+40% headroom — small file)
-            "openspace/llm_factory.py": 100,       # ~67 (+49% headroom — small file)
+            "scion/tool_layer.py": 530,       # was 788, now ~476 (+11% headroom)
+            "scion/tool_registry.py": 280,     # ~245 (+14% headroom)
+            "scion/execution_engine.py": 590,  # ~537 (+10% headroom)
+            "scion/recording_service.py": 100, # ~71 (+40% headroom — small file)
+            "scion/llm_factory.py": 100,       # ~67 (+49% headroom — small file)
         }
         base = Path(__file__).parent.parent
         for path, max_lines in modules.items():
@@ -393,9 +393,9 @@ class TestArchitectureSoundness:
     def test_mcp_decomposition_sizes(self):
         """Verify MCP modules are within expected bounds."""
         modules = {
-            "openspace/mcp_server.py": 65,           # shim, ~51 (+27% headroom)
-            "openspace/mcp/server.py": 410,           # ~396 (+4% headroom, CLI help + preflight added 6.4)
-            "openspace/mcp/tool_handlers.py": 970,    # ~880 (+10% headroom, SLO tool added 6.2)
+            "scion/mcp_server.py": 65,           # shim, ~51 (+27% headroom)
+            "scion/mcp/server.py": 410,           # ~396 (+4% headroom, CLI help + preflight added 6.4)
+            "scion/mcp/tool_handlers.py": 970,    # ~880 (+10% headroom, SLO tool added 6.2)
         }
         base = Path(__file__).parent.parent
         for path, max_lines in modules.items():

@@ -9,11 +9,11 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in OpenSpace, please report it responsibly:
+If you discover a security vulnerability in Scion, please report it responsibly:
 
 1. **Do NOT open a public GitHub issue.**
 2. Email the maintainers at the address listed in the repository's GitHub Security Advisories tab.
-3. Alternatively, use [GitHub's private vulnerability reporting](https://github.com/Deepfreezechill/OpenSpace/security/advisories/new).
+3. Alternatively, use [GitHub's private vulnerability reporting](https://github.com/Deepfreezechill/scion/security/advisories/new).
 
 ### What to include
 
@@ -30,7 +30,7 @@ If you discover a security vulnerability in OpenSpace, please report it responsi
 
 ## Security Architecture
 
-OpenSpace employs defense-in-depth:
+Scion employs defense-in-depth:
 
 - **Bearer token + HMAC auth** on all MCP endpoints
 - **Capability lease model** with tier-gated access, expiration, and revocation

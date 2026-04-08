@@ -1,4 +1,4 @@
-"""Tests for openspace.agents.grounding.prompts — prompt construction helpers.
+"""Tests for scion.agents.grounding.prompts — prompt construction helpers.
 
 Epic 5.8 extraction: default_system_prompt, construct_messages.
 """
@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from openspace.agents.grounding.prompts import construct_messages, default_system_prompt
+from scion.agents.grounding.prompts import construct_messages, default_system_prompt
 
 
 class _FakeAgent:
@@ -26,7 +26,7 @@ class _FakeAgent:
 
 
 class TestDefaultSystemPrompt:
-    @patch("openspace.agents.grounding.prompts.GroundingAgentPrompts")
+    @patch("scion.agents.grounding.prompts.GroundingAgentPrompts")
     def test_calls_build_system_prompt(self, mock_prompts):
         mock_prompts.build_system_prompt.return_value = "sys prompt"
         agent = _FakeAgent()
@@ -56,7 +56,7 @@ class TestConstructMessages:
         with pytest.raises(ValueError, match="instruction"):
             construct_messages(agent, {"instruction": ""})
 
-    @patch("openspace.agents.grounding.prompts.GroundingAgentPrompts")
+    @patch("scion.agents.grounding.prompts.GroundingAgentPrompts")
     def test_includes_workspace_dir(self, mock_prompts):
         mock_prompts.workspace_directory.return_value = "workspace info"
         agent = _FakeAgent()
@@ -67,7 +67,7 @@ class TestConstructMessages:
         assert "workspace info" in system_contents
         mock_prompts.workspace_directory.assert_called_once_with("/tmp/work")
 
-    @patch("openspace.agents.grounding.prompts.GroundingAgentPrompts")
+    @patch("scion.agents.grounding.prompts.GroundingAgentPrompts")
     def test_includes_matching_files(self, mock_prompts):
         mock_prompts.workspace_matching_files.return_value = "matched!"
         agent = _FakeAgent()
@@ -84,7 +84,7 @@ class TestConstructMessages:
         system_contents = [m["content"] for m in msgs if m["role"] == "system"]
         assert "matched!" in system_contents
 
-    @patch("openspace.agents.grounding.prompts.GroundingAgentPrompts")
+    @patch("scion.agents.grounding.prompts.GroundingAgentPrompts")
     def test_includes_recent_files(self, mock_prompts):
         mock_prompts.workspace_recent_files.return_value = "recent!"
         agent = _FakeAgent()
@@ -101,7 +101,7 @@ class TestConstructMessages:
         system_contents = [m["content"] for m in msgs if m["role"] == "system"]
         assert "recent!" in system_contents
 
-    @patch("openspace.agents.grounding.prompts.GroundingAgentPrompts")
+    @patch("scion.agents.grounding.prompts.GroundingAgentPrompts")
     def test_includes_file_list_fallback(self, mock_prompts):
         mock_prompts.workspace_file_list.return_value = "file list!"
         agent = _FakeAgent()
@@ -150,16 +150,16 @@ class TestDelegationSeams:
     """Verify grounding_agent.py properly delegates to prompts module."""
 
     def test_construct_messages_exists(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert callable(getattr(GroundingAgent, "construct_messages", None))
 
     def test_default_system_prompt_exists(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert callable(getattr(GroundingAgent, "_default_system_prompt", None))
 
     def test_process_exists(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert callable(getattr(GroundingAgent, "process", None))

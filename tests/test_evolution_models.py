@@ -1,9 +1,9 @@
-"""Tests for openspace.skill_engine.evolution.models — Epic 5.1."""
+"""Tests for scion.skill_engine.evolution.models — Epic 5.1."""
 from __future__ import annotations
 
 import pytest
 
-from openspace.skill_engine.evolution.models import (
+from scion.skill_engine.evolution.models import (
     _MAX_SKILL_NAME_LENGTH,
     EvolutionContext,
     EvolutionTrigger,
@@ -30,7 +30,7 @@ class TestEvolutionContext:
     """Verify EvolutionContext dataclass."""
 
     def test_minimal_construction(self):
-        from openspace.skill_engine.types import EvolutionSuggestion, EvolutionType
+        from scion.skill_engine.types import EvolutionSuggestion, EvolutionType
 
         suggestion = EvolutionSuggestion(
             evolution_type=EvolutionType.FIX,
@@ -50,7 +50,7 @@ class TestEvolutionContext:
         assert ctx.available_tools == []
 
     def test_trigger_specific_fields(self):
-        from openspace.skill_engine.types import EvolutionSuggestion, EvolutionType
+        from scion.skill_engine.types import EvolutionSuggestion, EvolutionType
 
         suggestion = EvolutionSuggestion(
             evolution_type=EvolutionType.FIX,
@@ -107,18 +107,18 @@ class TestBackwardCompatImports:
 
     def test_import_from_evolver(self):
         """evolver.py re-exports EvolutionTrigger and EvolutionContext."""
-        from openspace.skill_engine.evolver import EvolutionContext as EC1
-        from openspace.skill_engine.evolver import EvolutionTrigger as ET1
-        from openspace.skill_engine.evolution.models import EvolutionContext as EC2
-        from openspace.skill_engine.evolution.models import EvolutionTrigger as ET2
+        from scion.skill_engine.evolver import EvolutionContext as EC1
+        from scion.skill_engine.evolver import EvolutionTrigger as ET1
+        from scion.skill_engine.evolution.models import EvolutionContext as EC2
+        from scion.skill_engine.evolution.models import EvolutionTrigger as ET2
 
         assert ET1 is ET2
         assert EC1 is EC2
 
     def test_import_from_package(self):
         """skill_engine.__init__ re-exports from new location."""
-        from openspace.skill_engine import EvolutionContext, EvolutionTrigger
-        from openspace.skill_engine.evolution.models import (
+        from scion.skill_engine import EvolutionContext, EvolutionTrigger
+        from scion.skill_engine.evolution.models import (
             EvolutionContext as EC2,
             EvolutionTrigger as ET2,
         )

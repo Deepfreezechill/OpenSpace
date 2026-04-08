@@ -1,1 +1,1 @@
-# GDPVal Benchmark for OpenSpace
+# GDPVal Benchmark for Scion

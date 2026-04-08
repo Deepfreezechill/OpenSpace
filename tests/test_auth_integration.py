@@ -21,8 +21,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from openspace.auth.bearer import BearerTokenMiddleware
-from openspace.auth.rate_limit import (
+from scion.auth.bearer import BearerTokenMiddleware
+from scion.auth.rate_limit import (
     RATE_LIMIT_PER_IP_ENV,
     RATE_LIMIT_PER_TOKEN_ENV,
     RATE_LIMIT_WINDOW_ENV,

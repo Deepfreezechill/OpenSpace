@@ -1,10 +1,10 @@
-"""Tests for ExecutionEngine — extracted from OpenSpace.tool_layer.
+"""Tests for ExecutionEngine — extracted from Scion.tool_layer.
 
 Verifies:
   - Task execution lifecycle (init check, busy-wait, dispatch)
   - Skill-first → fallback two-phase orchestration
   - Post-execution analysis and quality evolution
-  - OpenSpace backward compatibility delegation
+  - Scion backward compatibility delegation
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import pytest
 
 # tool_layer imports litellm which may not be available
 try:
-    from openspace.tool_layer import OpenSpace, OpenSpaceConfig
+    from scion.tool_layer import Scion, ScionConfig
 
     _HAS_TOOL_LAYER = True
 except (ImportError, ModuleNotFoundError):
@@ -25,7 +25,7 @@ except (ImportError, ModuleNotFoundError):
 
 pytestmark = pytest.mark.skipif(
     not _HAS_TOOL_LAYER,
-    reason="openspace.tool_layer requires litellm (not installed or broken)",
+    reason="scion.tool_layer requires litellm (not installed or broken)",
 )
 
 
@@ -35,7 +35,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture
 def mock_config():
-    return OpenSpaceConfig(
+    return ScionConfig(
         grounding_max_iterations=10,
         llm_kwargs={},
     )
@@ -84,7 +84,7 @@ def mock_recording_manager():
 
 @pytest.fixture
 def engine(mock_config, mock_grounding_agent, mock_grounding_client):
-    from openspace.execution_engine import ExecutionEngine
+    from scion.execution_engine import ExecutionEngine
     return ExecutionEngine(
         config=mock_config,
         grounding_agent=mock_grounding_agent,
@@ -105,7 +105,7 @@ class TestExecutionEngineInit:
         assert engine.last_evolved_skills == []
 
     def test_stores_dependencies(self, mock_config, mock_grounding_agent, mock_grounding_client):
-        from openspace.execution_engine import ExecutionEngine
+        from scion.execution_engine import ExecutionEngine
         e = ExecutionEngine(
             config=mock_config,
             grounding_agent=mock_grounding_agent,
@@ -115,7 +115,7 @@ class TestExecutionEngineInit:
         assert e._grounding_agent is mock_grounding_agent
 
     def test_optional_deps_default_none(self, mock_config, mock_grounding_agent, mock_grounding_client):
-        from openspace.execution_engine import ExecutionEngine
+        from scion.execution_engine import ExecutionEngine
         e = ExecutionEngine(
             config=mock_config,
             grounding_agent=mock_grounding_agent,
@@ -137,7 +137,7 @@ class TestExecuteLifecycle:
     @pytest.mark.asyncio
     async def test_raises_without_agent(self, mock_config, mock_grounding_client):
         """execute() raises if grounding_agent is None."""
-        from openspace.execution_engine import ExecutionEngine
+        from scion.execution_engine import ExecutionEngine
         e = ExecutionEngine(
             config=mock_config,
             grounding_agent=None,
@@ -206,8 +206,8 @@ class TestTwoPhaseExecution:
     @pytest.mark.asyncio
     async def test_skill_first_success_skips_fallback(self, engine, mock_grounding_agent):
         """When skill-guided phase succeeds, no fallback is triggered."""
-        from openspace.execution_engine import ExecutionEngine
-        from openspace.tool_registry import ToolRegistry
+        from scion.execution_engine import ExecutionEngine
+        from scion.tool_registry import ToolRegistry
 
         mock_tr = MagicMock(spec=ToolRegistry)
         mock_tr.select_and_inject = AsyncMock(return_value=True)
@@ -230,7 +230,7 @@ class TestTwoPhaseExecution:
     @pytest.mark.asyncio
     async def test_skill_failure_triggers_fallback(self, engine, mock_grounding_agent):
         """When skill phase fails, fallback to tool-only execution."""
-        from openspace.tool_registry import ToolRegistry
+        from scion.tool_registry import ToolRegistry
 
         mock_tr = MagicMock(spec=ToolRegistry)
         mock_tr.select_and_inject = AsyncMock(return_value=True)
@@ -392,7 +392,7 @@ class TestResolveWorkspace:
         mock_config.workspace_dir = None
         ctx = {}
         engine._resolve_workspace(ctx, None, "task_abc")
-        assert "openspace_workspace" in ctx["workspace_dir"]
+        assert "scion_workspace" in ctx["workspace_dir"]
         assert "task_abc" in ctx["workspace_dir"]
 
 
@@ -404,7 +404,7 @@ class TestCleanupWorkspace:
 
     def test_removes_new_files_preserves_old(self, tmp_path):
         """Removes files not in pre_skill_files set, preserves originals."""
-        from openspace.execution_engine import ExecutionEngine
+        from scion.execution_engine import ExecutionEngine
 
         (tmp_path / "existing.txt").write_text("keep me")
         (tmp_path / "new_file.txt").write_text("remove me")
@@ -418,7 +418,7 @@ class TestCleanupWorkspace:
 
     def test_empty_path_is_noop(self):
         """Empty workspace path does nothing."""
-        from openspace.execution_engine import ExecutionEngine
+        from scion.execution_engine import ExecutionEngine
         ExecutionEngine._cleanup_workspace("", set())  # no raise
 
 
@@ -441,7 +441,7 @@ class TestConcurrencyGuards:
         """Raises RuntimeError if busy-wait exceeds timeout."""
         engine._running = True
         engine._task_done.clear()
-        with patch("openspace.execution_engine.asyncio.wait_for", side_effect=asyncio.TimeoutError):
+        with patch("scion.execution_engine.asyncio.wait_for", side_effect=asyncio.TimeoutError):
             with pytest.raises(RuntimeError, match="still running"):
                 await engine.execute("task")
 
@@ -481,13 +481,13 @@ class TestAnalyzeExecutionEvolution:
 
 
 # ---------------------------------------------------------------------------
-# OpenSpace backward compatibility
+# Scion backward compatibility
 # ---------------------------------------------------------------------------
 
-class TestOpenSpaceDelegation:
+class TestScionDelegation:
 
-    def test_openspace_has_execution_engine_attr(self):
-        """OpenSpace instance has _execution_engine attribute."""
-        os_instance = OpenSpace()
+    def test_scion_has_execution_engine_attr(self):
+        """Scion instance has _execution_engine attribute."""
+        os_instance = Scion()
         assert hasattr(os_instance, "_execution_engine")
         assert os_instance._execution_engine is None

@@ -37,7 +37,7 @@ my-daily-monitor/
 │   │   └── panels.ts
 │   └── styles/
 │       └── main.css
-└── skills/                    # OpenSpace skill files
+└── skills/                    # Scion skill files
 ```
 
 ## package.json

@@ -1,4 +1,4 @@
-"""Tests for openspace.agents.grounding.context — skill context helpers.
+"""Tests for scion.agents.grounding.context — skill context helpers.
 
 Epic 5.7 extraction: set_skill_context, clear_skill_context,
 has_skill_context, set_skill_registry.
@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from openspace.agents.grounding.context import (
+from scion.agents.grounding.context import (
     clear_skill_context,
     has_skill_context,
     set_skill_context,
@@ -121,7 +121,7 @@ class TestDelegationSeams:
     """Verify grounding_agent.py properly delegates to context module."""
 
     def test_set_skill_context_delegates(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert "set_skill_context" in dir(GroundingAgent)
         # Method should exist on the class
@@ -129,13 +129,13 @@ class TestDelegationSeams:
         assert callable(method)
 
     def test_has_skill_context_is_property(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert isinstance(
             GroundingAgent.__dict__.get("has_skill_context"), property
         ), "has_skill_context must be a property"
 
     def test_set_skill_registry_delegates(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert "set_skill_registry" in dir(GroundingAgent)

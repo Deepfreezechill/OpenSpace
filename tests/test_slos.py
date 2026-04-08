@@ -1,4 +1,4 @@
-"""Tests for openspace.observability.slos — SLO targets, budgets, burn rates.
+"""Tests for scion.observability.slos — SLO targets, budgets, burn rates.
 
 Epic 6.2: SLOs (latency, error rate, availability).
 """
@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 from prometheus_client import CollectorRegistry
 
-from openspace.observability.metrics import MetricsRegistry
+from scion.observability.metrics import MetricsRegistry
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -22,7 +22,7 @@ from openspace.observability.metrics import MetricsRegistry
 
 class TestSLOTarget:
     def test_create_latency_target(self):
-        from openspace.observability.slos import SLOTarget
+        from scion.observability.slos import SLOTarget
 
         t = SLOTarget(
             name="execution_latency_p99",
@@ -36,7 +36,7 @@ class TestSLOTarget:
         assert t.threshold == 30.0
 
     def test_create_error_rate_target(self):
-        from openspace.observability.slos import SLOTarget
+        from scion.observability.slos import SLOTarget
 
         t = SLOTarget(
             name="error_rate",
@@ -49,7 +49,7 @@ class TestSLOTarget:
         assert t.threshold == 0.05
 
     def test_create_availability_target(self):
-        from openspace.observability.slos import SLOTarget
+        from scion.observability.slos import SLOTarget
 
         t = SLOTarget(
             name="availability",
@@ -61,7 +61,7 @@ class TestSLOTarget:
         assert t.objective == 0.99
 
     def test_to_dict(self):
-        from openspace.observability.slos import SLOTarget
+        from scion.observability.slos import SLOTarget
 
         t = SLOTarget(name="test", objective=0.99, threshold=10.0, unit="seconds")
         d = t.to_dict()
@@ -71,13 +71,13 @@ class TestSLOTarget:
         assert d["unit"] == "seconds"
 
     def test_invalid_objective_raises(self):
-        from openspace.observability.slos import SLOTarget
+        from scion.observability.slos import SLOTarget
 
         with pytest.raises(ValueError, match="objective"):
             SLOTarget(name="bad", objective=1.5, threshold=10.0)
 
     def test_zero_objective_raises(self):
-        from openspace.observability.slos import SLOTarget
+        from scion.observability.slos import SLOTarget
 
         with pytest.raises(ValueError, match="objective"):
             SLOTarget(name="bad", objective=-0.1, threshold=10.0)
@@ -90,7 +90,7 @@ class TestSLOTarget:
 
 class TestErrorBudget:
     def test_full_budget_remaining(self):
-        from openspace.observability.slos import ErrorBudget
+        from scion.observability.slos import ErrorBudget
 
         budget = ErrorBudget(objective=0.99, window_seconds=3600)
         status = budget.status(total_requests=1000, failed_requests=0)
@@ -101,7 +101,7 @@ class TestErrorBudget:
         assert status["exhausted"] is False
 
     def test_partial_budget_consumed(self):
-        from openspace.observability.slos import ErrorBudget
+        from scion.observability.slos import ErrorBudget
 
         budget = ErrorBudget(objective=0.99, window_seconds=3600)
         status = budget.status(total_requests=1000, failed_requests=5)
@@ -113,7 +113,7 @@ class TestErrorBudget:
 
     def test_budget_exactly_exhausted(self):
         """Boundary: consumed == total → exhausted."""
-        from openspace.observability.slos import ErrorBudget
+        from scion.observability.slos import ErrorBudget
 
         budget = ErrorBudget(objective=0.99, window_seconds=3600)
         status = budget.status(total_requests=1000, failed_requests=10)
@@ -123,7 +123,7 @@ class TestErrorBudget:
 
     def test_budget_over_exhausted(self):
         """Over budget: consumed > total."""
-        from openspace.observability.slos import ErrorBudget
+        from scion.observability.slos import ErrorBudget
 
         budget = ErrorBudget(objective=0.99, window_seconds=3600)
         status = budget.status(total_requests=1000, failed_requests=15)
@@ -133,7 +133,7 @@ class TestErrorBudget:
 
     def test_zero_requests(self):
         """No requests → full budget, not exhausted."""
-        from openspace.observability.slos import ErrorBudget
+        from scion.observability.slos import ErrorBudget
 
         budget = ErrorBudget(objective=0.99, window_seconds=3600)
         status = budget.status(total_requests=0, failed_requests=0)
@@ -141,7 +141,7 @@ class TestErrorBudget:
         assert status["exhausted"] is False
 
     def test_to_dict(self):
-        from openspace.observability.slos import ErrorBudget
+        from scion.observability.slos import ErrorBudget
 
         budget = ErrorBudget(objective=0.95, window_seconds=86400)
         d = budget.to_dict()
@@ -157,7 +157,7 @@ class TestErrorBudget:
 class TestBurnRate:
     def test_burn_rate_calculation(self):
         """Burn rate = actual error rate / allowed error rate."""
-        from openspace.observability.slos import BurnRateCalculator
+        from scion.observability.slos import BurnRateCalculator
 
         calc = BurnRateCalculator(objective=0.99)
         # 2% errors when 1% allowed → burn rate 2.0
@@ -165,14 +165,14 @@ class TestBurnRate:
         assert rate == pytest.approx(2.0)
 
     def test_burn_rate_zero_errors(self):
-        from openspace.observability.slos import BurnRateCalculator
+        from scion.observability.slos import BurnRateCalculator
 
         calc = BurnRateCalculator(objective=0.99)
         rate = calc.burn_rate(total_requests=1000, failed_requests=0)
         assert rate == 0.0
 
     def test_burn_rate_zero_requests(self):
-        from openspace.observability.slos import BurnRateCalculator
+        from scion.observability.slos import BurnRateCalculator
 
         calc = BurnRateCalculator(objective=0.99)
         rate = calc.burn_rate(total_requests=0, failed_requests=0)
@@ -180,14 +180,14 @@ class TestBurnRate:
 
     def test_burn_rate_exactly_at_budget(self):
         """Burn rate = 1.0 when error rate matches allowed rate exactly."""
-        from openspace.observability.slos import BurnRateCalculator
+        from scion.observability.slos import BurnRateCalculator
 
         calc = BurnRateCalculator(objective=0.99)
         rate = calc.burn_rate(total_requests=1000, failed_requests=10)
         assert rate == pytest.approx(1.0)
 
     def test_alert_thresholds_default(self):
-        from openspace.observability.slos import BurnRateCalculator
+        from scion.observability.slos import BurnRateCalculator
 
         calc = BurnRateCalculator(objective=0.99)
         alerts = calc.check_alerts(total_requests=1000, failed_requests=150)
@@ -196,7 +196,7 @@ class TestBurnRate:
         assert any(a["severity"] == "critical" for a in alerts)
 
     def test_no_alerts_when_healthy(self):
-        from openspace.observability.slos import BurnRateCalculator
+        from scion.observability.slos import BurnRateCalculator
 
         calc = BurnRateCalculator(objective=0.99)
         alerts = calc.check_alerts(total_requests=1000, failed_requests=5)
@@ -205,7 +205,7 @@ class TestBurnRate:
 
     def test_alert_at_boundary(self):
         """Burn rate exactly at threshold should NOT trigger (strict >)."""
-        from openspace.observability.slos import BurnRateCalculator
+        from scion.observability.slos import BurnRateCalculator
 
         calc = BurnRateCalculator(objective=0.99)
         # Default high threshold is 6.0
@@ -225,7 +225,7 @@ class TestBurnRate:
 
 class TestSLOEvaluator:
     def test_evaluate_healthy(self):
-        from openspace.observability.slos import SLOEvaluator, SLOTarget
+        from scion.observability.slos import SLOEvaluator, SLOTarget
 
         reg = MetricsRegistry()
         # Simulate 100 successful requests
@@ -242,7 +242,7 @@ class TestSLOEvaluator:
         assert result["overall_status"] in ("meeting", "at_risk", "breaching")
 
     def test_evaluate_breaching_error_rate(self):
-        from openspace.observability.slos import SLOEvaluator
+        from scion.observability.slos import SLOEvaluator
 
         reg = MetricsRegistry()
         for _ in range(50):
@@ -259,7 +259,7 @@ class TestSLOEvaluator:
         assert error_slo["status"] == "breaching"
 
     def test_evaluate_with_custom_targets(self):
-        from openspace.observability.slos import SLOEvaluator, SLOTarget
+        from scion.observability.slos import SLOEvaluator, SLOTarget
 
         reg = MetricsRegistry()
         targets = [
@@ -278,7 +278,7 @@ class TestSLOEvaluator:
 
     def test_evaluate_no_data(self):
         """With zero requests, SLOs should report meeting (no violations)."""
-        from openspace.observability.slos import SLOEvaluator
+        from scion.observability.slos import SLOEvaluator
 
         reg = MetricsRegistry()
         ev = SLOEvaluator(registry=reg)
@@ -286,7 +286,7 @@ class TestSLOEvaluator:
         assert result["overall_status"] == "meeting"
 
     def test_to_json(self):
-        from openspace.observability.slos import SLOEvaluator
+        from scion.observability.slos import SLOEvaluator
 
         reg = MetricsRegistry()
         ev = SLOEvaluator(registry=reg)
@@ -303,7 +303,7 @@ class TestSLOEvaluator:
 
 class TestDefaultTargets:
     def test_default_targets_exist(self):
-        from openspace.observability.slos import DEFAULT_TARGETS
+        from scion.observability.slos import DEFAULT_TARGETS
 
         names = {t.name for t in DEFAULT_TARGETS}
         assert "execution_latency_p99" in names
@@ -311,7 +311,7 @@ class TestDefaultTargets:
         assert "availability" in names
 
     def test_all_defaults_valid(self):
-        from openspace.observability.slos import DEFAULT_TARGETS
+        from scion.observability.slos import DEFAULT_TARGETS
 
         for t in DEFAULT_TARGETS:
             assert 0 < t.objective <= 1.0
@@ -326,14 +326,14 @@ class TestDefaultTargets:
 class TestSLOMCPIntegration:
     def test_mcp_registers_check_slos_tool(self):
         mock_mcp = MagicMock()
-        from openspace.mcp.tool_handlers import register_handlers
+        from scion.mcp.tool_handlers import register_handlers
 
         register_handlers(mock_mcp)
         assert mock_mcp.tool.call_count == 8  # 7 existing + 1 new
 
     def test_check_slos_returns_valid_json(self):
         """End-to-end: create MCP app, call check_slos, parse result."""
-        from openspace.mcp.server import create_mcp_app
+        from scion.mcp.server import create_mcp_app
 
         app = create_mcp_app()
         if hasattr(app, "_tool_manager") and hasattr(app._tool_manager, "_tools"):
@@ -342,7 +342,7 @@ class TestSLOMCPIntegration:
     @pytest.mark.asyncio
     async def test_check_slos_handler_returns_parseable_json(self):
         """Actually invoke check_slos handler and verify JSON output."""
-        from openspace.mcp.tool_handlers import check_slos
+        from scion.mcp.tool_handlers import check_slos
 
         result = await check_slos()
         parsed = json.loads(result)
@@ -360,10 +360,10 @@ class TestSLOMCPIntegration:
         from unittest.mock import patch
 
         with patch(
-            "openspace.observability.metrics.metrics",
+            "scion.observability.metrics.metrics",
             side_effect=RuntimeError("registry boom"),
         ):
-            from openspace.mcp.tool_handlers import check_slos
+            from scion.mcp.tool_handlers import check_slos
 
             result = await check_slos()
             # Should return error JSON, not crash
@@ -377,7 +377,7 @@ class TestSLOMCPIntegration:
 
 class TestSLOPackageCompleteness:
     def test_module_importable(self):
-        import openspace.observability.slos as slos
+        import scion.observability.slos as slos
 
         assert hasattr(slos, "SLOTarget")
         assert hasattr(slos, "ErrorBudget")
@@ -386,13 +386,13 @@ class TestSLOPackageCompleteness:
         assert hasattr(slos, "DEFAULT_TARGETS")
 
     def test_exported_from_observability_package(self):
-        import openspace.observability as obs
+        import scion.observability as obs
 
         assert hasattr(obs, "SLOEvaluator")
 
     def test_default_targets_immutable(self):
         """DEFAULT_TARGETS must be a tuple (not mutable list)."""
-        from openspace.observability.slos import DEFAULT_TARGETS
+        from scion.observability.slos import DEFAULT_TARGETS
 
         assert isinstance(DEFAULT_TARGETS, tuple)
 
@@ -406,19 +406,19 @@ class TestSLOTargetValidation:
     """Threshold and name validation (8eyes-test P1-4, 8eyes-sec P2)."""
 
     def test_empty_name_rejected(self):
-        from openspace.observability.slos import SLOTarget
+        from scion.observability.slos import SLOTarget
 
         with pytest.raises(ValueError, match="non-empty"):
             SLOTarget(name="", objective=0.99, threshold=1.0)
 
     def test_whitespace_name_rejected(self):
-        from openspace.observability.slos import SLOTarget
+        from scion.observability.slos import SLOTarget
 
         with pytest.raises(ValueError, match="non-empty"):
             SLOTarget(name="   ", objective=0.99, threshold=1.0)
 
     def test_negative_threshold_rejected(self):
-        from openspace.observability.slos import SLOTarget
+        from scion.observability.slos import SLOTarget
 
         with pytest.raises(ValueError, match="non-negative"):
             SLOTarget(name="test", objective=0.99, threshold=-1.0)
@@ -426,27 +426,27 @@ class TestSLOTargetValidation:
     def test_nan_threshold_rejected(self):
         import math
 
-        from openspace.observability.slos import SLOTarget
+        from scion.observability.slos import SLOTarget
 
         with pytest.raises(ValueError, match="finite"):
             SLOTarget(name="test", objective=0.99, threshold=float("nan"))
 
     def test_inf_threshold_rejected(self):
-        from openspace.observability.slos import SLOTarget
+        from scion.observability.slos import SLOTarget
 
         with pytest.raises(ValueError, match="finite"):
             SLOTarget(name="test", objective=0.99, threshold=float("inf"))
 
     def test_zero_threshold_allowed(self):
         """threshold=0 is valid (e.g., zero-tolerance error rate)."""
-        from openspace.observability.slos import SLOTarget
+        from scion.observability.slos import SLOTarget
 
         t = SLOTarget(name="zero_errors", objective=0.99, threshold=0.0)
         assert t.threshold == 0.0
 
     def test_frozen_target(self):
         """SLOTarget should be immutable."""
-        from openspace.observability.slos import SLOTarget
+        from scion.observability.slos import SLOTarget
 
         t = SLOTarget(name="test", objective=0.99, threshold=1.0)
         with pytest.raises(AttributeError):
@@ -457,7 +457,7 @@ class TestObjectiveOneEdgeCases:
     """objective=1.0 zero-tolerance SLO (8eyes-test P0-2, 8eyes-impl P1)."""
 
     def test_obj_1_no_failures_not_exhausted(self):
-        from openspace.observability.slos import ErrorBudget
+        from scion.observability.slos import ErrorBudget
 
         budget = ErrorBudget(objective=1.0)
         status = budget.status(total_requests=1000, failed_requests=0)
@@ -465,7 +465,7 @@ class TestObjectiveOneEdgeCases:
         assert status["budget_remaining_pct"] == 100.0
 
     def test_obj_1_any_failure_exhausted(self):
-        from openspace.observability.slos import ErrorBudget
+        from scion.observability.slos import ErrorBudget
 
         budget = ErrorBudget(objective=1.0)
         status = budget.status(total_requests=1000, failed_requests=1)
@@ -474,7 +474,7 @@ class TestObjectiveOneEdgeCases:
 
     def test_obj_1_no_contradictory_state(self):
         """exhausted=True must never coexist with remaining_pct=100%."""
-        from openspace.observability.slos import ErrorBudget
+        from scion.observability.slos import ErrorBudget
 
         budget = ErrorBudget(objective=1.0)
         for fails in range(0, 5):
@@ -490,7 +490,7 @@ class TestBurnRateClamp:
 
     def test_obj_1_burn_rate_finite(self):
         """objective=1.0 with failures must NOT produce float('inf')."""
-        from openspace.observability.slos import BurnRateCalculator
+        from scion.observability.slos import BurnRateCalculator
 
         calc = BurnRateCalculator(objective=1.0)
         rate = calc.burn_rate(total_requests=1000, failed_requests=5)
@@ -499,7 +499,7 @@ class TestBurnRateClamp:
 
     def test_burn_rate_json_serializable(self):
         """Burn rate must be valid JSON (no Infinity)."""
-        from openspace.observability.slos import BurnRateCalculator
+        from scion.observability.slos import BurnRateCalculator
 
         calc = BurnRateCalculator(objective=1.0)
         rate = calc.burn_rate(total_requests=1000, failed_requests=5)
@@ -507,7 +507,7 @@ class TestBurnRateClamp:
         assert "Infinity" not in serialized
 
     def test_obj_1_triggers_all_alerts(self):
-        from openspace.observability.slos import BurnRateCalculator
+        from scion.observability.slos import BurnRateCalculator
 
         calc = BurnRateCalculator(objective=1.0)
         alerts = calc.check_alerts(total_requests=1000, failed_requests=5)
@@ -522,7 +522,7 @@ class TestAlertTiersIndependent:
 
     def test_warning_only(self):
         """Burn rate ~1.5x → only warning fires."""
-        from openspace.observability.slos import BurnRateCalculator
+        from scion.observability.slos import BurnRateCalculator
 
         calc = BurnRateCalculator(objective=0.95)
         # allowed = 5%, actual = 7.5% → rate = 1.5x
@@ -532,7 +532,7 @@ class TestAlertTiersIndependent:
 
     def test_high_and_warning(self):
         """Burn rate ~7x → high + warning fire, not critical."""
-        from openspace.observability.slos import BurnRateCalculator
+        from scion.observability.slos import BurnRateCalculator
 
         calc = BurnRateCalculator(objective=0.95)
         # allowed = 5%, actual = 35% → rate = 7x
@@ -542,7 +542,7 @@ class TestAlertTiersIndependent:
 
     def test_all_three_tiers(self):
         """Burn rate ~15x → all three fire."""
-        from openspace.observability.slos import BurnRateCalculator
+        from scion.observability.slos import BurnRateCalculator
 
         calc = BurnRateCalculator(objective=0.95)
         # allowed = 5%, actual = 75% → rate = 15x
@@ -556,7 +556,7 @@ class TestP99Estimation:
 
     def test_p99_known_distribution(self):
         """90 fast + 10 slow → p99 should reflect the slow bucket."""
-        from openspace.observability.slos import SLOEvaluator
+        from scion.observability.slos import SLOEvaluator
 
         reg = CollectorRegistry()
         m = MetricsRegistry(registry=reg)
@@ -575,7 +575,7 @@ class TestP99Estimation:
 
     def test_p99_all_fast(self):
         """100 fast requests → p99 in fast bucket."""
-        from openspace.observability.slos import SLOEvaluator
+        from scion.observability.slos import SLOEvaluator
 
         reg = CollectorRegistry()
         m = MetricsRegistry(registry=reg)
@@ -589,7 +589,7 @@ class TestP99Estimation:
 
     def test_p99_empty_histogram(self):
         """No observations → None."""
-        from openspace.observability.slos import SLOEvaluator
+        from scion.observability.slos import SLOEvaluator
 
         reg = CollectorRegistry()
         m = MetricsRegistry(registry=reg)
@@ -600,7 +600,7 @@ class TestP99Estimation:
 
     def test_p99_multi_agent_aggregation(self):
         """p99 must aggregate across multiple agent label sets."""
-        from openspace.observability.slos import SLOEvaluator
+        from scion.observability.slos import SLOEvaluator
 
         reg = CollectorRegistry()
         m = MetricsRegistry(registry=reg)
@@ -625,7 +625,7 @@ class TestP99Estimation:
         GPT-5.4 P0: if true p99 > 120s, _estimate_p99 must return a
         lower-bound estimate (120s), not None which hides the outage.
         """
-        from openspace.observability.slos import SLOEvaluator
+        from scion.observability.slos import SLOEvaluator
 
         reg = CollectorRegistry()
         m = MetricsRegistry(registry=reg)
@@ -643,7 +643,7 @@ class TestEvaluateReturnSchema:
     """Exhaustive schema assertion (8eyes-test P2-5)."""
 
     def test_evaluate_all_fields_present(self):
-        from openspace.observability.slos import SLOEvaluator
+        from scion.observability.slos import SLOEvaluator
 
         reg = CollectorRegistry()
         m = MetricsRegistry(registry=reg)
@@ -664,7 +664,7 @@ class TestEvaluateReturnSchema:
 
     def test_evaluate_numeric_values(self):
         """Verify computed values, not just field existence."""
-        from openspace.observability.slos import SLOEvaluator
+        from scion.observability.slos import SLOEvaluator
 
         reg = CollectorRegistry()
         m = MetricsRegistry(registry=reg)

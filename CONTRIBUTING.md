@@ -1,14 +1,14 @@
-# Contributing to OpenSpace
+# Contributing to Scion
 
-Thank you for your interest in contributing to OpenSpace! This document provides guidelines for contributing.
+Thank you for your interest in contributing to Scion! This document provides guidelines for contributing.
 
 ## Getting Started
 
 1. **Fork** the repository on GitHub
 2. **Clone** your fork locally:
    ```bash
-   git clone https://github.com/<your-username>/OpenSpace.git
-   cd OpenSpace
+   git clone https://github.com/<your-username>/Scion.git
+   cd Scion
    ```
 3. **Install** in development mode:
    ```bash
@@ -35,14 +35,14 @@ pytest tests/ -x -q
 ### Linting & Type Checking
 
 ```bash
-ruff check openspace/
-mypy openspace/
+ruff check scion/
+mypy scion/
 ```
 
 ## Pull Request Process
 
 1. Ensure all tests pass (`pytest tests/ -x -q`)
-2. Ensure linting passes (`ruff check openspace/`)
+2. Ensure linting passes (`ruff check scion/`)
 3. Update documentation if your change affects public APIs
 4. Write clear commit messages describing what and why
 5. Open a pull request against the `main` branch

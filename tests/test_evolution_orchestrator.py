@@ -1,4 +1,4 @@
-"""Tests for openspace.skill_engine.evolution.orchestrator (Epic 5.2).
+"""Tests for scion.skill_engine.evolution.orchestrator (Epic 5.2).
 
 Verifies:
   1. dispatch_evolution routes FIX/DERIVED/CAPTURED correctly
@@ -70,7 +70,7 @@ class _FakeEvolver:
 # Import orchestrator — patch EvolutionType so dispatch_evolution resolves
 # ---------------------------------------------------------------------------
 
-from openspace.skill_engine.evolution.orchestrator import (
+from scion.skill_engine.evolution.orchestrator import (
     dispatch_evolution,
     execute_contexts,
     log_background_result,
@@ -88,7 +88,7 @@ class TestDispatchEvolution:
         evolver = _FakeEvolver()
         ctx = _FakeContext(_FakeSuggestion(evolution_type=_FakeEvolutionType.FIX))
 
-        with patch("openspace.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
+        with patch("scion.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
             result = await dispatch_evolution(evolver, ctx)
 
         assert result is not None
@@ -100,7 +100,7 @@ class TestDispatchEvolution:
         evolver = _FakeEvolver()
         ctx = _FakeContext(_FakeSuggestion(evolution_type=_FakeEvolutionType.DERIVED))
 
-        with patch("openspace.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
+        with patch("scion.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
             result = await dispatch_evolution(evolver, ctx)
 
         assert result is not None
@@ -112,7 +112,7 @@ class TestDispatchEvolution:
         evolver = _FakeEvolver()
         ctx = _FakeContext(_FakeSuggestion(evolution_type=_FakeEvolutionType.CAPTURED))
 
-        with patch("openspace.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
+        with patch("scion.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
             result = await dispatch_evolution(evolver, ctx)
 
         assert result is not None
@@ -124,7 +124,7 @@ class TestDispatchEvolution:
         evolver = _FakeEvolver()
         ctx = _FakeContext(_FakeSuggestion(evolution_type=_FakeEvolutionType.UNKNOWN))
 
-        with patch("openspace.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
+        with patch("scion.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
             result = await dispatch_evolution(evolver, ctx)
 
         assert result is None
@@ -135,7 +135,7 @@ class TestDispatchEvolution:
         evolver._evolve_fix = AsyncMock(side_effect=RuntimeError("boom"))
         ctx = _FakeContext(_FakeSuggestion(evolution_type=_FakeEvolutionType.FIX))
 
-        with patch("openspace.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
+        with patch("scion.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
             with caplog.at_level(logging.ERROR):
                 result = await dispatch_evolution(evolver, ctx)
 
@@ -156,7 +156,7 @@ class TestExecuteContexts:
             _FakeContext(_FakeSuggestion(evolution_type=_FakeEvolutionType.DERIVED)),
         ]
 
-        with patch("openspace.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
+        with patch("scion.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
             results = await execute_contexts(evolver, ctxs, "test-trigger")
 
         assert len(results) == 2
@@ -168,7 +168,7 @@ class TestExecuteContexts:
     async def test_empty_contexts_returns_empty(self):
         evolver = _FakeEvolver()
 
-        with patch("openspace.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
+        with patch("scion.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
             results = await execute_contexts(evolver, [], "empty")
 
         assert results == []
@@ -182,7 +182,7 @@ class TestExecuteContexts:
             _FakeContext(_FakeSuggestion(evolution_type=_FakeEvolutionType.DERIVED)),
         ]
 
-        with patch("openspace.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
+        with patch("scion.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
             with caplog.at_level(logging.ERROR):
                 results = await execute_contexts(evolver, ctxs, "mixed")
 
@@ -216,7 +216,7 @@ class TestExecuteContexts:
             _FakeContext(_FakeSuggestion(evolution_type=_FakeEvolutionType.DERIVED)),
         ]
 
-        with patch("openspace.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
+        with patch("scion.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
             results = await execute_contexts(evolver, ctxs, "serial")
 
         assert len(results) == 2
@@ -276,7 +276,7 @@ class TestScheduleBackground:
         # We need to be outside a running loop for this test
         # Since pytest-asyncio provides a loop, we test via a sync function
         # that patches get_running_loop to raise
-        with patch("openspace.skill_engine.evolution.orchestrator.asyncio") as mock_asyncio:
+        with patch("scion.skill_engine.evolution.orchestrator.asyncio") as mock_asyncio:
             mock_asyncio.get_running_loop.side_effect = RuntimeError("no loop")
             with caplog.at_level(logging.WARNING):
                 result = schedule_background(tasks, coro, label="no-loop")
@@ -330,7 +330,7 @@ class TestLogBackgroundResult:
 # ---------------------------------------------------------------------------
 
 try:
-    from openspace.skill_engine.evolution.orchestrator import (
+    from scion.skill_engine.evolution.orchestrator import (
         dispatch_evolution as _canonical_dispatch,
         execute_contexts as _canonical_execute,
         log_background_result as _canonical_log,
@@ -345,7 +345,7 @@ except ImportError:
 class TestBackwardCompat:
     def test_orchestrator_importable_from_evolution_package(self):
         """Canonical import path works."""
-        from openspace.skill_engine.evolution import orchestrator
+        from scion.skill_engine.evolution import orchestrator
         assert hasattr(orchestrator, "dispatch_evolution")
         assert hasattr(orchestrator, "execute_contexts")
         assert hasattr(orchestrator, "schedule_background")
@@ -365,7 +365,7 @@ class TestBackwardCompat:
 # ---------------------------------------------------------------------------
 
 try:
-    from openspace.skill_engine.evolver import SkillEvolver
+    from scion.skill_engine.evolver import SkillEvolver
     _HAS_EVOLVER = True
 except ImportError:
     _HAS_EVOLVER = False
@@ -388,7 +388,7 @@ class TestDelegationSeam:
         evolver._evolve_fix = fake_fix
 
         ctx = _FakeContext(_FakeSuggestion(evolution_type=_FakeEvolutionType.FIX))
-        with patch("openspace.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
+        with patch("scion.skill_engine.evolution.orchestrator.EvolutionType", _FakeEvolutionType):
             result = await evolver.evolve(ctx)
 
         assert result is not None
@@ -442,7 +442,7 @@ class TestSizeGuard:
     def test_orchestrator_module_size(self):
         """orchestrator.py should stay focused (< 160 lines)."""
         from pathlib import Path
-        mod_path = Path(__file__).resolve().parent.parent / "openspace" / "skill_engine" / "evolution" / "orchestrator.py"
+        mod_path = Path(__file__).resolve().parent.parent / "scion" / "skill_engine" / "evolution" / "orchestrator.py"
         assert mod_path.exists(), f"orchestrator.py not found at {mod_path}"
         lines = mod_path.read_text(encoding="utf-8").splitlines()
         assert len(lines) < 160, f"orchestrator.py has {len(lines)} lines (limit 160)"

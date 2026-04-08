@@ -1,13 +1,13 @@
 # Changelog
 
-All notable changes to OpenSpace are documented in this file.
+All notable changes to Scion are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [2.0.0] — 2026-04-07
 
 ### Overview
 
-OpenSpace v2.0.0 is a ground-up architectural overhaul of the self-evolving skill engine for AI agents. Across 8 phases (P0–P7) and 50+ epics, the project was hardened, decomposed, and extended from a monolithic prototype into a production-grade, security-first platform. The codebase grew from ~500 tests to **2,174 tests with zero failures**. Every epic underwent multi-agent adversarial code review before merge.
+Scion v2.0.0 is a ground-up architectural overhaul of the self-evolving skill engine for AI agents. Across 8 phases (P0–P7) and 50+ epics, the project was hardened, decomposed, and extended from a monolithic prototype into a production-grade, security-first platform. The codebase grew from ~500 tests to **2,174 tests with zero failures**. Every epic underwent multi-agent adversarial code review before merge.
 
 ---
 
@@ -70,16 +70,16 @@ Decomposed `tool_layer.py` (788 lines) and `mcp_server.py` (992 lines):
 - **ExecutionEngine** — task execution with skill injection and fallback orchestration (Epic 4.3, PR #32)
 - **RecordingService** — execution trace capture, analysis triggers, evolution hooks (Epic 4.4, PR #33)
 - **LLMFactory** — provider-agnostic LLM client initialization (Epic 4.5, PR #34)
-- **OpenSpace facade** — tool_layer.py reduced to thin composition facade preserving public API (Epic 4.6, PR #35)
+- **Scion facade** — tool_layer.py reduced to thin composition facade preserving public API (Epic 4.6, PR #35)
 - **MCPToolHandlers** — all 4 MCP tool implementations (execute, search, fix, upload) extracted (Epic 4.7, PR #36)
-- **MCPServer package** — `openspace/mcp/` package with clean server lifecycle and endpoint wiring (Epic 4.9, PR #37)
+- **MCPServer package** — `scion/mcp/` package with clean server lifecycle and endpoint wiring (Epic 4.9, PR #37)
 - **P4 integration tests** — 26 outcome-focused tests + MCP protocol conformance (Epic 4.10, PR #38)
 - _Skipped:_ Epic 4.2 (SkillSelector — covered by 4.1), Epic 4.8 (MCPAuthMiddleware — covered by P3)
 
 ### Phase 5 — Skill Engine / Grounding Decomposition
 _11 epics · PRs #39–#49 · Two sub-phases (P5a: evolver, P5b: grounding agent)_
 
-**P5a — Evolution Engine** (evolver.py → `openspace/skill_engine/evolution/` package):
+**P5a — Evolution Engine** (evolver.py → `scion/skill_engine/evolution/` package):
 - **EvolutionModels** — domain types: EvolutionTrigger, EvolutionContext, name sanitizer (Epic 5.1, PR #39)
 - **EvolutionOrchestrator** — scheduling, dispatch, background execution (Epic 5.2, PR #40)
 - **Evolution triggers** — analysis, tool degradation, and metric monitor as separate modules (Epic 5.3, PR #41)
@@ -87,7 +87,7 @@ _11 epics · PRs #39–#49 · Two sub-phases (P5a: evolver, P5b: grounding agent
 - **Evolution engines** — FIX/DERIVED/CAPTURED strategies in loop.py + strategies.py (Epic 5.5, PR #43)
 - **P5a capstone** — evolver.py reduced to thin facade (**80% code reduction**); formatting helpers extracted (Epic 5.6, PR #44)
 
-**P5b — Grounding Agent** (grounding_agent.py → `openspace/agents/grounding/` package):
+**P5b — Grounding Agent** (grounding_agent.py → `scion/agents/grounding/` package):
 - **SkillContext + MessageSafety** — context management and message truncation with cap safety (Epic 5.7, PR #45)
 - **ExecutionLoop + PromptBuilder** — core reasoning loop decoupled from tool/visual concerns (Epic 5.8, PR #46)
 - **ToolCatalog + Visual + Workspace** — tool discovery, visual analysis callbacks, workspace scanning with MRO safety (Epic 5.9, PR #47)
@@ -138,11 +138,11 @@ Key security improvements across the v2.0.0 release:
 
 - `store.py` is now a re-export facade — direct imports still work but should migrate to specific modules (`skill_repository`, `lineage_tracker`, `analysis_store`, `tag_index_search`, `migration_manager`)
 - `tool_layer.py` is now a thin facade — migrate to `tool_registry`, `execution_engine`, `recording_service`, `llm_adapter`
-- `mcp_server.py` is now a backward-compat shim — migrate to `openspace/mcp/` package
-- `evolver.py` is now a thin facade — migrate to `openspace/skill_engine/evolution/` package
-- `grounding_agent.py` replaced by `openspace/agents/grounding/` package
-- All MCP endpoints now require bearer token auth (set `OPENSPACE_MCP_BEARER_TOKEN`)
-- Cloud auto-import disabled by default (set `OPENSPACE_CLOUD_IMPORT=true` to re-enable)
+- `mcp_server.py` is now a backward-compat shim — migrate to `scion/mcp/` package
+- `evolver.py` is now a thin facade — migrate to `scion/skill_engine/evolution/` package
+- `grounding_agent.py` replaced by `scion/agents/grounding/` package
+- All MCP endpoints now require bearer token auth (set `SCION_MCP_BEARER_TOKEN`)
+- Cloud auto-import disabled by default (set `SCION_CLOUD_IMPORT=true` to re-enable)
 - E2B sandbox enforced by default for skill execution
 
 ### Stats
@@ -158,4 +158,4 @@ Key security improvements across the v2.0.0 release:
 | AST blocklist patterns | 40+ |
 | Security layers | 5 (ReviewGate) + capability leases + auth |
 
-[2.0.0]: https://github.com/Deepfreezechill/OpenSpace/releases/tag/v2.0.0
+[2.0.0]: https://github.com/Deepfreezechill/scion/releases/tag/v2.0.0

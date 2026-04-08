@@ -1,4 +1,4 @@
-"""Tests for openspace.agents.grounding.visual — visual analysis helpers.
+"""Tests for scion.agents.grounding.visual — visual analysis helpers.
 
 Epic 5.9 extraction: _visual_analysis_callback, _enhance_result_with_visual_context,
 _select_key_screenshots.
@@ -10,12 +10,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from openspace.agents.grounding.visual import (
+from scion.agents.grounding.visual import (
     _enhance_result_with_visual_context,
     _select_key_screenshots,
     _visual_analysis_callback,
 )
-from openspace.grounding.core.types import ToolResult, ToolStatus
+from scion.grounding.core.types import ToolResult, ToolStatus
 
 
 def _make_result(**kwargs):
@@ -47,7 +47,7 @@ class _FakeAgent:
 
     async def _enhance_result_with_visual_context(self, result, tool_name):
         """Delegate for MRO — calls module function."""
-        from openspace.agents.grounding.visual import _enhance_result_with_visual_context
+        from scion.agents.grounding.visual import _enhance_result_with_visual_context
         return await _enhance_result_with_visual_context(self, result, tool_name)
 
 
@@ -117,7 +117,7 @@ class TestVisualAnalysisCallback:
         result = _make_result(metadata={})
         tc = _make_tool_call()
 
-        with patch("openspace.agents.grounding.visual.ScreenshotClient") as MockSC:
+        with patch("scion.agents.grounding.visual.ScreenshotClient") as MockSC:
             mock_client = AsyncMock()
             mock_client.capture.return_value = None
             MockSC.return_value = mock_client
@@ -130,13 +130,13 @@ class TestVisualAnalysisCallback:
         result = _make_result(metadata={})
         tc = _make_tool_call()
 
-        with patch("openspace.agents.grounding.visual.ScreenshotClient") as MockSC:
+        with patch("scion.agents.grounding.visual.ScreenshotClient") as MockSC:
             mock_client = AsyncMock()
             mock_client.capture.return_value = b"screenshot_bytes"
             MockSC.return_value = mock_client
 
             with patch(
-                "openspace.agents.grounding.visual._enhance_result_with_visual_context",
+                "scion.agents.grounding.visual._enhance_result_with_visual_context",
                 new_callable=AsyncMock,
             ) as mock_enhance:
                 enhanced = _make_result(content="enhanced!")
@@ -159,7 +159,7 @@ class TestVisualAnalysisCallback:
         result = _make_result(metadata={})
         tc = _make_tool_call(args_str="not-json{{{")
 
-        with patch("openspace.agents.grounding.visual.ScreenshotClient") as MockSC:
+        with patch("scion.agents.grounding.visual.ScreenshotClient") as MockSC:
             mock_client = AsyncMock()
             mock_client.capture.return_value = None
             MockSC.return_value = mock_client
@@ -196,17 +196,17 @@ class TestVisualDelegationSeams:
     """Verify grounding_agent.py properly delegates to visual module."""
 
     def test_visual_analysis_callback_delegates(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert "_visual_analysis_callback" in dir(GroundingAgent)
 
     def test_enhance_result_delegates(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         assert "_enhance_result_with_visual_context" in dir(GroundingAgent)
 
     def test_select_key_screenshots_is_static(self):
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         # staticmethod binding — callable on both class and instance
         assert callable(GroundingAgent._select_key_screenshots)

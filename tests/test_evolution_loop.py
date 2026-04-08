@@ -1,4 +1,4 @@
-"""Tests for openspace.skill_engine.evolution.loop (Epic 5.5).
+"""Tests for scion.skill_engine.evolution.loop (Epic 5.5).
 
 Verifies:
   1. parse_evolution_output — complete/failed token extraction
@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 # Import module-level functions
-from openspace.skill_engine.evolution.loop import (
+from scion.skill_engine.evolution.loop import (
     EVOLUTION_COMPLETE,
     EVOLUTION_FAILED,
     _MAX_EVOLUTION_ATTEMPTS,
@@ -143,7 +143,7 @@ class TestRunEvolutionLoop:
             "tool_results": [],
         }
 
-        with patch("openspace.recording.RecordingManager") as mock_rec:
+        with patch("scion.recording.RecordingManager") as mock_rec:
             mock_rec.record_conversation_setup = AsyncMock()
             mock_rec.record_iteration_context = AsyncMock()
             result = await run_evolution_loop(evolver, "prompt", _FakeCtx())
@@ -162,7 +162,7 @@ class TestRunEvolutionLoop:
             "tool_results": [],
         }
 
-        with patch("openspace.recording.RecordingManager") as mock_rec:
+        with patch("scion.recording.RecordingManager") as mock_rec:
             mock_rec.record_conversation_setup = AsyncMock()
             mock_rec.record_iteration_context = AsyncMock()
             result = await run_evolution_loop(evolver, "prompt", _FakeCtx())
@@ -175,7 +175,7 @@ class TestRunEvolutionLoop:
         evolver = _FakeEvolver()
         evolver._llm_client.complete.side_effect = RuntimeError("API down")
 
-        with patch("openspace.recording.RecordingManager") as mock_rec:
+        with patch("scion.recording.RecordingManager") as mock_rec:
             mock_rec.record_conversation_setup = AsyncMock()
             result = await run_evolution_loop(evolver, "prompt", _FakeCtx())
 
@@ -192,7 +192,7 @@ class TestRunEvolutionLoop:
             "tool_results": [],
         }
 
-        with patch("openspace.recording.RecordingManager") as mock_rec:
+        with patch("scion.recording.RecordingManager") as mock_rec:
             mock_rec.record_conversation_setup = AsyncMock()
             mock_rec.record_iteration_context = AsyncMock()
             await run_evolution_loop(evolver, "prompt", _FakeCtx())
@@ -212,7 +212,7 @@ class TestRunEvolutionLoop:
             "tool_results": [],
         }
 
-        with patch("openspace.recording.RecordingManager") as mock_rec:
+        with patch("scion.recording.RecordingManager") as mock_rec:
             mock_rec.record_conversation_setup = AsyncMock()
             mock_rec.record_iteration_context = AsyncMock()
             await run_evolution_loop(evolver, "prompt", _FakeCtx())
@@ -231,7 +231,7 @@ class TestRunEvolutionLoop:
             "tool_results": [],
         }
 
-        with patch("openspace.recording.RecordingManager") as mock_rec:
+        with patch("scion.recording.RecordingManager") as mock_rec:
             mock_rec.record_conversation_setup = AsyncMock()
             mock_rec.record_iteration_context = AsyncMock()
             await run_evolution_loop(evolver, "prompt", _FakeCtx())
@@ -260,8 +260,8 @@ class TestApplyWithRetry:
         apply_fn = MagicMock(return_value=_FakeEditResult(ok=True))
         ctx = _FakeCtx()
 
-        with patch("openspace.skill_engine.evolution.loop._validate_skill_dir", return_value=None), \
-             patch("openspace.recording.RecordingManager"):
+        with patch("scion.skill_engine.evolution.loop._validate_skill_dir", return_value=None), \
+             patch("scion.recording.RecordingManager"):
             result = await apply_with_retry(
                 evolver, apply_fn=apply_fn, initial_content="content",
                 skill_dir=Path("/fake"), ctx=ctx, prompt="prompt",
@@ -285,8 +285,8 @@ class TestApplyWithRetry:
         }
         ctx = _FakeCtx()
 
-        with patch("openspace.skill_engine.evolution.loop._validate_skill_dir", return_value=None), \
-             patch("openspace.recording.RecordingManager") as mock_rec:
+        with patch("scion.skill_engine.evolution.loop._validate_skill_dir", return_value=None), \
+             patch("scion.recording.RecordingManager") as mock_rec:
             mock_rec.record_conversation_setup = AsyncMock()
             mock_rec.record_iteration_context = AsyncMock()
             result = await apply_with_retry(
@@ -309,8 +309,8 @@ class TestApplyWithRetry:
         }
         ctx = _FakeCtx()
 
-        with patch("openspace.skill_engine.evolution.loop._validate_skill_dir"), \
-             patch("openspace.recording.RecordingManager") as mock_rec:
+        with patch("scion.skill_engine.evolution.loop._validate_skill_dir"), \
+             patch("scion.recording.RecordingManager") as mock_rec:
             mock_rec.record_conversation_setup = AsyncMock()
             mock_rec.record_iteration_context = AsyncMock()
             result = await apply_with_retry(
@@ -333,8 +333,8 @@ class TestApplyWithRetry:
         ctx = _FakeCtx()
 
         validate_results = iter(["missing frontmatter", None])
-        with patch("openspace.skill_engine.evolution.loop._validate_skill_dir", side_effect=validate_results), \
-             patch("openspace.recording.RecordingManager") as mock_rec:
+        with patch("scion.skill_engine.evolution.loop._validate_skill_dir", side_effect=validate_results), \
+             patch("scion.recording.RecordingManager") as mock_rec:
             mock_rec.record_conversation_setup = AsyncMock()
             mock_rec.record_iteration_context = AsyncMock()
             result = await apply_with_retry(
@@ -363,8 +363,8 @@ class TestApplyWithRetry:
         }
         ctx = _FakeCtx()
 
-        with patch("openspace.skill_engine.evolution.loop._validate_skill_dir", return_value=None), \
-             patch("openspace.recording.RecordingManager") as mock_rec:
+        with patch("scion.skill_engine.evolution.loop._validate_skill_dir", return_value=None), \
+             patch("scion.recording.RecordingManager") as mock_rec:
             mock_rec.record_conversation_setup = AsyncMock()
             mock_rec.record_iteration_context = AsyncMock()
             result = await apply_with_retry(
@@ -391,8 +391,8 @@ class TestApplyWithRetry:
         fake_dir.is_dir.return_value = True
         fake_dir.exists.return_value = False
 
-        with patch("openspace.skill_engine.evolution.loop._validate_skill_dir"), \
-             patch("openspace.recording.RecordingManager") as mock_rec:
+        with patch("scion.skill_engine.evolution.loop._validate_skill_dir"), \
+             patch("scion.recording.RecordingManager") as mock_rec:
             mock_rec.record_conversation_setup = AsyncMock()
             mock_rec.record_iteration_context = AsyncMock()
             await apply_with_retry(
@@ -415,7 +415,7 @@ class TestConstants:
         assert _MAX_EVOLUTION_ATTEMPTS == 3
 
     def test_logger_uses_evolver_namespace(self):
-        from openspace.skill_engine.evolution.loop import logger
+        from scion.skill_engine.evolution.loop import logger
         assert "evolver" in logger.name
 
 
@@ -425,34 +425,34 @@ class TestConstants:
 
 class TestDelegationSeam:
     def test_parse_evolution_output_is_staticmethod(self):
-        from openspace.skill_engine.evolver import SkillEvolver
+        from scion.skill_engine.evolver import SkillEvolver
         assert isinstance(
             SkillEvolver.__dict__["_parse_evolution_output"],
             staticmethod,
         )
 
     def test_evolve_fix_method_exists(self):
-        from openspace.skill_engine.evolver import SkillEvolver
+        from scion.skill_engine.evolver import SkillEvolver
         assert hasattr(SkillEvolver, "_evolve_fix")
         assert asyncio.iscoroutinefunction(SkillEvolver._evolve_fix)
 
     def test_evolve_derived_method_exists(self):
-        from openspace.skill_engine.evolver import SkillEvolver
+        from scion.skill_engine.evolver import SkillEvolver
         assert hasattr(SkillEvolver, "_evolve_derived")
         assert asyncio.iscoroutinefunction(SkillEvolver._evolve_derived)
 
     def test_evolve_captured_method_exists(self):
-        from openspace.skill_engine.evolver import SkillEvolver
+        from scion.skill_engine.evolver import SkillEvolver
         assert hasattr(SkillEvolver, "_evolve_captured")
         assert asyncio.iscoroutinefunction(SkillEvolver._evolve_captured)
 
     def test_run_evolution_loop_method_exists(self):
-        from openspace.skill_engine.evolver import SkillEvolver
+        from scion.skill_engine.evolver import SkillEvolver
         assert hasattr(SkillEvolver, "_run_evolution_loop")
         assert asyncio.iscoroutinefunction(SkillEvolver._run_evolution_loop)
 
     def test_apply_with_retry_method_exists(self):
-        from openspace.skill_engine.evolver import SkillEvolver
+        from scion.skill_engine.evolver import SkillEvolver
         assert hasattr(SkillEvolver, "_apply_with_retry")
         assert asyncio.iscoroutinefunction(SkillEvolver._apply_with_retry)
 
@@ -464,7 +464,7 @@ class TestDelegationSeam:
 class TestSizeGuard:
     def test_loop_module_size(self):
         """loop.py should stay under 400 lines."""
-        import openspace.skill_engine.evolution.loop as mod
+        import scion.skill_engine.evolution.loop as mod
         src = Path(mod.__file__)
         lines = src.read_text(encoding="utf-8").splitlines()
         assert len(lines) <= 400, f"loop.py has {len(lines)} lines (limit 400)"

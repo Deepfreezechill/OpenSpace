@@ -1,4 +1,4 @@
-"""Test mocks for OpenSpace."""
+"""Test mocks for Scion."""
 
 from .llm import MockLLMClient
 

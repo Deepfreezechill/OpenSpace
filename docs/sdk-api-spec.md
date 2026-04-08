@@ -29,7 +29,7 @@ https://<host>:<port>/api/v2
 
 Token requirements:
 - Minimum 32 characters
-- Set via `OPENSPACE_MCP_BEARER_TOKEN` environment variable
+- Set via `SCION_MCP_BEARER_TOKEN` environment variable
 - Constant-time comparison (HMAC-based)
 - Fail-closed: missing/weak token → 401
 
@@ -344,9 +344,9 @@ Get current configuration (non-sensitive fields only).
 
 ## Rate Limiting
 
-- **Per-token:** Configurable via `OPENSPACE_RATE_LIMIT_PER_TOKEN` (default: 60/min)
-- **Per-IP:** Configurable via `OPENSPACE_RATE_LIMIT_PER_IP` (default: 120/min)
-- **Window:** Configurable via `OPENSPACE_RATE_LIMIT_WINDOW` (default: 60s)
+- **Per-token:** Configurable via `SCION_RATE_LIMIT_PER_TOKEN` (default: 60/min)
+- **Per-IP:** Configurable via `SCION_RATE_LIMIT_PER_IP` (default: 120/min)
+- **Window:** Configurable via `SCION_RATE_LIMIT_WINDOW` (default: 60s)
 
 Rate limit headers on every response:
 ```

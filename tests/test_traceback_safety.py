@@ -23,7 +23,7 @@ _FORBIDDEN_PATTERNS = [
     re.compile(r"Traceback \(most recent call last\)"),
     re.compile(r'File ".*", line \d+'),
     re.compile(r"line \d+, in "),
-    re.compile(r"openspace[/\\]\w+\.py"),
+    re.compile(r"scion[/\\]\w+\.py"),
     re.compile(r"\.py:\d+"),
     re.compile(r"raise \w+"),
 ]
@@ -60,20 +60,20 @@ def _assert_structured_error(response_str: str, tool_name: str) -> dict:
     return data
 
 
-# ── Unit tests for openspace.errors ──────────────────────────────────
+# ── Unit tests for scion.errors ──────────────────────────────────
 
 
 class TestSanitizeError:
     """Test that sanitize_error strips dangerous content."""
 
     def test_plain_message_preserved(self):
-        from openspace.errors import sanitize_error
+        from scion.errors import sanitize_error
 
         exc = ValueError("missing required field")
         assert sanitize_error(exc) == "missing required field"
 
     def test_traceback_string_stripped(self):
-        from openspace.errors import sanitize_error
+        from scion.errors import sanitize_error
 
         exc = RuntimeError('Traceback (most recent call last):\n  File "foo.py", line 42\nKeyError')
         result = sanitize_error(exc)
@@ -81,7 +81,7 @@ class TestSanitizeError:
         assert "foo.py" not in result
 
     def test_file_path_stripped(self):
-        from openspace.errors import sanitize_error
+        from scion.errors import sanitize_error
 
         exc = OSError("Cannot open C:\\Users\\dev\\project\\secret.py")
         result = sanitize_error(exc)
@@ -89,15 +89,15 @@ class TestSanitizeError:
         assert "secret.py" not in result
 
     def test_unix_path_stripped(self):
-        from openspace.errors import sanitize_error
+        from scion.errors import sanitize_error
 
-        exc = OSError("Failed at /home/user/openspace/mcp_server.py")
+        exc = OSError("Failed at /home/user/scion/mcp_server.py")
         result = sanitize_error(exc)
         assert "/home/user" not in result
         assert "mcp_server.py" not in result
 
     def test_empty_message_returns_generic(self):
-        from openspace.errors import sanitize_error
+        from scion.errors import sanitize_error
 
         exc = RuntimeError()
         result = sanitize_error(exc)
@@ -105,7 +105,7 @@ class TestSanitizeError:
         assert "RuntimeError" not in result
 
     def test_long_message_truncated(self):
-        from openspace.errors import sanitize_error
+        from scion.errors import sanitize_error
 
         exc = ValueError("x" * 500)
         result = sanitize_error(exc)
@@ -114,16 +114,16 @@ class TestSanitizeError:
     # ── Regression tests from adversarial code review ────────────
 
     def test_windows_path_with_spaces_stripped(self):
-        from openspace.errors import sanitize_error
+        from scion.errors import sanitize_error
 
-        exc = OSError(r"Cannot open C:\Program Files\OpenSpace\secret.py")
+        exc = OSError(r"Cannot open C:\Program Files\Scion\secret.py")
         result = sanitize_error(exc)
         assert "Program Files" not in result
-        assert "OpenSpace" not in result
+        assert "Scion" not in result
         assert "secret.py" not in result
 
     def test_unc_path_stripped(self):
-        from openspace.errors import sanitize_error
+        from scion.errors import sanitize_error
 
         exc = OSError(r"Failed reading \\server\share\secret.py")
         result = sanitize_error(exc)
@@ -131,15 +131,15 @@ class TestSanitizeError:
         assert "secret.py" not in result
 
     def test_dotted_module_name_stripped(self):
-        from openspace.errors import sanitize_error
+        from scion.errors import sanitize_error
 
-        exc = ImportError("No module named openspace.cloud.auth.TokenResolver")
+        exc = ImportError("No module named scion.cloud.auth.TokenResolver")
         result = sanitize_error(exc)
-        assert "openspace.cloud.auth" not in result
+        assert "scion.cloud.auth" not in result
         assert "TokenResolver" not in result
 
     def test_standalone_line_number_stripped(self):
-        from openspace.errors import sanitize_error
+        from scion.errors import sanitize_error
 
         exc = RuntimeError("failed at line 99 in processing")
         result = sanitize_error(exc)
@@ -147,7 +147,7 @@ class TestSanitizeError:
 
     def test_never_returns_exception_class_name(self):
         """Regression: fallback must not leak type(exc).__name__."""
-        from openspace.errors import sanitize_error
+        from scion.errors import sanitize_error
 
         class InternalSecretError(Exception):
             pass
@@ -162,7 +162,7 @@ class TestSafeErrorResponse:
     """Test the structured JSON builder."""
 
     def test_schema(self):
-        from openspace.errors import EXECUTION_ERROR, safe_error_response
+        from scion.errors import EXECUTION_ERROR, safe_error_response
 
         raw = safe_error_response(EXECUTION_ERROR, "Something went wrong")
         data = json.loads(raw)
@@ -173,7 +173,7 @@ class TestSafeErrorResponse:
         assert len(data["correlation_id"]) == 12
 
     def test_custom_correlation_id(self):
-        from openspace.errors import VALIDATION_ERROR, safe_error_response
+        from scion.errors import VALIDATION_ERROR, safe_error_response
 
         raw = safe_error_response(VALIDATION_ERROR, "bad input", correlation_id="abc123")
         data = json.loads(raw)
@@ -184,9 +184,9 @@ class TestHandleMcpException:
     """Test the one-liner exception handler."""
 
     def test_logs_and_returns_safe_json(self):
-        from openspace.errors import EXECUTION_ERROR, handle_mcp_exception
+        from scion.errors import EXECUTION_ERROR, handle_mcp_exception
 
-        with patch("openspace.errors.logger") as mock_logger:
+        with patch("scion.errors.logger") as mock_logger:
             exc = RuntimeError("boom at /secret/path.py:42")
             result = handle_mcp_exception(exc, tool_name="test_tool", error_code=EXECUTION_ERROR)
 
@@ -200,9 +200,9 @@ class TestHandleMcpException:
         _assert_no_traceback_leak(result, "test_tool")
 
     def test_correlation_id_in_log_and_response(self):
-        from openspace.errors import INTERNAL_ERROR, handle_mcp_exception
+        from scion.errors import INTERNAL_ERROR, handle_mcp_exception
 
-        with patch("openspace.errors.logger") as mock_logger:
+        with patch("scion.errors.logger") as mock_logger:
             exc = ValueError("oops")
             result = handle_mcp_exception(exc, tool_name="x", error_code=INTERNAL_ERROR)
 
@@ -216,8 +216,8 @@ class TestHandleMcpException:
 # ── Integration tests: MCP tool error paths ─────────────────────────
 
 
-def _make_openspace_mock():
-    """Create a mock OpenSpace instance sufficient for mcp_server imports."""
+def _make_scion_mock():
+    """Create a mock Scion instance sufficient for mcp_server imports."""
     mock = MagicMock()
     mock.is_initialized.return_value = True
     mock._skill_registry = MagicMock()
@@ -226,12 +226,12 @@ def _make_openspace_mock():
 
 
 @pytest.fixture(autouse=True)
-def _patch_openspace_init(monkeypatch):
-    """Prevent real OpenSpace initialization in every test."""
-    import openspace.mcp.tool_handlers as srv
+def _patch_scion_init(monkeypatch):
+    """Prevent real Scion initialization in every test."""
+    import scion.mcp.tool_handlers as srv
 
-    mock = _make_openspace_mock()
-    monkeypatch.setattr(srv, "_openspace_instance", mock)
+    mock = _make_scion_mock()
+    monkeypatch.setattr(srv, "_scion_instance", mock)
 
 
 # ---- execute_task ----
@@ -240,11 +240,11 @@ def _patch_openspace_init(monkeypatch):
 @pytest.mark.asyncio
 async def test_execute_task_error_no_traceback():
     """execute_task: exception → structured error, no traceback leak."""
-    import openspace.mcp.tool_handlers as srv
+    import scion.mcp.tool_handlers as srv
 
     with patch.object(
         srv,
-        "_get_openspace",
+        "_get_scion",
         new_callable=AsyncMock,
         side_effect=RuntimeError("DB connection to /var/lib/pg failed at line 99"),
     ):
@@ -258,7 +258,7 @@ async def test_execute_task_error_no_traceback():
 @pytest.mark.asyncio
 async def test_execute_task_deep_traceback_not_leaked():
     """execute_task: real traceback chain → nothing leaks."""
-    import openspace.mcp.tool_handlers as srv
+    import scion.mcp.tool_handlers as srv
 
     def _blow_up():
         raise KeyError("secret_key")
@@ -269,7 +269,7 @@ async def test_execute_task_deep_traceback_not_leaked():
         except KeyError:
             raise RuntimeError("nested failure") from None
 
-    with patch.object(srv, "_get_openspace", new_callable=AsyncMock, side_effect=_explode):
+    with patch.object(srv, "_get_scion", new_callable=AsyncMock, side_effect=_explode):
         result = await srv.execute_task(task="hello")
 
     _assert_no_traceback_leak(result, "execute_task")
@@ -282,15 +282,15 @@ async def test_execute_task_deep_traceback_not_leaked():
 @pytest.mark.asyncio
 async def test_search_skills_error_no_traceback():
     """search_skills: exception → structured error, no traceback leak."""
-    import openspace.mcp.tool_handlers as srv
+    import scion.mcp.tool_handlers as srv
 
     with patch(
-        "openspace.mcp.tool_handlers.hybrid_search_skills",
+        "scion.mcp.tool_handlers.hybrid_search_skills",
         create=True,
-        side_effect=ImportError("No module named 'openspace.cloud.search'"),
+        side_effect=ImportError("No module named 'scion.cloud.search'"),
     ):
         # The import happens inside the try block, so we need to make it raise
-        with patch.dict("sys.modules", {"openspace.cloud.search": None}):
+        with patch.dict("sys.modules", {"scion.cloud.search": None}):
             result = await srv.search_skills(query="test query")
 
     _assert_no_traceback_leak(result, "search_skills")
@@ -303,7 +303,7 @@ async def test_search_skills_error_no_traceback():
 @pytest.mark.asyncio
 async def test_fix_skill_missing_skill_md():
     """fix_skill: missing SKILL.md → SKILL_NOT_FOUND, no path leak."""
-    import openspace.mcp.tool_handlers as srv
+    import scion.mcp.tool_handlers as srv
 
     result = await srv.fix_skill(
         skill_dir="/secret/internal/path/my-skill",
@@ -323,7 +323,7 @@ async def test_fix_skill_exception_no_traceback():
     """fix_skill: runtime exception → structured error."""
     import os
 
-    import openspace.mcp.tool_handlers as srv
+    import scion.mcp.tool_handlers as srv
 
     # Create a temporary directory with SKILL.md so we pass validation
     tmpdir = os.path.join(os.path.dirname(__file__), "_test_skill_tmp")
@@ -333,12 +333,12 @@ async def test_fix_skill_exception_no_traceback():
         with open(skill_md, "w") as f:
             f.write("# Test Skill\n")
 
-        mock_os = _make_openspace_mock()
+        mock_os = _make_scion_mock()
         mock_os._skill_registry.register_skill_dir.side_effect = RuntimeError(
-            "segfault at openspace/skill_engine/registry.py:123"
+            "segfault at scion/skill_engine/registry.py:123"
         )
 
-        with patch.object(srv, "_get_openspace", new_callable=AsyncMock, return_value=mock_os):
+        with patch.object(srv, "_get_scion", new_callable=AsyncMock, return_value=mock_os):
             result = await srv.fix_skill(skill_dir=tmpdir, direction="fix it")
 
         _assert_no_traceback_leak(result, "fix_skill")
@@ -356,7 +356,7 @@ async def test_fix_skill_exception_no_traceback():
 @pytest.mark.asyncio
 async def test_upload_skill_missing_skill_md():
     """upload_skill: missing SKILL.md → SKILL_NOT_FOUND, no path leak."""
-    import openspace.mcp.tool_handlers as srv
+    import scion.mcp.tool_handlers as srv
 
     result = await srv.upload_skill(skill_dir="/opt/secret/skills/broken")
 
@@ -372,7 +372,7 @@ async def test_upload_skill_exception_no_traceback():
     """upload_skill: cloud auth failure → structured error, no traceback."""
     import os
 
-    import openspace.mcp.tool_handlers as srv
+    import scion.mcp.tool_handlers as srv
 
     tmpdir = os.path.join(os.path.dirname(__file__), "_test_upload_tmp")
     os.makedirs(tmpdir, exist_ok=True)
@@ -384,7 +384,7 @@ async def test_upload_skill_exception_no_traceback():
         with patch.object(
             srv,
             "_get_cloud_client",
-            side_effect=PermissionError("Invalid API key at openspace/cloud/auth.py:55"),
+            side_effect=PermissionError("Invalid API key at scion/cloud/auth.py:55"),
         ):
             result = await srv.upload_skill(skill_dir=tmpdir)
 
@@ -403,12 +403,12 @@ async def test_upload_skill_exception_no_traceback():
 @pytest.mark.asyncio
 async def test_server_logs_full_exception():
     """Verify that full exception details are logged server-side."""
-    import openspace.mcp.tool_handlers as srv
+    import scion.mcp.tool_handlers as srv
 
-    with patch("openspace.errors.logger") as mock_logger:
+    with patch("scion.errors.logger") as mock_logger:
         with patch.object(
             srv,
-            "_get_openspace",
+            "_get_scion",
             new_callable=AsyncMock,
             side_effect=RuntimeError("detailed internal error info"),
         ):
@@ -439,16 +439,16 @@ async def test_server_logs_full_exception():
 )
 async def test_all_tools_structured_error_on_failure(tool_name, call):
     """Every MCP tool returns structured error JSON on failure — never raw tracebacks."""
-    import openspace.mcp.tool_handlers as srv
+    import scion.mcp.tool_handlers as srv
 
     # Sabotage everything to force errors
     with patch.object(
         srv,
-        "_get_openspace",
+        "_get_scion",
         new_callable=AsyncMock,
         side_effect=Exception(f"Synthetic failure in {tool_name}"),
     ):
-        with patch.dict("sys.modules", {"openspace.cloud.search": None}):
+        with patch.dict("sys.modules", {"scion.cloud.search": None}):
             result = await call(srv)
 
     _assert_no_traceback_leak(result, tool_name)

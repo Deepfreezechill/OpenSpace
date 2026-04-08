@@ -1,4 +1,4 @@
-"""Tests for openspace.auth.provider — EPIC 2.5.
+"""Tests for scion.auth.provider — EPIC 2.5.
 
 Covers:
 - #104: Token creation, validation, claims model
@@ -17,7 +17,7 @@ import time
 
 import pytest
 
-from openspace.auth.provider import (
+from scion.auth.provider import (
     _MAX_TTL_SECONDS,
     DEFAULT_TOOL_POLICIES,
     TIER_DEFAULT_SCOPES,
@@ -40,7 +40,7 @@ from openspace.auth.provider import (
     create_token,
     validate_token,
 )
-from openspace.sandbox.leases import TrustTier
+from scion.sandbox.leases import TrustTier
 
 # Shared test secret (>= 32 chars)
 TEST_SECRET = "test-secret-key-for-hmac-signing-at-least-32-chars"

@@ -1,4 +1,4 @@
-"""Tests for openspace.agents.grounding.execution — core execution loop.
+"""Tests for scion.agents.grounding.execution — core execution loop.
 
 Epic 5.8 extraction: process, _build_retrieved_tools_list.
 """
@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from openspace.agents.grounding.execution import (
+from scion.agents.grounding.execution import (
     _MAX_CONSECUTIVE_EMPTY,
     _build_retrieved_tools_list,
     process,
@@ -136,7 +136,7 @@ class TestProcess:
                 "has_tool_calls": False,
             }
         )
-        with patch("openspace.recording.RecordingManager") as mock_rm:
+        with patch("scion.recording.RecordingManager") as mock_rm:
             mock_rm.record_retrieved_tools = AsyncMock()
             mock_rm.record_conversation_setup = AsyncMock()
             mock_rm.record_iteration_context = AsyncMock()
@@ -155,7 +155,7 @@ class TestProcess:
                 "has_tool_calls": False,
             }
         )
-        with patch("openspace.recording.RecordingManager") as mock_rm:
+        with patch("scion.recording.RecordingManager") as mock_rm:
             mock_rm.record_retrieved_tools = AsyncMock()
             mock_rm.record_conversation_setup = AsyncMock()
             mock_rm.record_iteration_context = AsyncMock()
@@ -166,7 +166,7 @@ class TestProcess:
     async def test_exception_returns_error(self):
         agent = _FakeAgent()
         agent._llm_client.complete = AsyncMock(side_effect=RuntimeError("boom"))
-        with patch("openspace.recording.RecordingManager") as mock_rm:
+        with patch("scion.recording.RecordingManager") as mock_rm:
             mock_rm.record_retrieved_tools = AsyncMock()
             mock_rm.record_conversation_setup = AsyncMock()
             mock_rm.record_iteration_context = AsyncMock()
@@ -187,7 +187,7 @@ class TestDelegationSeams:
         import asyncio
         import inspect
 
-        from openspace.agents.grounding_agent import GroundingAgent
+        from scion.agents.grounding_agent import GroundingAgent
 
         method = getattr(GroundingAgent, "process")
         assert inspect.iscoroutinefunction(method)

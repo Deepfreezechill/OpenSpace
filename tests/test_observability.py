@@ -1,4 +1,4 @@
-"""Tests for openspace.observability — metrics, tracing, health.
+"""Tests for scion.observability — metrics, tracing, health.
 
 Epic 6.1: Observability (metrics, tracing, health).
 """
@@ -13,9 +13,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from prometheus_client import CollectorRegistry
 
-from openspace.observability.health import HealthAggregator, HealthProbe, HealthStatus
-from openspace.observability.metrics import MetricsRegistry
-from openspace.observability.tracing import ExecutionTracer, Span, Trace, trace_async
+from scion.observability.health import HealthAggregator, HealthProbe, HealthStatus
+from scion.observability.metrics import MetricsRegistry
+from scion.observability.tracing import ExecutionTracer, Span, Trace, trace_async
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -33,21 +33,21 @@ class TestMetricsRegistry:
         reg = MetricsRegistry()
         reg.execution_total.labels(agent="test", status="success").inc()
         output = reg.render()
-        assert b"openspace_execution_total" in output
+        assert b"scion_execution_total" in output
         assert b'agent="test"' in output
 
     def test_execution_latency_histogram(self):
         reg = MetricsRegistry()
         reg.execution_latency.labels(agent="GA", status="success").observe(1.5)
         output = reg.render()
-        assert b"openspace_execution_latency_seconds" in output
+        assert b"scion_execution_latency_seconds" in output
 
     def test_skill_hits_counter(self):
         reg = MetricsRegistry()
         reg.skill_hits.labels(skill_id="web-search").inc()
         reg.skill_hits.labels(skill_id="web-search").inc()
         output = reg.render()
-        assert b"openspace_skill_hits_total" in output
+        assert b"scion_skill_hits_total" in output
         assert b'skill_id="web-search"' in output
 
     def test_evolution_metrics(self):
@@ -55,15 +55,15 @@ class TestMetricsRegistry:
         reg.evolution_total.labels(trigger="analysis", outcome="success").inc()
         reg.evolution_latency.labels(trigger="analysis").observe(2.3)
         output = reg.render()
-        assert b"openspace_evolution_total" in output
-        assert b"openspace_evolution_latency_seconds" in output
+        assert b"scion_evolution_total" in output
+        assert b"scion_evolution_latency_seconds" in output
 
     def test_tool_call_metrics(self):
         reg = MetricsRegistry()
         reg.tool_calls_total.labels(backend="gui", tool_name="click", status="ok").inc()
         reg.tool_call_latency.labels(backend="gui").observe(0.5)
         output = reg.render()
-        assert b"openspace_tool_calls_total" in output
+        assert b"scion_tool_calls_total" in output
 
     def test_track_execution_context_manager_success(self):
         reg = MetricsRegistry()
@@ -352,7 +352,7 @@ class TestHealthAggregator:
 class TestMCPObservabilityTools:
     @pytest.mark.asyncio
     async def test_health_check_returns_json(self):
-        from openspace.mcp.tool_handlers import health_check
+        from scion.mcp.tool_handlers import health_check
 
         result = await health_check()
         parsed = json.loads(result)
@@ -361,16 +361,16 @@ class TestMCPObservabilityTools:
 
     @pytest.mark.asyncio
     async def test_get_metrics_returns_prometheus_format(self):
-        from openspace.mcp.tool_handlers import get_metrics
+        from scion.mcp.tool_handlers import get_metrics
 
         result = await get_metrics()
         assert isinstance(result, str)
         # Should contain at least one metric name
-        assert "openspace_" in result
+        assert "scion_" in result
 
     @pytest.mark.asyncio
     async def test_get_execution_traces_returns_json(self):
-        from openspace.mcp.tool_handlers import get_execution_traces
+        from scion.mcp.tool_handlers import get_execution_traces
 
         result = await get_execution_traces(limit=3)
         parsed = json.loads(result)
@@ -378,7 +378,7 @@ class TestMCPObservabilityTools:
 
     @pytest.mark.asyncio
     async def test_get_execution_traces_limit_clamped(self):
-        from openspace.mcp.tool_handlers import get_execution_traces
+        from scion.mcp.tool_handlers import get_execution_traces
 
         result = await get_execution_traces(limit=999)
         parsed = json.loads(result)
@@ -394,18 +394,18 @@ class TestMCPObservabilityTools:
 class TestExecutionInstrumentation:
     def test_execution_module_imports_observability(self):
         """Verify the execution loop has observability wired in."""
-        import openspace.agents.grounding.execution as ex
+        import scion.agents.grounding.execution as ex
 
         assert hasattr(ex, "_metrics")
         assert hasattr(ex, "_tracer")
 
     def test_metrics_singleton_is_accessible(self):
-        from openspace.observability.metrics import metrics
+        from scion.observability.metrics import metrics
 
         assert isinstance(metrics, MetricsRegistry)
 
     def test_tracer_singleton_is_accessible(self):
-        from openspace.observability.tracing import tracer
+        from scion.observability.tracing import tracer
 
         assert isinstance(tracer, ExecutionTracer)
 
@@ -417,7 +417,7 @@ class TestExecutionInstrumentation:
 
 class TestPackageCompleteness:
     def test_package_exports(self):
-        import openspace.observability as obs
+        import scion.observability as obs
 
         assert hasattr(obs, "MetricsRegistry")
         assert hasattr(obs, "ExecutionTracer")
@@ -428,7 +428,7 @@ class TestPackageCompleteness:
     def test_mcp_registers_observability_tools(self):
         """Verify register_handlers wires observability tools."""
         mock_mcp = MagicMock()
-        from openspace.mcp.tool_handlers import register_handlers
+        from scion.mcp.tool_handlers import register_handlers
 
         register_handlers(mock_mcp)
         # 4 original + 3 observability = 7 calls
@@ -447,20 +447,20 @@ class TestMetricsAdditional:
         reg = MetricsRegistry()
         reg.execution_iterations.labels(agent="test").observe(5)
         rendered = reg.render().decode()
-        assert "openspace_execution_iterations" in rendered
+        assert "scion_execution_iterations" in rendered
 
     def test_skill_misses_counter(self):
         reg = MetricsRegistry()
         reg.skill_misses.inc()
         reg.skill_misses.inc()
         rendered = reg.render().decode()
-        assert "openspace_skill_misses_total" in rendered
+        assert "scion_skill_misses_total" in rendered
 
     def test_skill_search_latency_histogram(self):
         reg = MetricsRegistry()
         reg.skill_search_latency.observe(0.042)
         rendered = reg.render().decode()
-        assert "openspace_skill_search_latency_seconds" in rendered
+        assert "scion_skill_search_latency_seconds" in rendered
 
     def test_in_flight_gauge_lifecycle(self):
         """Verify gauge increments inside track_execution and decrements on exit."""
@@ -487,7 +487,7 @@ class TestMetricsAdditional:
         with reg.track_execution("test"):
             time.sleep(0.01)
         rendered = reg.render().decode()
-        assert "openspace_execution_latency_seconds" in rendered
+        assert "scion_execution_latency_seconds" in rendered
         # At least one observation should be recorded
         assert '_count 1.0' in rendered or '_count{' in rendered
 

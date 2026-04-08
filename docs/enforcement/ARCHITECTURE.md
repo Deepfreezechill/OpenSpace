@@ -2,14 +2,14 @@
 
 > **Classification:** Security-Critical Infrastructure
 > **Status:** Stable
-> **Pattern Lineage:** circuit_breaker → label-enforce → openspace/phase-gates
+> **Pattern Lineage:** circuit_breaker → label-enforce → scion/phase-gates
 
 ---
 
 ## Executive Summary
 
 A **fail-closed enforcement system** that makes it **technically impossible** to merge
-out-of-phase code into the OpenSpace repository without explicit, audited admin override.
+out-of-phase code into the Scion repository without explicit, audited admin override.
 
 **Key guarantee:** If the enforcement system crashes, is misconfigured, or encounters any
 unexpected state — the merge is BLOCKED, not allowed.

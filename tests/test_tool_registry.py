@@ -1,10 +1,10 @@
-"""Tests for ToolRegistry — extracted from OpenSpace.tool_layer.
+"""Tests for ToolRegistry — extracted from Scion.tool_layer.
 
 Verifies:
   - Skill directory discovery (env, config, builtin)
   - LLM-based skill selection and context injection
   - Selection LLM priority chain
-  - Backward compatibility (OpenSpace delegates to ToolRegistry)
+  - Backward compatibility (Scion delegates to ToolRegistry)
 """
 
 from __future__ import annotations
@@ -18,8 +18,8 @@ import pytest
 
 # tool_layer / tool_registry import litellm which may not be available
 try:
-    from openspace.tool_layer import OpenSpace, OpenSpaceConfig
-    from openspace.tool_registry import ToolRegistry
+    from scion.tool_layer import Scion, ScionConfig
+    from scion.tool_registry import ToolRegistry
 
     _HAS_TOOL_LAYER = True
 except (ImportError, ModuleNotFoundError):
@@ -27,7 +27,7 @@ except (ImportError, ModuleNotFoundError):
 
 pytestmark = pytest.mark.skipif(
     not _HAS_TOOL_LAYER,
-    reason="openspace.tool_layer requires litellm (not installed or broken)",
+    reason="scion.tool_layer requires litellm (not installed or broken)",
 )
 
 
@@ -47,8 +47,8 @@ def mock_grounding_config():
 
 @pytest.fixture
 def mock_config():
-    """Minimal OpenSpaceConfig."""
-    return OpenSpaceConfig(
+    """Minimal ScionConfig."""
+    return ScionConfig(
         skill_registry_model=None,
         llm_kwargs={},
     )
@@ -124,13 +124,13 @@ class TestToolRegistryDiscover:
         assert isinstance(result, bool)
 
     def test_discover_includes_env_skill_dirs(self, mock_config, mock_grounding_config, mock_llm_client, tmp_path):
-        """OPENSPACE_HOST_SKILL_DIRS env var adds skill directories."""
+        """SCION_HOST_SKILL_DIRS env var adds skill directories."""
 
         skill_dir = tmp_path / "env-skill"
         skill_dir.mkdir()
         (skill_dir / "SKILL.md").write_text("# Env Skill")
 
-        with patch.dict(os.environ, {"OPENSPACE_HOST_SKILL_DIRS": str(tmp_path)}):
+        with patch.dict(os.environ, {"SCION_HOST_SKILL_DIRS": str(tmp_path)}):
             tr = ToolRegistry(
                 config=mock_config,
                 grounding_config=mock_grounding_config,
@@ -276,7 +276,7 @@ class TestToolRegistrySelectAndInject:
         )
         tr._registry = mock_registry
 
-        with patch("openspace.tool_registry.RecordingManager") as MockRM:
+        with patch("scion.tool_registry.RecordingManager") as MockRM:
             MockRM.record_skill_selection = AsyncMock()
             await tr.select_and_inject(
                 task="test task",
@@ -344,7 +344,7 @@ class TestToolRegistrySelectAndInject:
     async def test_no_llm_client_skips_selection(self, mock_grounding_config, mock_grounding_agent):
         """When no LLM is available, selection is skipped and context cleared."""
 
-        config = OpenSpaceConfig(skill_registry_model=None, llm_kwargs={})
+        config = ScionConfig(skill_registry_model=None, llm_kwargs={})
         mock_grounding_agent._tool_retrieval_llm = None
 
         mock_registry = MagicMock()
@@ -401,13 +401,13 @@ class TestGetSelectionLLM:
     def test_dedicated_model_takes_priority(self, mock_grounding_config, mock_llm_client, mock_grounding_agent):
         """config.skill_registry_model overrides everything."""
 
-        config = OpenSpaceConfig(skill_registry_model="gpt-4o-mini")
+        config = ScionConfig(skill_registry_model="gpt-4o-mini")
         tr = ToolRegistry(
             config=config,
             grounding_config=mock_grounding_config,
             llm_client=mock_llm_client,
         )
-        with patch("openspace.tool_registry.LLMClient") as MockLLM:
+        with patch("scion.tool_registry.LLMClient") as MockLLM:
             result = tr._get_selection_llm(agent=mock_grounding_agent)
             MockLLM.assert_called_once()
             call_kwargs = MockLLM.call_args
@@ -444,7 +444,7 @@ class TestGetSelectionLLM:
     def test_returns_none_when_nothing_available(self, mock_grounding_config, mock_grounding_agent):
         """Returns None when all three LLM options are unavailable."""
 
-        config = OpenSpaceConfig(skill_registry_model=None, llm_kwargs={})
+        config = ScionConfig(skill_registry_model=None, llm_kwargs={})
         mock_grounding_agent._tool_retrieval_llm = None
 
         tr = ToolRegistry(
@@ -469,7 +469,7 @@ class TestGetSelectionLLM:
     def test_llm_kwargs_forwarded(self, mock_grounding_config, mock_llm_client, mock_grounding_agent):
         """llm_kwargs are passed through to the dedicated LLM client."""
 
-        config = OpenSpaceConfig(
+        config = ScionConfig(
             skill_registry_model="gpt-4o",
             llm_kwargs={"api_base": "http://local"},
         )
@@ -478,7 +478,7 @@ class TestGetSelectionLLM:
             grounding_config=mock_grounding_config,
             llm_client=mock_llm_client,
         )
-        with patch("openspace.tool_registry.LLMClient") as MockLLM:
+        with patch("scion.tool_registry.LLMClient") as MockLLM:
             tr._get_selection_llm(agent=mock_grounding_agent)
             call_kwargs = MockLLM.call_args.kwargs
             assert call_kwargs["api_base"] == "http://local"
@@ -488,22 +488,22 @@ class TestGetSelectionLLM:
 
 
 # ---------------------------------------------------------------------------
-# OpenSpace backward compatibility
+# Scion backward compatibility
 # ---------------------------------------------------------------------------
 
-class TestOpenSpaceDelegation:
-    """Verify OpenSpace still exposes the same public API via delegation."""
+class TestScionDelegation:
+    """Verify Scion still exposes the same public API via delegation."""
 
     def test_skill_registry_property_returns_inner_registry(self):
-        """OpenSpace.skill_registry returns the ToolRegistry's inner SkillRegistry."""
+        """Scion.skill_registry returns the ToolRegistry's inner SkillRegistry."""
 
-        os_instance = OpenSpace()
+        os_instance = Scion()
         # Before init, should be None
         assert os_instance.skill_registry is None
 
-    def test_openspace_has_tool_registry_attr(self):
-        """OpenSpace instance has a _tool_registry attribute initialized to None."""
+    def test_scion_has_tool_registry_attr(self):
+        """Scion instance has a _tool_registry attribute initialized to None."""
 
-        os_instance = OpenSpace()
+        os_instance = Scion()
         assert hasattr(os_instance, "_tool_registry")
         assert os_instance._tool_registry is None

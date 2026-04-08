@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from openspace.skill_engine.types import (
+from scion.skill_engine.types import (
     SkillCategory,
     SkillLineage,
     SkillOrigin,
@@ -54,7 +54,7 @@ def _make_record(
 @pytest.fixture
 def repo(tmp_path: Path):
     """Create a SkillRepository backed by a temp SQLite database."""
-    from openspace.skill_engine.skill_repository import SkillRepository
+    from scion.skill_engine.skill_repository import SkillRepository
 
     db_path = tmp_path / "test_repo.db"
     repository = SkillRepository(db_path=db_path)
@@ -399,7 +399,7 @@ class TestSharedLock:
     """When given an external lock, SkillRepository should use it."""
 
     def test_uses_provided_lock(self, tmp_path):
-        from openspace.skill_engine.skill_repository import SkillRepository
+        from scion.skill_engine.skill_repository import SkillRepository
         import threading
 
         external_lock = threading.Lock()
@@ -409,7 +409,7 @@ class TestSharedLock:
         repo.close()
 
     def test_creates_own_lock_when_none_provided(self, tmp_path):
-        from openspace.skill_engine.skill_repository import SkillRepository
+        from scion.skill_engine.skill_repository import SkillRepository
         import threading
 
         db_path = tmp_path / "own_lock.db"
@@ -419,7 +419,7 @@ class TestSharedLock:
 
     def test_shared_conn_and_lock(self, tmp_path):
         """Shared connection + shared lock should work without deadlock."""
-        from openspace.skill_engine.skill_repository import SkillRepository
+        from scion.skill_engine.skill_repository import SkillRepository
         import sqlite3
         import threading
 

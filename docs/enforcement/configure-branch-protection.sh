@@ -3,7 +3,7 @@
 # configure-branch-protection.sh
 # ============================================================================
 #
-# Configures branch protection rules for the OpenSpace repo.
+# Configures branch protection rules for the Scion repo.
 # Run this ONCE after pushing the enforcement workflow.
 #
 # Prerequisites:
@@ -16,7 +16,7 @@
 #   ./configure-branch-protection.sh <owner> <repo>
 #
 # Example:
-#   ./configure-branch-protection.sh Deepfreezechill OpenSpace
+#   ./configure-branch-protection.sh Deepfreezechill Scion
 # ============================================================================
 
 set -euo pipefail

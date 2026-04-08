@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-GDPVal Benchmark — Two-phase experiment for OpenSpace skill-driven token savings.
+GDPVal Benchmark — Two-phase experiment for Scion skill-driven token savings.
 
 Design:
   Phase 1 (Cold → Warm):  Run 220 tasks, skills accumulate across tasks.
@@ -18,7 +18,7 @@ Produces:
     ├── skills_snapshot.json     # All skills after Phase 1
     ├── comparison.jsonl         # Per-task Phase 1 vs Phase 2 comparison
     ├── summary.json             # Aggregate statistics
-    └── recordings/              # OpenSpace recordings per task
+    └── recordings/              # Scion recordings per task
         ├── phase1/
         └── phase2/
 
@@ -61,15 +61,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# ── Ensure OpenSpace is importable ──
-_OPENSPACE_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_OPENSPACE_ROOT))
+# ── Ensure Scion is importable ──
+_SCION_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_SCION_ROOT))
 
-# ── Load .env (same logic as openspace/llm/client.py) ──
+# ── Load .env (same logic as scion/llm/client.py) ──
 try:
     from dotenv import load_dotenv
 
-    _pkg_env = _OPENSPACE_ROOT / "openspace" / ".env"
+    _pkg_env = _SCION_ROOT / "scion" / ".env"
     if _pkg_env.is_file():
         load_dotenv(_pkg_env)
     load_dotenv()  # also try CWD/.env
@@ -82,7 +82,7 @@ from gdpval_bench.token_tracker import TokenStats, TokenTracker
 # ── Default paths ──
 _DEFAULT_CONFIG = Path(__file__).parent / "config.json"
 _DEFAULT_RESULTS = Path(__file__).parent / "results"
-_OPENSPACE_DB_DIR = _OPENSPACE_ROOT / ".openspace"
+_SCION_DB_DIR = _SCION_ROOT / ".scion"
 
 # ── Evaluation constants (aligned with ClawWork) ──
 # Artifact extensions that ClawWork considers for evaluation
@@ -117,7 +117,7 @@ _MIN_EVALUATION_THRESHOLD = 0.6
 def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     """Load experiment config with sensible defaults."""
     defaults = {
-        "clawwork_root": str(_OPENSPACE_ROOT.parent / "ClawWork"),
+        "clawwork_root": str(_SCION_ROOT.parent / "ClawWork"),
         "gdpval_path": None,
         "model": "openrouter/qwen/qwen3.5-plus-02-15",
         "max_iterations": 20,
@@ -390,20 +390,20 @@ def _evaluate_task(
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Helper: create OpenSpaceConfig
+# Helper: create ScionConfig
 # ═══════════════════════════════════════════════════════════════════
 
 
 def _make_config(cfg: Dict, phase: str, worker_id: int = 0):
-    """Create a OpenSpaceConfig for one worker."""
-    from openspace.tool_layer import OpenSpaceConfig
+    """Create a ScionConfig for one worker."""
+    from scion.tool_layer import ScionConfig
 
     rd = _results_dir(cfg)
     # Each worker gets its own recording dir to avoid collisions
     rec_suffix = f"w{worker_id}" if worker_id > 0 else ""
     rec_dir = str(rd / "recordings" / phase / rec_suffix) if rec_suffix else str(rd / "recordings" / phase)
 
-    return OpenSpaceConfig(
+    return ScionConfig(
         llm_model=cfg["model"],
         workspace_dir=str(rd / "workspace" / phase),
         recording_log_dir=rec_dir,
@@ -451,7 +451,7 @@ async def _run_single_task(
     *,
     concurrent: bool = False,
 ) -> Dict[str, Any]:
-    """Execute one task on the given OpenSpace instance and persist the result.
+    """Execute one task on the given Scion instance and persist the result.
 
     In concurrent mode, uses tracker.begin_task/end_task with ContextVar.
     In serial mode, uses tracker.start/stop.
@@ -590,15 +590,15 @@ async def _run_phase_serial(
     tracker: TokenTracker,
     completed_ids: set,
 ) -> List[Dict[str, Any]]:
-    """Run one phase sequentially. A single OpenSpace instance is reused
+    """Run one phase sequentially. A single Scion instance is reused
     so that skills accumulate within the phase."""
-    from openspace.tool_layer import OpenSpace
+    from scion.tool_layer import Scion
 
     rd = _results_dir(cfg)
     results_file = rd / f"{phase}_results.jsonl"
     config = _make_config(cfg, phase)
 
-    cs = OpenSpace(config=config)
+    cs = Scion(config=config)
     await cs.initialize()
 
     results: List[Dict] = []
@@ -645,7 +645,7 @@ async def _run_phase_concurrent(
     completed_ids: set,
     concurrency: int,
 ) -> List[Dict[str, Any]]:
-    """Run one phase with N concurrent OpenSpace workers.
+    """Run one phase with N concurrent Scion workers.
 
     Trade-offs vs serial:
       - Skills from concurrent tasks may not be visible to each other (reduced
@@ -655,12 +655,12 @@ async def _run_phase_concurrent(
       - Significantly faster wall-clock time.
 
     Architecture:
-      - N OpenSpace instances created up front (worker pool via asyncio.Queue)
+      - N Scion instances created up front (worker pool via asyncio.Queue)
       - Each asyncio.Task grabs a worker, executes, returns it to the pool
       - Token tracking uses ContextVar so litellm callbacks route to the
         correct per-task bucket automatically.
     """
-    from openspace.tool_layer import OpenSpace
+    from scion.tool_layer import Scion
 
     rd = _results_dir(cfg)
     results_file = rd / f"{phase}_results.jsonl"
@@ -677,14 +677,14 @@ async def _run_phase_concurrent(
 
     # ── Create worker pool ──
     actual_concurrency = min(concurrency, len(pending))
-    print(f"🔧 Creating {actual_concurrency} OpenSpace workers...")
+    print(f"🔧 Creating {actual_concurrency} Scion workers...")
 
     pool: asyncio.Queue = asyncio.Queue()
-    workers: List[OpenSpace] = []
+    workers: List[Scion] = []
 
     for i in range(actual_concurrency):
         config = _make_config(cfg, phase, worker_id=i)
-        cs = OpenSpace(config=config)
+        cs = Scion(config=config)
         await cs.initialize()
         workers.append(cs)
         pool.put_nowait(cs)
@@ -764,7 +764,7 @@ async def run_phase(
     """Run one phase (phase1 or phase2) over all tasks.
 
     Args:
-        concurrency: Number of parallel OpenSpace workers.
+        concurrency: Number of parallel Scion workers.
                      1 = serial (default, best for skill accumulation).
                      >1 = concurrent (faster, reduced skill accumulation).
     """
@@ -1191,8 +1191,8 @@ def build_comparison(cfg: Dict) -> None:
 
 
 def _wipe_skill_db() -> None:
-    """Delete the shared .openspace/openspace.db for a fresh start."""
-    db_file = _OPENSPACE_DB_DIR / "openspace.db"
+    """Delete the shared .scion/scion.db for a fresh start."""
+    db_file = _SCION_DB_DIR / "scion.db"
     for f in [db_file, db_file.with_suffix(".db-wal"), db_file.with_suffix(".db-shm")]:
         if f.exists():
             f.unlink()
@@ -1200,8 +1200,8 @@ def _wipe_skill_db() -> None:
 
 
 def _backup_skill_db(dest: Path) -> None:
-    """Copy the current .openspace/openspace.db to dest."""
-    db_file = _OPENSPACE_DB_DIR / "openspace.db"
+    """Copy the current .scion/scion.db to dest."""
+    db_file = _SCION_DB_DIR / "scion.db"
     if db_file.exists():
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(str(db_file), str(dest))
@@ -1235,7 +1235,7 @@ async def main(args: argparse.Namespace) -> None:
         cfg["use_clawwork_productivity"] = True
 
     # When using ClawWork productivity tools, ensure livebench is importable
-    # before OpenSpace.initialize() (ShellSession loads productivity_tools which imports livebench)
+    # before Scion.initialize() (ShellSession loads productivity_tools which imports livebench)
     if cfg.get("use_clawwork_productivity"):
         clawwork_root = Path(cfg.get("clawwork_root", "") or "").resolve()
         if clawwork_root.is_dir():
@@ -1286,8 +1286,8 @@ async def main(args: argparse.Namespace) -> None:
     else:
         cfg.setdefault("enable_evaluation", True)
 
-    # Propagate model to sub-agents (ShellAgentTool reads OPENSPACE_MODEL)
-    os.environ["OPENSPACE_MODEL"] = cfg.get("model", "")
+    # Propagate model to sub-agents (ShellAgentTool reads SCION_MODEL)
+    os.environ["SCION_MODEL"] = cfg.get("model", "")
 
     # Pre-flight checks
     env_ok = _check_environment(cfg)
@@ -1379,7 +1379,7 @@ async def main(args: argparse.Namespace) -> None:
 
         # Snapshot skills after Phase 1
         try:
-            from openspace.skill_engine import SkillStore
+            from scion.skill_engine import SkillStore
 
             store = SkillStore()
             skills = _snapshot_skills(store)
@@ -1460,14 +1460,14 @@ def _check_environment(cfg: Dict) -> bool:
         print("  ❌ litellm not installed — pip install litellm")
         ok = False
 
-    # 3. Check openspace
+    # 3. Check scion
     try:
-        from openspace.tool_layer import OpenSpace
+        from scion.tool_layer import Scion
 
-        print("  ✅ openspace importable")
+        print("  ✅ scion importable")
     except ImportError as e:
-        print(f"  ❌ openspace not importable: {e}")
-        print("     Run from OpenSpace directory or: pip install -e .")
+        print(f"  ❌ scion not importable: {e}")
+        print("     Run from Scion directory or: pip install -e .")
         ok = False
 
     # 4. Check data availability (quick peek)
@@ -1523,7 +1523,7 @@ def _check_environment(cfg: Dict) -> bool:
 
 
 def cli():
-    parser = argparse.ArgumentParser(description="GDPVal Benchmark for OpenSpace skill-driven token savings")
+    parser = argparse.ArgumentParser(description="GDPVal Benchmark for Scion skill-driven token savings")
     parser.add_argument(
         "--config",
         type=str,
@@ -1553,7 +1553,7 @@ def cli():
         "--concurrency",
         type=int,
         default=1,
-        help="Number of parallel OpenSpace workers per phase "
+        help="Number of parallel Scion workers per phase "
         "(default: 1 = serial). Higher values reduce "
         "cross-task skill accumulation within a phase.",
     )

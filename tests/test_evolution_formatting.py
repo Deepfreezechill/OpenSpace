@@ -1,4 +1,4 @@
-"""Tests for openspace.skill_engine.evolution.formatting (Epic 5.6).
+"""Tests for scion.skill_engine.evolution.formatting (Epic 5.6).
 
 Verifies:
   1. format_skill_dir_content — single-file, multi-file, empty
@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from openspace.skill_engine.evolution.formatting import (
+from scion.skill_engine.evolution.formatting import (
     format_analysis_context,
     format_skill_dir_content,
 )
@@ -27,14 +27,14 @@ from openspace.skill_engine.evolution.formatting import (
 class TestFormatSkillDirContent:
     def test_empty_dir(self):
         """Empty directory → empty string."""
-        with patch("openspace.skill_engine.evolution.formatting.collect_skill_snapshot", return_value={}):
+        with patch("scion.skill_engine.evolution.formatting.collect_skill_snapshot", return_value={}):
             result = format_skill_dir_content(Path("/fake"))
         assert result == ""
 
     def test_single_file_skill(self):
         """Single SKILL.md → return content directly (no formatting)."""
         with patch(
-            "openspace.skill_engine.evolution.formatting.collect_skill_snapshot",
+            "scion.skill_engine.evolution.formatting.collect_skill_snapshot",
             return_value={"SKILL.md": "---\nname: test\n---\ncontent"},
         ):
             result = format_skill_dir_content(Path("/fake"))
@@ -48,7 +48,7 @@ class TestFormatSkillDirContent:
             "README.md": "readme text",
         }
         with patch(
-            "openspace.skill_engine.evolution.formatting.collect_skill_snapshot",
+            "scion.skill_engine.evolution.formatting.collect_skill_snapshot",
             return_value=files,
         ):
             result = format_skill_dir_content(Path("/fake"))
@@ -65,7 +65,7 @@ class TestFormatSkillDirContent:
         """Multi-file with no SKILL.md → still formats all files."""
         files = {"helper.py": "code", "config.yaml": "key: val"}
         with patch(
-            "openspace.skill_engine.evolution.formatting.collect_skill_snapshot",
+            "scion.skill_engine.evolution.formatting.collect_skill_snapshot",
             return_value=files,
         ):
             result = format_skill_dir_content(Path("/fake"))
@@ -154,23 +154,23 @@ class TestFormatAnalysisContext:
 
 class TestDelegationSeam:
     def test_format_skill_dir_is_staticmethod(self):
-        from openspace.skill_engine.evolver import SkillEvolver
+        from scion.skill_engine.evolver import SkillEvolver
         assert isinstance(
             SkillEvolver.__dict__["_format_skill_dir_content"],
             staticmethod,
         )
 
     def test_format_analysis_is_staticmethod(self):
-        from openspace.skill_engine.evolver import SkillEvolver
+        from scion.skill_engine.evolver import SkillEvolver
         assert isinstance(
             SkillEvolver.__dict__["_format_analysis_context"],
             staticmethod,
         )
 
     def test_format_skill_dir_callable(self):
-        from openspace.skill_engine.evolver import SkillEvolver
+        from scion.skill_engine.evolver import SkillEvolver
         with patch(
-            "openspace.skill_engine.evolution.formatting.collect_skill_snapshot",
+            "scion.skill_engine.evolution.formatting.collect_skill_snapshot",
             return_value={"SKILL.md": "test"},
         ):
             result = SkillEvolver._format_skill_dir_content(Path("/fake"))
@@ -184,7 +184,7 @@ class TestDelegationSeam:
 class TestMeta:
     def test_module_size(self):
         """formatting.py should stay under 120 lines."""
-        import openspace.skill_engine.evolution.formatting as mod
+        import scion.skill_engine.evolution.formatting as mod
         src = Path(mod.__file__)
         lines = src.read_text(encoding="utf-8").splitlines()
         assert len(lines) <= 120, f"formatting.py has {len(lines)} lines (limit 120)"

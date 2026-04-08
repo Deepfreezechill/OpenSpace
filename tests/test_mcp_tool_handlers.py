@@ -1,4 +1,4 @@
-"""Tests for openspace.mcp.tool_handlers — Epic 4.7 extraction."""
+"""Tests for scion.mcp.tool_handlers — Epic 4.7 extraction."""
 from __future__ import annotations
 
 import json
@@ -11,7 +11,7 @@ import pytest
 
 # Guard: skip all tests if the tool_handlers module can't be imported
 try:
-    from openspace.mcp.tool_handlers import (
+    from scion.mcp.tool_handlers import (
         _format_task_result,
         _is_auto_import_enabled,
         _json_error,
@@ -25,7 +25,7 @@ try:
 except ImportError:
     _HAS_MODULE = False
 
-pytestmark = pytest.mark.skipif(not _HAS_MODULE, reason="openspace.mcp.tool_handlers not importable")
+pytestmark = pytest.mark.skipif(not _HAS_MODULE, reason="scion.mcp.tool_handlers not importable")
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +168,7 @@ class TestUploadMeta:
 
     def test_read_empty_dir_returns_empty(self, tmp_path):
         """No sidecar, no DB → empty dict."""
-        with patch("openspace.mcp.tool_handlers._get_store") as mock_store:
+        with patch("scion.mcp.tool_handlers._get_store") as mock_store:
             mock_store.return_value.load_record_by_path.return_value = None
             result = _read_upload_meta(tmp_path)
         assert result == {}
@@ -182,7 +182,7 @@ class TestUploadMeta:
     def test_corrupt_sidecar_falls_through(self, tmp_path):
         """Corrupt JSON → falls to DB tier → empty dict."""
         (tmp_path / ".upload_meta.json").write_text("{bad json", encoding="utf-8")
-        with patch("openspace.mcp.tool_handlers._get_store") as mock_store:
+        with patch("scion.mcp.tool_handlers._get_store") as mock_store:
             mock_store.return_value.load_record_by_path.return_value = None
             result = _read_upload_meta(tmp_path)
         assert result == {}
@@ -193,25 +193,25 @@ class TestUploadMeta:
 # ---------------------------------------------------------------------------
 class TestAutoImportEnabled:
     def test_returns_false_when_no_instance(self):
-        with patch("openspace.mcp.tool_handlers._openspace_instance", None):
+        with patch("scion.mcp.tool_handlers._scion_instance", None):
             assert _is_auto_import_enabled() is False
 
     def test_returns_false_when_not_initialized(self):
         mock_os = MagicMock()
         mock_os.is_initialized.return_value = False
-        with patch("openspace.mcp.tool_handlers._openspace_instance", mock_os):
+        with patch("scion.mcp.tool_handlers._scion_instance", mock_os):
             assert _is_auto_import_enabled() is False
 
     def test_returns_true_when_enabled(self):
         mock_os = MagicMock()
         mock_os.is_initialized.return_value = True
         mock_os._grounding_config.skills.auto_import_enabled = True
-        with patch("openspace.mcp.tool_handlers._openspace_instance", mock_os):
+        with patch("scion.mcp.tool_handlers._scion_instance", mock_os):
             assert _is_auto_import_enabled() is True
 
     def test_returns_false_when_no_skills_config(self):
         mock_os = MagicMock()
         mock_os.is_initialized.return_value = True
         mock_os._grounding_config = None
-        with patch("openspace.mcp.tool_handlers._openspace_instance", mock_os):
+        with patch("scion.mcp.tool_handlers._scion_instance", mock_os):
             assert _is_auto_import_enabled() is False

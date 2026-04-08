@@ -19,9 +19,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from openspace.skill_engine.registry import SkillMeta
-from openspace.skill_engine.store import SkillStore
-from openspace.skill_engine.types import (
+from scion.skill_engine.registry import SkillMeta
+from scion.skill_engine.store import SkillStore
+from scion.skill_engine.types import (
     ExecutionAnalysis,
     SkillCategory,
     SkillJudgment,

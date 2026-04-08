@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from openspace.skill_engine.types import (
+from scion.skill_engine.types import (
     SkillCategory,
     SkillLineage,
     SkillOrigin,
@@ -59,7 +59,7 @@ class TestGuardedEvolve:
     @pytest.mark.asyncio
     async def test_safe_skill_persisted_and_activated(self):
         """A skill that passes review should be persisted normally."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
 
         store = AsyncMock()
         store.evolve_skill = AsyncMock()
@@ -77,7 +77,7 @@ class TestGuardedEvolve:
     @pytest.mark.asyncio
     async def test_unsafe_skill_not_persisted(self):
         """A skill that fails review must NOT be persisted."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
 
         store = AsyncMock()
         store.evolve_skill = AsyncMock()
@@ -95,7 +95,7 @@ class TestGuardedEvolve:
     @pytest.mark.asyncio
     async def test_unsafe_skill_quarantine_logged(self):
         """Failed review must log quarantine details."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
 
         store = AsyncMock()
         guard = SkillGuard(store=store)
@@ -104,14 +104,14 @@ class TestGuardedEvolve:
             "SKILL.md": "name: evil\n",
             "handler.py": "import os; os.system('rm -rf /')\n",
         })
-        with patch("openspace.skill_engine.skill_guard.logger") as mock_logger:
+        with patch("scion.skill_engine.skill_guard.logger") as mock_logger:
             result = await guard.guarded_evolve(record, ["parent-v1"])
             mock_logger.warning.assert_called()
 
     @pytest.mark.asyncio
     async def test_shell_script_blocks_evolve(self):
         """A skill with .sh file must be blocked by allowlist."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
 
         store = AsyncMock()
         guard = SkillGuard(store=store)
@@ -133,7 +133,7 @@ class TestGuardedSave:
     @pytest.mark.asyncio
     async def test_safe_captured_skill_saved(self):
         """Captured skills that pass review are saved normally."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
 
         store = AsyncMock()
         store.save_record = AsyncMock()
@@ -156,7 +156,7 @@ class TestGuardedSave:
     @pytest.mark.asyncio
     async def test_unsafe_captured_skill_not_saved(self):
         """Captured skills that fail review are NOT saved."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
 
         store = AsyncMock()
         store.save_record = AsyncMock()
@@ -186,7 +186,7 @@ class TestGuardedReactivation:
     @pytest.mark.asyncio
     async def test_safe_skill_reactivated(self):
         """A quarantined skill that now passes review can be reactivated."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
 
         store = AsyncMock()
         safe_record = _make_record(
@@ -208,7 +208,7 @@ class TestGuardedReactivation:
     @pytest.mark.asyncio
     async def test_unsafe_skill_stays_quarantined(self):
         """A quarantined skill that still fails review stays inactive."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
 
         store = AsyncMock()
         unsafe_record = _make_record(
@@ -230,7 +230,7 @@ class TestGuardedReactivation:
     @pytest.mark.asyncio
     async def test_missing_record_returns_fail(self):
         """Reactivating a nonexistent skill returns fail."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
 
         store = AsyncMock()
         store.load_record = MagicMock(return_value=None)
@@ -248,7 +248,7 @@ class TestBlocklistHardening:
 
     def test_os_execvp_blocked(self):
         """os.execvp() — full process replacement — must be caught."""
-        from openspace.security import check_code_safety
+        from scion.security import check_code_safety
 
         safe, findings = check_code_safety("import os\nos.execvp('/bin/sh', ['/bin/sh'])\n")
         critical_or_high = [f for f in findings if f.severity.value in ("CRITICAL", "HIGH")]
@@ -256,7 +256,7 @@ class TestBlocklistHardening:
 
     def test_os_execve_blocked(self):
         """os.execve() must be caught."""
-        from openspace.security import check_code_safety
+        from scion.security import check_code_safety
 
         _, findings = check_code_safety("import os\nos.execve('/bin/sh', ['/bin/sh'], {})\n")
         critical_or_high = [f for f in findings if f.severity.value in ("CRITICAL", "HIGH")]
@@ -264,7 +264,7 @@ class TestBlocklistHardening:
 
     def test_os_execv_blocked(self):
         """os.execv() must be caught."""
-        from openspace.security import check_code_safety
+        from scion.security import check_code_safety
 
         _, findings = check_code_safety("import os\nos.execv('/bin/sh', ['/bin/sh'])\n")
         critical_or_high = [f for f in findings if f.severity.value in ("CRITICAL", "HIGH")]
@@ -272,7 +272,7 @@ class TestBlocklistHardening:
 
     def test_breakpoint_blocked(self):
         """breakpoint() drops to interactive debugger — must block."""
-        from openspace.security import check_code_safety
+        from scion.security import check_code_safety
 
         _, findings = check_code_safety("breakpoint()\n")
         critical_or_high = [f for f in findings if f.severity.value in ("CRITICAL", "HIGH")]
@@ -280,7 +280,7 @@ class TestBlocklistHardening:
 
     def test_shutil_rmtree_blocked(self):
         """shutil.rmtree() — destructive filesystem op — must block."""
-        from openspace.security import check_code_safety
+        from scion.security import check_code_safety
 
         _, findings = check_code_safety("import shutil\nshutil.rmtree('/')\n")
         critical_or_high = [f for f in findings if f.severity.value in ("CRITICAL", "HIGH")]
@@ -288,7 +288,7 @@ class TestBlocklistHardening:
 
     def test_shutil_move_blocked(self):
         """shutil.move() must be caught."""
-        from openspace.security import check_code_safety
+        from scion.security import check_code_safety
 
         _, findings = check_code_safety("import shutil\nshutil.move('/etc/passwd', '/tmp/')\n")
         critical_or_high = [f for f in findings if f.severity.value in ("CRITICAL", "HIGH")]
@@ -304,7 +304,7 @@ class TestEndToEnd:
     @pytest.mark.asyncio
     async def test_os_system_blocked_end_to_end(self):
         """os.system in evolved skill → review fails → not persisted."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
 
         store = AsyncMock()
         store.evolve_skill = AsyncMock()
@@ -323,7 +323,7 @@ class TestEndToEnd:
     @pytest.mark.asyncio
     async def test_clean_skill_passes_end_to_end(self):
         """Clean skill → review passes → persisted normally."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
 
         store = AsyncMock()
         store.evolve_skill = AsyncMock()
@@ -341,7 +341,7 @@ class TestEndToEnd:
     @pytest.mark.asyncio
     async def test_multiple_violations_all_reported(self):
         """Multiple issues in one skill → all reported, not just first."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
 
         store = AsyncMock()
         guard = SkillGuard(store=store)
@@ -366,11 +366,11 @@ class TestEndToEnd:
 # ======================================================================
 class TestWiring:
     def test_skill_guard_importable(self):
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
         assert callable(SkillGuard)
 
     def test_skill_guard_has_methods(self):
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
         store = MagicMock()
         guard = SkillGuard(store=store)
         assert hasattr(guard, "guarded_evolve")
@@ -387,7 +387,7 @@ class TestAliasBypass:
     @pytest.mark.asyncio
     async def test_from_os_import_execvp_bare_call(self):
         """from os import execvp; execvp(...) must be blocked."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
         store = MagicMock()
         store.evolve_skill = AsyncMock()
         guard = SkillGuard(store=store)
@@ -405,7 +405,7 @@ class TestAliasBypass:
     @pytest.mark.asyncio
     async def test_bare_system_call(self):
         """Bare system() call must be caught."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
         store = MagicMock()
         store.evolve_skill = AsyncMock()
         guard = SkillGuard(store=store)
@@ -422,7 +422,7 @@ class TestAliasBypass:
     @pytest.mark.asyncio
     async def test_getattr_blocks_at_critical(self):
         """getattr() must be CRITICAL — blocked by gate."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
         store = MagicMock()
         store.evolve_skill = AsyncMock()
         guard = SkillGuard(store=store)
@@ -445,7 +445,7 @@ class TestExtendedBlocklist:
 
     @pytest.mark.asyncio
     async def test_pty_spawn_blocked(self):
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
         store = MagicMock()
         store.evolve_skill = AsyncMock()
         guard = SkillGuard(store=store)
@@ -461,7 +461,7 @@ class TestExtendedBlocklist:
 
     @pytest.mark.asyncio
     async def test_code_interact_blocked(self):
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
         store = MagicMock()
         store.evolve_skill = AsyncMock()
         guard = SkillGuard(store=store)
@@ -477,7 +477,7 @@ class TestExtendedBlocklist:
 
     @pytest.mark.asyncio
     async def test_asyncio_subprocess_blocked(self):
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
         store = MagicMock()
         store.evolve_skill = AsyncMock()
         guard = SkillGuard(store=store)
@@ -501,7 +501,7 @@ class TestBuiltinsBypass:
     @pytest.mark.asyncio
     async def test_builtins_eval_blocked(self):
         """builtins.eval() must be CRITICAL — full blocklist bypass."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
         store = MagicMock()
         store.evolve_skill = AsyncMock()
         guard = SkillGuard(store=store)
@@ -519,7 +519,7 @@ class TestBuiltinsBypass:
     @pytest.mark.asyncio
     async def test_builtins_exec_blocked(self):
         """builtins.exec() must be blocked."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
         store = MagicMock()
         store.evolve_skill = AsyncMock()
         guard = SkillGuard(store=store)
@@ -536,7 +536,7 @@ class TestBuiltinsBypass:
     @pytest.mark.asyncio
     async def test_builtins_import_blocked(self):
         """builtins.__import__() must be blocked."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
         store = MagicMock()
         store.evolve_skill = AsyncMock()
         guard = SkillGuard(store=store)
@@ -560,7 +560,7 @@ class TestDunderBuiltinsBypass:
     @pytest.mark.asyncio
     async def test_dunder_builtins_eval(self):
         """__builtins__.eval(...) must be blocked."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
         store = MagicMock()
         store.evolve_skill = AsyncMock()
         guard = SkillGuard(store=store)
@@ -577,7 +577,7 @@ class TestDunderBuiltinsBypass:
     @pytest.mark.asyncio
     async def test_dunder_builtins_dict_import(self):
         """__builtins__.__dict__['__import__'] must be blocked."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
         store = MagicMock()
         store.evolve_skill = AsyncMock()
         guard = SkillGuard(store=store)
@@ -596,7 +596,7 @@ class TestSysModulesBypass:
     @pytest.mark.asyncio
     async def test_sys_modules_access_blocked(self):
         """sys.modules['os'].system('id') — classic CTF bypass."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
         store = MagicMock()
         store.evolve_skill = AsyncMock()
         guard = SkillGuard(store=store)
@@ -614,7 +614,7 @@ class TestSysModulesBypass:
     @pytest.mark.asyncio
     async def test_sys_settrace_blocked(self):
         """sys.settrace() can hijack execution flow."""
-        from openspace.skill_engine.skill_guard import SkillGuard
+        from scion.skill_engine.skill_guard import SkillGuard
         store = MagicMock()
         store.evolve_skill = AsyncMock()
         guard = SkillGuard(store=store)

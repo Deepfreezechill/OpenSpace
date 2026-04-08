@@ -1,4 +1,4 @@
-"""Tests for openspace.mcp.server — Epic 4.9 extraction."""
+"""Tests for scion.mcp.server — Epic 4.9 extraction."""
 from __future__ import annotations
 
 import sys
@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 try:
-    from openspace.mcp.server import (
+    from scion.mcp.server import (
         _MCPSafeStdout,
         _cleanup_file_handles,
         create_mcp_app,
@@ -18,7 +18,7 @@ try:
 except ImportError:
     _HAS_MODULE = False
 
-pytestmark = pytest.mark.skipif(not _HAS_MODULE, reason="openspace.mcp.server not importable")
+pytestmark = pytest.mark.skipif(not _HAS_MODULE, reason="scion.mcp.server not importable")
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +129,7 @@ class TestCleanupFileHandles:
     """Verify cleanup properly closes handles."""
 
     def test_cleanup_closes_stderr_file(self):
-        import openspace.mcp.server as srv
+        import scion.mcp.server as srv
         mock_file = MagicMock()
         original = srv._stderr_file
         try:
@@ -142,7 +142,7 @@ class TestCleanupFileHandles:
 
     def test_cleanup_noop_when_none(self):
         """Should not raise when handles are already None."""
-        import openspace.mcp.server as srv
+        import scion.mcp.server as srv
         original_stderr = srv._stderr_file
         original_handler = srv._log_file_handler
         try:

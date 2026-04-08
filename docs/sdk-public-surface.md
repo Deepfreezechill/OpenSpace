@@ -55,7 +55,7 @@ Authorization: Bearer <token>
 ```
 
 **Token lifecycle:**
-1. Admin generates token (min 32 chars) and sets `OPENSPACE_MCP_BEARER_TOKEN`
+1. Admin generates token (min 32 chars) and sets `SCION_MCP_BEARER_TOKEN`
 2. SDK client includes token in every request
 3. Server validates via constant-time HMAC comparison
 4. Invalid/missing token → 401 immediately (fail-closed)
@@ -81,9 +81,9 @@ Authorization: Bearer <token>
 
 | Scope | Default | Env Var |
 |-------|---------|---------|
-| Per-token | 60 req/min | `OPENSPACE_RATE_LIMIT_PER_TOKEN` |
-| Per-IP | 120 req/min | `OPENSPACE_RATE_LIMIT_PER_IP` |
-| Window | 60 seconds | `OPENSPACE_RATE_LIMIT_WINDOW` |
+| Per-token | 60 req/min | `SCION_RATE_LIMIT_PER_TOKEN` |
+| Per-IP | 120 req/min | `SCION_RATE_LIMIT_PER_IP` |
+| Window | 60 seconds | `SCION_RATE_LIMIT_WINDOW` |
 
 **Behavior on limit:**
 - HTTP 429 with `Retry-After` header
@@ -187,17 +187,17 @@ class HealthStatus:
 
 | Type | Module | Description |
 |------|--------|-------------|
-| `SkillIdentity` | `openspace.domain.types` | Skill ID + version |
-| `SkillManifest` | `openspace.domain.types` | Full skill metadata |
-| `ToolDescriptor` | `openspace.domain.types` | Tool name + schema |
-| `ToolCallResult` | `openspace.domain.types` | Tool execution result |
-| `SandboxPolicy` | `openspace.domain.types` | Security policy config |
+| `SkillIdentity` | `scion.domain.types` | Skill ID + version |
+| `SkillManifest` | `scion.domain.types` | Full skill metadata |
+| `ToolDescriptor` | `scion.domain.types` | Tool name + schema |
+| `ToolCallResult` | `scion.domain.types` | Tool execution result |
+| `SandboxPolicy` | `scion.domain.types` | Security policy config |
 
 ---
 
 ## SDK Client Interface (Python)
 
-> Implementation in Phase 6 (`openspace-sdk` package)
+> Implementation in Phase 6 (`scion-sdk` package)
 
 ```python
 class SkillGuardClient:

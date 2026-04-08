@@ -1,6 +1,6 @@
-# OpenSpace Frontend
+# Scion Frontend
 
-A dashboard frontend for the OpenSpace, providing skill browsing, lineage visualization, and workflow inspection.
+A dashboard frontend for Scion, providing skill browsing, lineage visualization, and workflow inspection.
 
 ## Prerequisites
 
@@ -34,10 +34,10 @@ npm install
 
 ```bash
 # option A – CLI entry point
-openspace-dashboard --host 127.0.0.1 --port 7788
+scion-dashboard --host 127.0.0.1 --port 7788
 
 # option B – from the repo root
-python -m openspace.dashboard_server --host 127.0.0.1 --port 7788
+python -m scion.dashboard_server --host 127.0.0.1 --port 7788
 ```
 
 > Requires Python ≥ 3.12 with `flask` installed.
@@ -56,7 +56,7 @@ Once `.env` is configured and dependencies are installed, you only need:
 
 ```bash
 # terminal 1 – backend
-openspace-dashboard --host 127.0.0.1 --port 7788
+scion-dashboard --host 127.0.0.1 --port 7788
 
 # terminal 2 – frontend
 cd frontend

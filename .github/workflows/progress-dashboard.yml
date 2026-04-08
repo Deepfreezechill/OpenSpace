@@ -39,9 +39,9 @@ jobs:
             const overallPct = grandTotal > 0 ? Math.round((totalClosed / grandTotal) * 100) : 0;
             const overallBar = '█'.repeat(Math.floor(overallPct / 5)) + '░'.repeat(20 - Math.floor(overallPct / 5));
 
-            const report = `# 📊 OpenSpace Upgrade — Progress Dashboard
+            const report = `# 📊 Scion Upgrade — Progress Dashboard
 
-> Auto-generated: ${new Date().toISOString().split('T')[0]} | [View Project Board](https://github.com/Deepfreezechill/OpenSpace/projects)
+> Auto-generated: ${new Date().toISOString().split('T')[0]} | [View Project Board](https://github.com/Deepfreezechill/scion/projects)
 
 ## Overall: ${overallPct}% Complete
 \`\`\`

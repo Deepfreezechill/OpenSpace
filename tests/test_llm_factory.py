@@ -1,4 +1,4 @@
-"""Tests for LLMFactory — extracted LLM client creation from OpenSpace."""
+"""Tests for LLMFactory — extracted LLM client creation from Scion."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import pytest
 from unittest.mock import MagicMock, patch, call
 
 try:
-    from openspace.tool_layer import OpenSpace, OpenSpaceConfig
-    from openspace.llm_factory import LLMFactory
+    from scion.tool_layer import Scion, ScionConfig
+    from scion.llm_factory import LLMFactory
 
     _HAS_TOOL_LAYER = True
 except Exception:
@@ -22,7 +22,7 @@ pytestmark = pytest.mark.skipif(not _HAS_TOOL_LAYER, reason="tool_layer deps una
 
 @pytest.fixture
 def config():
-    return OpenSpaceConfig(
+    return ScionConfig(
         llm_model="openrouter/anthropic/claude-sonnet-4.5",
         llm_enable_thinking=True,
         llm_timeout=60.0,
@@ -35,7 +35,7 @@ def config():
 
 @pytest.fixture
 def minimal_config():
-    return OpenSpaceConfig()
+    return ScionConfig()
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ class TestLLMFactoryInit:
 class TestCreateMain:
 
     def test_creates_llm_client(self, config):
-        with patch("openspace.llm_factory.LLMClient") as MockLLM:
+        with patch("scion.llm_factory.LLMClient") as MockLLM:
             mock_client = MagicMock()
             MockLLM.return_value = mock_client
 
@@ -72,7 +72,7 @@ class TestCreateMain:
             assert factory.llm_client is mock_client
 
     def test_passes_all_config_fields(self, config):
-        with patch("openspace.llm_factory.LLMClient") as MockLLM:
+        with patch("scion.llm_factory.LLMClient") as MockLLM:
             MockLLM.return_value = MagicMock()
 
             factory = LLMFactory(config=config)
@@ -88,7 +88,7 @@ class TestCreateMain:
             )
 
     def test_uses_defaults_when_minimal_config(self, minimal_config):
-        with patch("openspace.llm_factory.LLMClient") as MockLLM:
+        with patch("scion.llm_factory.LLMClient") as MockLLM:
             MockLLM.return_value = MagicMock()
 
             factory = LLMFactory(config=minimal_config)
@@ -103,7 +103,7 @@ class TestCreateMain:
             )
 
     def test_create_main_twice_replaces_client(self, config):
-        with patch("openspace.llm_factory.LLMClient") as MockLLM:
+        with patch("scion.llm_factory.LLMClient") as MockLLM:
             first = MagicMock()
             second = MagicMock()
             MockLLM.side_effect = [first, second]
@@ -122,7 +122,7 @@ class TestCreateMain:
 class TestCreateToolRetrieval:
 
     def test_creates_when_model_configured(self, config):
-        with patch("openspace.llm_factory.LLMClient") as MockLLM:
+        with patch("scion.llm_factory.LLMClient") as MockLLM:
             mock_client = MagicMock()
             MockLLM.return_value = mock_client
 
@@ -139,7 +139,7 @@ class TestCreateToolRetrieval:
         assert factory.tool_retrieval_llm is None
 
     def test_passes_correct_config(self, config):
-        with patch("openspace.llm_factory.LLMClient") as MockLLM:
+        with patch("scion.llm_factory.LLMClient") as MockLLM:
             MockLLM.return_value = MagicMock()
 
             factory = LLMFactory(config=config)
@@ -155,7 +155,7 @@ class TestCreateToolRetrieval:
     def test_inherits_llm_kwargs(self, config):
         """Tool retrieval LLM inherits credentials from llm_kwargs."""
         config.llm_kwargs = {"api_key": "sk-shared", "api_base": "https://custom"}
-        with patch("openspace.llm_factory.LLMClient") as MockLLM:
+        with patch("scion.llm_factory.LLMClient") as MockLLM:
             MockLLM.return_value = MagicMock()
 
             factory = LLMFactory(config=config)
@@ -175,7 +175,7 @@ class TestCreateToolRetrieval:
 
     def test_create_tool_retrieval_twice_replaces(self, config):
         """Second call replaces the tool retrieval client."""
-        with patch("openspace.llm_factory.LLMClient") as MockLLM:
+        with patch("scion.llm_factory.LLMClient") as MockLLM:
             first, second = MagicMock(), MagicMock()
             MockLLM.side_effect = [first, second]
 
@@ -194,7 +194,7 @@ class TestErrorHandling:
 
     def test_create_main_exception_propagates(self, config):
         """LLMClient constructor failure propagates, client stays None."""
-        with patch("openspace.llm_factory.LLMClient", side_effect=RuntimeError("boom")):
+        with patch("scion.llm_factory.LLMClient", side_effect=RuntimeError("boom")):
             factory = LLMFactory(config=config)
             with pytest.raises(RuntimeError, match="boom"):
                 factory.create_main()
@@ -202,16 +202,16 @@ class TestErrorHandling:
 
 
 # ---------------------------------------------------------------------------
-# OpenSpace backward compatibility
+# Scion backward compatibility
 # ---------------------------------------------------------------------------
 
-class TestOpenSpaceDelegation:
+class TestScionDelegation:
 
-    def test_openspace_has_llm_factory_attr(self):
-        os_instance = OpenSpace()
+    def test_scion_has_llm_factory_attr(self):
+        os_instance = Scion()
         assert hasattr(os_instance, "_llm_factory")
 
     def test_llm_client_still_accessible(self):
-        os_instance = OpenSpace()
+        os_instance = Scion()
         assert hasattr(os_instance, "_llm_client")
         assert os_instance._llm_client is None

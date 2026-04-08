@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from openspace.auth.bearer import (
+from scion.auth.bearer import (
     BEARER_TOKEN_ENV,
     MIN_TOKEN_LENGTH,
     BearerTokenMiddleware,
@@ -217,18 +217,18 @@ class TestRunMcpServerFailClosed:
 
     def test_sse_without_token_exits(self, monkeypatch):
         monkeypatch.delenv(BEARER_TOKEN_ENV, raising=False)
-        monkeypatch.setattr(sys, "argv", ["openspace-mcp", "--transport", "sse"])
+        monkeypatch.setattr(sys, "argv", ["scion-mcp", "--transport", "sse"])
         with pytest.raises(SystemExit) as exc_info:
-            from openspace.mcp_server import run_mcp_server
+            from scion.mcp_server import run_mcp_server
 
             run_mcp_server()
         assert exc_info.value.code == 1
 
     def test_sse_with_weak_token_exits(self, monkeypatch):
         monkeypatch.setenv(BEARER_TOKEN_ENV, "tooshort")
-        monkeypatch.setattr(sys, "argv", ["openspace-mcp", "--transport", "sse"])
+        monkeypatch.setattr(sys, "argv", ["scion-mcp", "--transport", "sse"])
         with pytest.raises(SystemExit) as exc_info:
-            from openspace.mcp_server import run_mcp_server
+            from scion.mcp_server import run_mcp_server
 
             run_mcp_server()
         assert exc_info.value.code == 1
@@ -238,10 +238,10 @@ class TestRunMcpServerFailClosed:
         monkeypatch.setattr(
             sys,
             "argv",
-            ["openspace-mcp", "--transport", "streamable-http"],
+            ["scion-mcp", "--transport", "streamable-http"],
         )
         with pytest.raises(SystemExit) as exc_info:
-            from openspace.mcp_server import run_mcp_server
+            from scion.mcp_server import run_mcp_server
 
             run_mcp_server()
         assert exc_info.value.code == 1

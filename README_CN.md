@@ -1,10 +1,10 @@
 <div align="center">
 
 <picture>
-    <img src="assets/logo.png" width="320px" style="border: none; box-shadow: none;" alt="OpenSpace Logo">
+    <img src="assets/logo.png" width="320px" style="border: none; box-shadow: none;" alt="Scion Logo">
 </picture>
 
-## ✨ OpenSpace：让你的 Agent 更聪明、更省钱、自我进化 ✨
+## ✨ Scion：让你的 Agent 更聪明、更省钱、自我进化 ✨
 
 | 🔋 **Token 用量减少 46%** | **💰 6 小时赚取 $11K** | 🧬 **Skill 自我进化** | 🌐 **Agent 经验共享** |
 
@@ -15,7 +15,7 @@
 
 **一条命令，进化你所有的 AI Agent**：OpenClaw、nanobot、Claude Code、Codex、Cursor 等
 
-<img src="assets/cli-typing.gif" width="500px" alt="openspace --query your task">
+<img src="assets/cli-typing.gif" width="500px" alt="scion --query your task">
 
 </div>
 
@@ -28,13 +28,13 @@
 - **❌ 重复犯下高代价的错误** - 如何在 Agent 之间共享解决方案，而非反复进行同样昂贵的探索和犯同样的错？
 - **❌ Skill 质量差且不可靠** - 当工具和 API 持续演变时，如何保证 Skill 的可靠性——同时确保社区贡献的 Skill 达到严格的质量标准？
 
-## 🎯 什么是 OpenSpace？
+## 🎯 什么是 Scion？
 
 **🚀 🚀 一个自我进化引擎，让每一次任务都能使每个 Agent 变得更聪明、更高效。**
 
 https://github.com/user-attachments/assets/c50f70ab-f6db-47bf-9498-3210c0f0abae
 
-OpenSpace 以 Skill 的形式接入任意 Agent，并赋予其三大超能力：
+Scion 以 Skill 的形式接入任意 Agent，并赋予其三大超能力：
 
 ### 🧬 自我进化
 Skill 能够自动学习并持续提升
@@ -72,15 +72,15 @@ Skill 能够自动学习并持续提升
 - 失败模式反复重演，缺乏学习机制
 - 知识封锁在单个 Agent 内
 
-**✅ OpenSpace 赋能的 Agent**
+**✅ Scion 赋能的 Agent**
 - 多层监控捕捉问题并自动触发修复
 - 成功的工作流转化为可复用、可共享的 Skill
 - 一个 Agent 学到有用的东西，所有 Agent 即刻获得
 
-### 📊 OpenSpace：让你的 Agent 成为能赚钱的同事
+### 📊 Scion：让你的 Agent 成为能赚钱的同事
 
 **🎯 真实世界的硬核结果**
-在 6 个行业的 50 项专业任务（**📈 [GDPVal 经济基准测试](#-基准测试gdpval)**）上，OpenSpace Agent 使用相同的骨干 LLM（Qwen 3.5-Plus），收入是基线（[ClawWork](https://github.com/HKUDS/ClawWork)）Agent 的 **4.2 倍**，同时通过 Skill 进化节省了 46% 的 Token 开销。
+在 6 个行业的 50 项专业任务（**📈 [GDPVal 经济基准测试](#-基准测试gdpval)**）上，Scion Agent 使用相同的骨干 LLM（Qwen 3.5-Plus），收入是基线（[ClawWork](https://github.com/HKUDS/ClawWork)）Agent 的 **4.2 倍**，同时通过 Skill 进化节省了 46% 的 Token 开销。
 
 <div align="center">
 <img src="assets/benchmark_kpi.png" width="100%" alt="GDPVal 基准测试 — 核心指标" />
@@ -102,11 +102,11 @@ Skill 能够自动学习并持续提升
 <img src="assets/benchmark_task_showcase.png" width="100%" alt="GDPVal 基准测试 — 各类别任务展示" />
 </div>
 
-**OpenSpace 不仅让 Agent 更聪明** —— 更让它们具备经济可行性。真实工作、真实收入、可衡量的成果。
+**Scion 不仅让 Agent 更聪明** —— 更让它们具备经济可行性。真实工作、真实收入、可衡量的成果。
 
-## OpenSpace 自主系统开发案例
+## Scion 自主系统开发案例
 
-**🖥️ [My Daily Monitor](showcase/README.md)** — OpenSpace 赋能你的 Agent 完成大规模系统开发。这个拥有 20 多个实时仪表盘面板的个人行为监控系统完全由 Agent 构建——通过 OpenSpace 从零进化出 60 多项 Skill，展示了自主端到端软件开发能力。
+**🖥️ [My Daily Monitor](showcase/README.md)** — Scion 赋能你的 Agent 完成大规模系统开发。这个拥有 20 多个实时仪表盘面板的个人行为监控系统完全由 Agent 构建——通过 Scion 从零进化出 60 多项 Skill，展示了自主端到端软件开发能力。
 
 <div align="center">
 <img src="assets/my_daily_monitor_dark.png" width="100%" alt="My Daily Monitor – 深色模式" />
@@ -122,7 +122,7 @@ Skill 能够自动学习并持续提升
   - [📊 本地仪表盘](#-本地仪表盘)
 - [📈 基准测试：GDPVal](#-基准测试gdpval)
 - [📊 案例展示：My Daily Monitor](#-案例展示my-daily-monitor)
-- [🏗️ OpenSpace 框架](#️-openspace-框架)
+- [🏗️ Scion 框架](#️-scion-框架)
   - [🧬 自我进化引擎](#-自我进化引擎)
   - [🌐 协作 Skill 社区](#-协作-skill-社区)
 - [🔧 高级配置](#-高级配置)
@@ -134,43 +134,43 @@ Skill 能够自动学习并持续提升
 
 ## ⚡ 快速开始
 
-🌐 **只想看看？** 在 **[open-space.cloud](https://open-space.cloud)** 浏览社区 Skill 和进化谱系——无需安装。
+🌐 **只想看看？** 在 **[scion-skills.dev](https://scion-skills.dev)** 浏览社区 Skill 和进化谱系——无需安装。
 
 ```bash
-git clone https://github.com/Deepfreezechill/OpenSpace.git && cd OpenSpace
+git clone https://github.com/Deepfreezechill/scion.git && cd Scion
 pip install -e .
-openspace-mcp --help   # 验证安装
+scion-mcp --help   # 验证安装
 ```
 
 > [!TIP]
 > **Clone 太慢？** `assets/` 目录包含约 50 MB 的图片文件，导致仓库较大。使用以下轻量方式跳过它：
 > ```bash
-> git clone --filter=blob:none --sparse https://github.com/Deepfreezechill/OpenSpace.git
-> cd OpenSpace
+> git clone --filter=blob:none --sparse https://github.com/Deepfreezechill/scion.git
+> cd Scion
 > git sparse-checkout set '/*' '!assets/'
 > pip install -e .
 > ```
 
 **选择你的路径：**
-- **[路径 A](#-路径-a为你的-agent-接入)** — 将 OpenSpace 接入你的 Agent
-- **[路径 B](#-路径-b作为你的-ai-协作者)** — 直接使用 OpenSpace 作为你的 AI 协作者
+- **[路径 A](#-路径-a为你的-agent-接入)** — 将 Scion 接入你的 Agent
+- **[路径 B](#-路径-b作为你的-ai-协作者)** — 直接使用 Scion 作为你的 AI 协作者
 
 ### 🤖 路径 A：为你的 Agent 接入
 
 适用于任何支持 Skill（`SKILL.md`）的 Agent——[Claude Code](https://docs.anthropic.com/en/docs/claude-code)、[Codex](https://github.com/openai/codex)、[OpenClaw](https://github.com/openclaw/openclaw)、[nanobot](https://github.com/HKUDS/nanobot) 等。
 
-**① 将 OpenSpace 添加到你的 Agent 的 MCP 配置中：**
+**① 将 Scion 添加到你的 Agent 的 MCP 配置中：**
 
 ```json
 {
   "mcpServers": {
-    "openspace": {
-      "command": "openspace-mcp",
+    "scion": {
+      "command": "scion-mcp",
       "toolTimeout": 600,
       "env": {
-        "OPENSPACE_HOST_SKILL_DIRS": "/path/to/your/agent/skills",
-        "OPENSPACE_WORKSPACE": "/path/to/OpenSpace",
-        "OPENSPACE_API_KEY": "sk-xxx (可选，用于云端)"
+        "SCION_HOST_SKILL_DIRS": "/path/to/your/agent/skills",
+        "SCION_WORKSPACE": "/path/to/Scion",
+        "SCION_API_KEY": "sk-xxx (可选，用于云端)"
       }
     }
   }
@@ -183,39 +183,39 @@ openspace-mcp --help   # 验证安装
 **② 将 Skill 复制**到你的 Agent Skill 目录：
 
 ```bash
-cp -r OpenSpace/openspace/host_skills/delegate-task/ /path/to/your/agent/skills/
-cp -r OpenSpace/openspace/host_skills/skill-discovery/ /path/to/your/agent/skills/
+cp -r Scion/scion/host_skills/delegate-task/ /path/to/your/agent/skills/
+cp -r Scion/scion/host_skills/skill-discovery/ /path/to/your/agent/skills/
 ```
 
-完成。这两项 Skill 会教你的 Agent 何时以及如何使用 OpenSpace——无需额外提示。你的 Agent 现在可以自我进化 Skill、执行复杂任务、访问云端 Skill 社区。你也可以添加自定义 Skill——参见 [`openspace/skills/README.md`](openspace/skills/README.md)。
+完成。这两项 Skill 会教你的 Agent 何时以及如何使用 Scion——无需额外提示。你的 Agent 现在可以自我进化 Skill、执行复杂任务、访问云端 Skill 社区。你也可以添加自定义 Skill——参见 [`scion/skills/README.md`](scion/skills/README.md)。
 
 > [!NOTE]
-> **云端社区（可选）：** 在 **[open-space.cloud](https://open-space.cloud)** 注册以获取 `OPENSPACE_API_KEY`，然后将其添加到上面的 `env` 块中。即使没有 API Key，所有本地功能（任务执行、进化、本地 Skill 搜索）也能正常运行。
+> **云端社区（可选）：** 在 **[scion-skills.dev](https://scion-skills.dev)** 注册以获取 `SCION_API_KEY`，然后将其添加到上面的 `env` 块中。即使没有 API Key，所有本地功能（任务执行、进化、本地 Skill 搜索）也能正常运行。
 
-📖 各 Agent 配置（OpenClaw / nanobot）、所有环境变量、高级设置：[`openspace/host_skills/README.md`](openspace/host_skills/README.md)
+📖 各 Agent 配置（OpenClaw / nanobot）、所有环境变量、高级设置：[`scion/host_skills/README.md`](scion/host_skills/README.md)
 
 ### 👤 路径 B：作为你的 AI 协作者
 
-直接使用 OpenSpace——编码、搜索、工具调用等——内置自我进化 Skill 和云端社区。
+直接使用 Scion——编码、搜索、工具调用等——内置自我进化 Skill 和云端社区。
 
 > [!NOTE]
-> 创建 `.env` 文件并填入你的 LLM API 密钥，可选添加 `OPENSPACE_API_KEY` 以访问云端社区（参考 [`openspace/.env.example`](openspace/.env.example)）。
+> 创建 `.env` 文件并填入你的 LLM API 密钥，可选添加 `SCION_API_KEY` 以访问云端社区（参考 [`scion/.env.example`](scion/.env.example)）。
 
 ```bash
 # 交互模式
-openspace
+scion
 
 # 执行任务
-openspace --model "anthropic/claude-sonnet-4-5" --query "Create a monitoring dashboard for my Docker containers"
+scion --model "anthropic/claude-sonnet-4-5" --query "Create a monitoring dashboard for my Docker containers"
 ```
 
-添加自定义 Skill：[`openspace/skills/README.md`](openspace/skills/README.md)。
+添加自定义 Skill：[`scion/skills/README.md`](scion/skills/README.md)。
 
 **Cloud CLI** — 通过命令行管理 Skill：
 
 ```bash
-openspace-download-skill <skill_id>         # 从云端下载 Skill
-openspace-upload-skill /path/to/skill/dir   # 上传 Skill 到云端
+scion-download-skill <skill_id>         # 从云端下载 Skill
+scion-upload-skill /path/to/skill/dir   # 上传 Skill 到云端
 ```
 
 <details>
@@ -223,10 +223,10 @@ openspace-upload-skill /path/to/skill/dir   # 上传 Skill 到云端
 
 ```python
 import asyncio
-from openspace import OpenSpace
+from scion import Scion
 
 async def main():
-    async with OpenSpace() as cs:
+    async with Scion() as cs:
         result = await cs.execute("Analyze GitHub trending repos and create a report")
         print(result["response"])
 
@@ -246,7 +246,7 @@ asyncio.run(main())
 
 ```bash
 # 终端 1：启动后端 API
-openspace-dashboard --port 7788
+scion-dashboard --port 7788
 
 # 终端 2：启动前端开发服务器
 cd frontend
@@ -281,9 +281,9 @@ npm run dev
 
 ## 📈 基准测试：GDPVal
 
-我们在 [GDPVal](https://huggingface.co/datasets/openai/gdpval) 上评估 OpenSpace——该数据集包含 220 项真实世界的专业任务，涵盖 44 个职业——采用 [ClawWork](https://github.com/HKUDS/ClawWork) 评测协议，使用相同的生产力工具和基于 LLM 的评分方式。我们的两阶段设计（Cold Start → Warm Rerun）展示了积累的 Skill 如何随时间降低 Token 消耗。
+我们在 [GDPVal](https://huggingface.co/datasets/openai/gdpval) 上评估 Scion——该数据集包含 220 项真实世界的专业任务，涵盖 44 个职业——采用 [ClawWork](https://github.com/HKUDS/ClawWork) 评测协议，使用相同的生产力工具和基于 LLM 的评分方式。我们的两阶段设计（Cold Start → Warm Rerun）展示了积累的 Skill 如何随时间降低 Token 消耗。
 
-公平基准：OpenSpace 使用 Qwen 3.5-Plus 作为骨干 LLM——与 ClawWork 基线 Agent 完全相同——确保性能差异纯粹来源于 Skill 进化，而非模型能力差异。
+公平基准：Scion 使用 Qwen 3.5-Plus 作为骨干 LLM——与 ClawWork 基线 Agent 完全相同——确保性能差异纯粹来源于 Skill 进化，而非模型能力差异。
 
 真实经济价值：任务涵盖构建工资计算器、准备纳税申报表、起草法律备忘录等——这些都是产生真实 GDP 的专业工作，同时从质量和成本效率两个维度进行评估。
 
@@ -300,7 +300,7 @@ npm run dev
 <img src="assets/benchmark_quality_tokens.png" width="100%" alt="GDPVal 基准测试 — 质量与 Token 效率" />
 </div>
 
-### OpenSpace 能处理哪些真实任务？
+### Scion 能处理哪些真实任务？
 
 50 项 GDPVal 任务涵盖 6 个真实工作类别。
 - **Phase 1（Cold Start）** 按顺序执行全部 50 项任务——每项任务完成后，Skill 积累到共享数据库中。
@@ -325,7 +325,7 @@ npm run dev
 
 ### 进化产出了什么？（165 项 Skill）
 
-在 50 项 Phase 1 任务中，OpenSpace 自主进化出 **165 项 Skill**。突破性发现：这些不仅是领域知识——它们是**鲁棒的执行模式**和**质量保障工作流**。Agent 学会了如何在不完美的真实世界环境中可靠地交付成果。
+在 50 项 Phase 1 任务中，Scion 自主进化出 **165 项 Skill**。突破性发现：这些不仅是领域知识——它们是**鲁棒的执行模式**和**质量保障工作流**。Agent 学会了如何在不完美的真实世界环境中可靠地交付成果。
 
 **关键发现**：大多数 Skill 聚焦于工具可靠性和错误恢复，而非特定任务知识。
 
@@ -357,7 +357,7 @@ npm run dev
 <img src="assets/my_daily_monitor_light.png" width="90%" alt="My Daily Monitor – 浅色模式" />
 </div>
 
-### OpenSpace 如何从零构建它
+### Scion 如何从零构建它
 
 | 阶段 | 发生了什么 | Skill |
 |-------|------------|-------|
@@ -374,25 +374,25 @@ npm run dev
 <img src="assets/my_daily_monitor_evograph.png" width="90%" alt="Skill 进化图谱" />
 </div>
 
-> 每个节点代表 OpenSpace 学习、提取或精炼的一项 Skill。完整的进化历史已在 [`showcase/.openspace/openspace.db`](showcase/.openspace/openspace.db) 中开源——可用任意 SQLite 浏览器加载，探索谱系、差异和质量指标。
+> 每个节点代表 Scion 学习、提取或精炼的一项 Skill。完整的进化历史已在 [`showcase/.scion/scion.db`](showcase/.scion/scion.db) 中开源——可用任意 SQLite 浏览器加载，探索谱系、差异和质量指标。
 
 **完整详情**：[`showcase/README.md`](showcase/README.md)
 
 ---
 
-## 🏗️ OpenSpace 框架
+## 🏗️ Scion 框架
 
 <div align="center">
-<img src="assets/framework.png" width="90%" alt="OpenSpace 框架" />
+<img src="assets/framework.png" width="90%" alt="Scion 框架" />
 </div>
 
 ### 🧬 自我进化引擎
 
-OpenSpace 的核心。Skill 不是静态文件——它们是能够自动选择、应用、监控、分析和进化自身的"活"实体。
+Scion 的核心。Skill 不是静态文件——它们是能够自动选择、应用、监控、分析和进化自身的"活"实体。
 
 #### 🔄 自主与持续进化
 
-- **全生命周期管理**：从发现到应用到进化——全程无需人工干预。无论是否存在匹配的 Skill，OpenSpace 都能完成任务。
+- **全生命周期管理**：从发现到应用到进化——全程无需人工干预。无论是否存在匹配的 Skill，Scion 都能完成任务。
 
 **三种进化模式**：
 - 🔧 FIX — 就地修复损坏或过时的指令。同一 Skill，新版本。
@@ -430,13 +430,13 @@ OpenSpace 的核心。Skill 不是静态文件——它们是能够自动选择�
 
 - **🔐 灵活共享**：可选择公开分享、团队内分享或保持私有。智能搜索帮你找到所需并自动导入。每次进化都有完整 Diff 的谱系追踪。
 
-- **☁️ 协作平台**：open-space.cloud — 注册获取 API 密钥、浏览社区 Skill、管理你的团队。
+- **☁️ 协作平台**：scion-skills.dev — 注册获取 API 密钥、浏览社区 Skill、管理你的团队。
 
 ---
 
 ## 🔧 高级配置
 
-对大多数用户而言，[快速开始](#-快速开始)就是你所需的全部。如需高级选项（环境变量、执行模式、安全策略等），请参见 [`openspace/config/README.md`](openspace/config/README.md)。
+对大多数用户而言，[快速开始](#-快速开始)就是你所需的全部。如需高级选项（环境变量、执行模式、安全策略等），请参见 [`scion/config/README.md`](scion/config/README.md)。
 
 ---
 
@@ -447,11 +447,11 @@ OpenSpace 的核心。Skill 不是静态文件——它们是能够自动选择�
 > **图例**：⚡ 核心模块 &nbsp;|&nbsp; 🧬 Skill 进化 &nbsp;|&nbsp; 🌐 云端 &nbsp;|&nbsp; 🔧 支撑模块
 
 ```
-OpenSpace/
-├── openspace/
-│   ├── tool_layer.py                     # OpenSpace 主类 & OpenSpaceConfig
+Scion/
+├── scion/
+│   ├── tool_layer.py                     # Scion 主类 & ScionConfig
 │   ├── mcp_server.py                     # MCP 服务器（为你的 Agent 提供 4 个工具）
-│   ├── __main__.py                       # CLI 入口（python -m openspace）
+│   ├── __main__.py                       # CLI 入口（python -m scion）
 │   ├── dashboard_server.py               # Web 仪表盘 API 服务器
 │   │
 │   ├── ⚡ agents/                         # Agent 系统
@@ -511,7 +511,7 @@ OpenSpace/
 ├── showcase/                             # My Daily Monitor（60+ 进化 Skill）
 │   ├── my-daily-monitor/                 # 完整应用（零行人工代码）
 │   └── skills/                           # 60+ 进化 Skill 及完整谱系
-├── .openspace/                           # 运行时：embedding 缓存 + Skill 数据库
+├── .scion/                           # 运行时：embedding 缓存 + Skill 数据库
 └── logs/                                 # 执行日志与录制
 ```
 
@@ -521,7 +521,7 @@ OpenSpace/
 
 ## 🤝 贡献与路线图
 
-欢迎贡献！OpenSpace 目前在进化「*如何完成任务 X*」。下一个前沿方向是：**进化 Agent 如何协同完成任务 X**。
+欢迎贡献！Scion 目前在进化「*如何完成任务 X*」。下一个前沿方向是：**进化 Agent 如何协同完成任务 X**。
 
 团队基础设施（可见性、共享、权限）已上线。接下来：
 
@@ -534,7 +534,7 @@ OpenSpace/
 
 ## 🔗 相关项目
 
-OpenSpace 构建于以下开源项目之上。我们衷心感谢其作者和贡献者：
+Scion 构建于以下开源项目之上。我们衷心感谢其作者和贡献者：
 
 - **[AnyTool](https://github.com/HKUDS/AnyTool)** — 面向任意 AI Agent 的即插即用通用工具层
 - **[ClawWork](https://github.com/HKUDS/ClawWork)** — 将 AI 助手转变为真正的 AI 同事
@@ -544,7 +544,7 @@ OpenSpace 构建于以下开源项目之上。我们衷心感谢其作者和贡�
 
 <div align="center">
 
-**🌟 如果 OpenSpace 对你的 Agent 有帮助，请给我们一颗 Star！**
+**🌟 如果 Scion 对你的 Agent 有帮助，请给我们一颗 Star！**
 
 **🧬 让你的 Agent 自我进化 · 🌐 一个共同成长的社区 · 💰 更少 Token，更聪明的 Agent**
 
@@ -553,7 +553,7 @@ OpenSpace 构建于以下开源项目之上。我们衷心感谢其作者和贡�
 ---
 
 <p align="center">
-  <em> ❤️ 感谢访问 ✨ OpenSpace！</em><br><br>
-  <img src="https://visitor-badge.laobi.icu/badge?page_id=Deepfreezechill.OpenSpace&style=for-the-badge&color=00d4ff"
+  <em> ❤️ 感谢访问 ✨ Scion！</em><br><br>
+  <img src="https://visitor-badge.laobi.icu/badge?page_id=Deepfreezechill.Scion&style=for-the-badge&color=00d4ff"
   alt="Views">
 </p>

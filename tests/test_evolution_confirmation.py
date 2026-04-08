@@ -1,4 +1,4 @@
-"""Tests for openspace.skill_engine.evolution.confirmation (Epic 5.4).
+"""Tests for scion.skill_engine.evolution.confirmation (Epic 5.4).
 
 Verifies:
   1. parse_confirmation — JSON, keywords, ambiguous, edge cases
@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from openspace.skill_engine.evolution.confirmation import (
+from scion.skill_engine.evolution.confirmation import (
     _SKILL_CONTENT_MAX_CHARS,
     llm_confirm_evolution,
     parse_confirmation,
@@ -169,7 +169,7 @@ class TestLlmConfirmEvolution:
         evolver._parse_confirmation.side_effect = parse_confirmation
         return evolver
 
-    _RM_PATCH = "openspace.recording.RecordingManager"
+    _RM_PATCH = "scion.recording.RecordingManager"
 
     @pytest.mark.asyncio
     async def test_confirmed_returns_true(self):
@@ -325,7 +325,7 @@ class TestLlmConfirmEvolution:
     @pytest.mark.asyncio
     async def test_recording_truncates_content(self):
         """Recorded messages are truncated to _RECORDING_MAX_CHARS."""
-        from openspace.skill_engine.evolution.confirmation import _RECORDING_MAX_CHARS
+        from scion.skill_engine.evolution.confirmation import _RECORDING_MAX_CHARS
 
         # Create skill content larger than recording limit
         big_content = "x" * (_RECORDING_MAX_CHARS + 5000)
@@ -363,8 +363,8 @@ class TestConstants:
 
     def test_logger_uses_evolver_namespace(self):
         """Logger preserves evolver namespace for log filter compatibility."""
-        from openspace.skill_engine.evolution import confirmation
-        assert confirmation.logger.name == "openspace.skill_engine.evolver"
+        from scion.skill_engine.evolution import confirmation
+        assert confirmation.logger.name == "scion.skill_engine.evolver"
 
 
 # ---------------------------------------------------------------------------
@@ -372,7 +372,7 @@ class TestConstants:
 # ---------------------------------------------------------------------------
 
 try:
-    from openspace.skill_engine.evolver import SkillEvolver
+    from scion.skill_engine.evolver import SkillEvolver
     _HAS_EVOLVER = True
 except ImportError:
     _HAS_EVOLVER = False
@@ -419,7 +419,7 @@ class TestDelegationSeam:
             return_value={"message": {"content": '{"proceed": true}'}}
         )
 
-        with patch("openspace.recording.RecordingManager") as mock_rm:
+        with patch("scion.recording.RecordingManager") as mock_rm:
             mock_rm.record_conversation_setup = AsyncMock()
             mock_rm.record_iteration_context = AsyncMock()
 
@@ -445,7 +445,7 @@ class TestSizeGuard:
         from pathlib import Path
         mod_path = (
             Path(__file__).resolve().parent.parent
-            / "openspace" / "skill_engine" / "evolution" / "confirmation.py"
+            / "scion" / "skill_engine" / "evolution" / "confirmation.py"
         )
         assert mod_path.exists(), f"confirmation.py not found at {mod_path}"
         lines = mod_path.read_text(encoding="utf-8").splitlines()

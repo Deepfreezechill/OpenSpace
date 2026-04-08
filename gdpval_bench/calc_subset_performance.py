@@ -13,7 +13,7 @@ Token pricing per model (from ClawWork configs):
   Gemini 3.1 Pro:input $2.00/1M, output $12.00/1M
   Claude 4.6:    input $3.00/1M, output $15.00/1M
 
-OpenSpace uses qwen3.5-plus → same pricing as ClawWork's Qwen3.5-Plus agent.
+Scion uses qwen3.5-plus → same pricing as ClawWork's Qwen3.5-Plus agent.
 
 Usage:
     python -m gdpval_bench.calc_subset_performance
@@ -64,7 +64,7 @@ AGENT_PRICING = {
     "kimi-k2.5-test-openrouter-10dollar-1": (0.50, 2.80),
     "Gemini 3.1 Pro Preview": (2.00, 12.00),
 }
-# OpenSpace uses qwen3.5-plus, same pricing
+# Scion uses qwen3.5-plus, same pricing
 CS_INPUT_PER_1M = 0.12
 CS_OUTPUT_PER_1M = 0.69
 
@@ -153,7 +153,7 @@ def main():
     task_ids = set(r["task_id"] for r in cs_records)
     n = len(task_ids)
 
-    # OpenSpace per-task lookups (for common-task comparison)
+    # Scion per-task lookups (for common-task comparison)
     cs_pay_by_tid = {}
     cs_score_by_tid = {}
     cs_value_by_tid = {}
@@ -168,7 +168,7 @@ def main():
     cs_avg_q = sum(cs_scores) / len(cs_scores)
     cs_total_value = sum(cs_value_by_tid.values())
 
-    # OpenSpace token cost using same pricing as ClawWork's Qwen3.5-Plus (agent tokens only, excl eval)
+    # Scion token cost using same pricing as ClawWork's Qwen3.5-Plus (agent tokens only, excl eval)
     cs_agent_prompt = sum(r.get("tokens", {}).get("agent_prompt_tokens", 0) for r in cs_records)
     cs_agent_completion = sum(r.get("tokens", {}).get("agent_completion_tokens", 0) for r in cs_records)
     cs_total_prompt = sum(r.get("tokens", {}).get("prompt_tokens", 0) for r in cs_records)
@@ -200,7 +200,7 @@ def main():
     p2_token_cost = calc_token_cost(p2_agent_prompt, p2_agent_completion, CS_INPUT_PER_1M, CS_OUTPUT_PER_1M)
     p2_balance = INITIAL_BALANCE + p2_earned - p2_token_cost
 
-    print(f"OpenSpace run: {RUN_NAME}")
+    print(f"Scion run: {RUN_NAME}")
     print(f"Phase1: {n} tasks (all evaluated), Task Value ${cs_total_value:,.2f}")
     print(f"Phase2: {p2_n} tasks ({len(p2_scores)} evaluated), Task Value ${p2_total_value:,.2f}")
     print()
@@ -246,8 +246,8 @@ def main():
         token_cost = _calc_agent_subset_token_cost(agent_dir, task_ids, agent)
         balance = INITIAL_BALANCE + earned - token_cost
 
-        # Common-task comparison: only tasks assigned to BOTH OpenSpace and this agent
-        common = assigned  # OpenSpace has all 50, so intersection = agent's assigned
+        # Common-task comparison: only tasks assigned to BOTH Scion and this agent
+        common = assigned  # Scion has all 50, so intersection = agent's assigned
         cs_earn_common = sum(cs_pay_by_tid.get(tid, 0) for tid in common)
         cs_value_common = sum(cs_value_by_tid.get(tid, 0) for tid in common)
         cw_earn_common = sum(earn_by_tid.get(tid, 0) for tid in common)
@@ -282,14 +282,14 @@ def main():
                 "common_cw_avgq_eval": cw_avgq_eval_common,
                 "common_cw_avgq_asgn": cw_avgq_asgn_common,
                 "common_cw_scored": len(cw_scores_eval_common),
-                "is_openspace": False,
+                "is_scion": False,
                 "task_count": n,
             }
         )
 
     rows.append(
         {
-            "name": "OpenSpace Phase1",
+            "name": "Scion Phase1",
             "earned": cs_earned,
             "avg_q_eval": cs_avg_q,
             "avg_q_assigned": cs_avg_q,
@@ -302,7 +302,7 @@ def main():
             "common_value": cs_total_value,
             "common_cs_earn": cs_earned,
             "common_cw_earn": cs_earned,
-            "is_openspace": True,
+            "is_scion": True,
             "task_count": n,
         }
     )
@@ -310,7 +310,7 @@ def main():
     if p2_records:
         rows.append(
             {
-                "name": "OpenSpace Phase2",
+                "name": "Scion Phase2",
                 "earned": p2_earned,
                 "avg_q_eval": p2_avg_q,
                 "avg_q_assigned": p2_avg_q,
@@ -323,7 +323,7 @@ def main():
                 "common_value": p2_total_value,
                 "common_cs_earn": p2_earned,
                 "common_cw_earn": p2_earned,
-                "is_openspace": True,
+                "is_scion": True,
                 "task_count": p2_n,
             }
         )
@@ -364,7 +364,7 @@ def main():
         tc = r.get("task_count", r["assigned"])
         tv = r.get("common_value", cs_total_value)
         cap = r["earned"] / tv * 100 if tv else 0
-        marker = " ◀◀◀" if r.get("is_openspace") else ""
+        marker = " ◀◀◀" if r.get("is_scion") else ""
         aq = f"{r['avg_q_eval'] * 100:.1f}%" if r["scored"] else "—"
         print(
             f"  {i + 1:>2} {dn(r['name']):{W}} {tc:>5} ${r['earned']:>9,.2f} ${r['balance']:>9,.2f} ${r['token_cost']:>5,.2f} {cap:>6.1f}%"
@@ -375,7 +375,7 @@ def main():
 
     # ── Token usage note under table 1 ──
     print()
-    print(f"  OpenSpace model: {cs_model}")
+    print(f"  Scion model: {cs_model}")
     tok_save = (1 - p2_total_tokens / cs_total_tokens) * 100 if cs_total_tokens else 0
     ag_save = (1 - p2_agent_tokens / cs_agent_tokens) * 100 if cs_agent_tokens else 0
     tpd_p1 = cs_total_tokens / cs_earned if cs_earned else 0
@@ -389,9 +389,9 @@ def main():
 
     # ═══════════════════════════════════════════════════════
     # Table 2: Head-to-head on common tasks (apple-to-apple)
-    #   Now includes both Phase 1 and Phase 2 OpenSpace results
+    #   Now includes both Phase 1 and Phase 2 Scion results
     # ═══════════════════════════════════════════════════════
-    cw_rows = [r for r in rows if not r.get("is_openspace")]
+    cw_rows = [r for r in rows if not r.get("is_scion")]
 
     # Build Phase 2 per-task lookup for common-task comparison
     p2_pay_tid = {r["task_id"]: r.get("evaluation", {}).get("actual_payment", 0) for r in p2_records}
@@ -414,7 +414,7 @@ def main():
     print(f"  Table 2: Head-to-Head on Common Tasks  (CS model: {cs_model})")
     print("=" * 165)
     print()
-    hdr_cs = "── OpenSpace (P1 │ P2) ──"
+    hdr_cs = "── Scion (P1 │ P2) ──"
     hdr_cw = "── ClawWork Agent ──"
     print(
         f"  {'Agent':{W}} {'Tasks':>5} │"

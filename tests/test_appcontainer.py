@@ -21,15 +21,15 @@ from typing import Any
 
 import pytest
 
-from openspace.app.container import AppContainer
-from openspace.app.factory import (
+from scion.app.container import AppContainer
+from scion.app.factory import (
     _StubLLM,
     _StubSkillStore,
     _StubTelemetry,
     build_container,
     build_test_container,
 )
-from openspace.domain.ports import LLMClientPort, SkillStorePort, TelemetryPort
+from scion.domain.ports import LLMClientPort, SkillStorePort, TelemetryPort
 
 # ══════════════════════════════════════════════════════════════════════
 # Container construction
