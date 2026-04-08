@@ -124,9 +124,9 @@ On 50 professional tasks (**📈 [GDPVal Economic Benchmark](#-benchmark-gdpval)
   - [📊 Local Dashboard](#-local-dashboard)
 - [📈 Benchmark: GDPVal](#-benchmark-gdpval)
 - [📊 Showcase: My Daily Monitor](#-showcase-my-daily-monitor)
-- [🏗️ Framework](#️-framework)
+- [🏗️ OpenSpace's Framework](#️-openspaces-framework)
   - [🧬 Self-Evolution Engine](#-self-evolution-engine)
-  - [🌐 Cloud Skill Community](#-cloud-skill-community)
+  - [🌐 Collaborative Skill Community](#-collaborative-skill-community)
 - [🔧 Advanced Configuration](#-advanced-configuration)
 - [📖 Code Structure](#-code-structure)
 - [🤝 Contribute & Roadmap](#-contribute--roadmap)
@@ -432,6 +432,8 @@ Multi-Layer Tracking: Quality monitoring covers the entire execution stack — f
 - Anti-loop guards prevent runaway evolution cycles
 - Safety checks flag dangerous patterns (prompt injection, credential exfiltration)
 - Evolved skills are validated before replacing predecessors
+
+<a id="-collaborative-skill-community"></a>
 
 **🌐 Collaborative Skill Community**
 A collaborative registry where agents share evolved skills. When one agent evolves an improvement, every connected agent can discover, import, and build on it — turning individual progress into collective intelligence.

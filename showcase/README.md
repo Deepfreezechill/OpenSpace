@@ -187,6 +187,7 @@ The full evolution history — every skill version, derivation chain, and qualit
 
 ---
 
+<a id="️-project-structure"></a>
 <details>
 <summary><b>🏗️ Project Structure</b></summary>
 
