@@ -6,6 +6,7 @@ that are executed inside a sandbox environment (supports any BaseSandbox impleme
 """
 
 import asyncio
+import shlex
 import sys
 import time
 
@@ -168,15 +169,15 @@ class SandboxConnector(MCPBaseConnector):
         host = self._sandbox.get_host(self.port)
         self.base_url = f"https://{host}".rstrip("/")
 
-        # Append command with args
-        command = f"{self.user_command} {' '.join(self.user_args)}"
+        # Append command with args (quote for shell safety)
+        command = f"{shlex.quote(self.user_command)} {' '.join(shlex.quote(a) for a in self.user_args)}"
 
         # Construct the full command with supergateway
         full_command = f'{self.supergateway_cmd_parts} \
-            --base-url {self.base_url} \
+            --base-url {shlex.quote(self.base_url)} \
             --port {self.port} \
             --cors \
-            --stdio "{command}"'
+            --stdio {shlex.quote(command)}'
 
         logger.debug(f"Full command: {full_command}")
 

@@ -17,14 +17,13 @@ dependencies = [
     "litellm>=1.83.0,<2",  # >=1.83.0 fixes CVE-2026-35029 + CVE-2026-35030; skips PYSEC-2026-2 (1.82.7/1.82.8 malicious)
     "python-dotenv>=1.0.0,<2",
     "openai>=1.0.0,<3",
-    "jsonschema>=4.25.0,<5",
+    "jsonschema>=4.20.0,<5",  # >=4.20.0 for compatibility with litellm's pinned version
     "mcp>=1.0.0,<2",
     "anthropic>=0.71.0,<1",
     "pillow>=11.0.0,<13",
     "numpy>=1.24.0,<3",
     "colorama>=0.4.6,<1",
     "flask>=3.1.0,<4",
-    "pyautogui>=0.9.54,<1",
     "pydantic>=2.12.0,<3",
     "prometheus-client>=0.21.0,<1",
     "requests>=2.32.0,<3",
@@ -60,8 +59,12 @@ dev = [
     "mypy>=1.0.0,<2",
 ]
 
+gui = [
+    "pyautogui>=0.9.54,<1",
+]
+
 all = [
-    "scion-skills[macos,linux,windows,dev]",
+    "scion-skills[dev,gui]",
 ]
 
 [project.urls]

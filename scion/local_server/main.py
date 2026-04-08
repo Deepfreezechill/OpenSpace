@@ -11,7 +11,10 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 
-import pyautogui
+try:
+    import pyautogui
+except (ImportError, Exception):
+    pyautogui = None  # Unavailable on headless systems; GUI endpoints will return 503
 from flask import Flask, abort, jsonify, request, send_file
 
 from scion.local_server.feature_checker import FeatureChecker
@@ -25,19 +28,17 @@ platform_name = platform.system()
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # 500MB
 
-pyautogui.PAUSE = 0
-if platform_name == "Darwin":
-    pyautogui.DARWIN_CATCH_UP_TIME = 0
+if pyautogui is not None:
+    pyautogui.PAUSE = 0
+    if platform_name == "Darwin":
+        pyautogui.DARWIN_CATCH_UP_TIME = 0
 
 logger = Logger.get_logger(__name__)
 
 TIMEOUT = 1800
 recording_process = None
 
-if platform_name == "Windows":
-    recording_path = os.path.join(os.environ.get("TEMP", "C:\\Temp"), "recording.mp4")
-else:
-    recording_path = "/tmp/recording.mp4"
+recording_path = os.path.join(tempfile.gettempdir(), "recording.mp4")
 
 accessibility_helper = AccessibilityHelper()
 screenshot_helper = ScreenshotHelper()
@@ -408,10 +409,7 @@ def run_python():
         return jsonify({"status": "error", "message": "Code not supplied!"}), 400
 
     # Generate unique filename
-    if platform_name == "Windows":
-        temp_filename = os.path.join(tempfile.gettempdir(), f"python_exec_{uuid.uuid4().hex}.py")
-    else:
-        temp_filename = f"/tmp/python_exec_{uuid.uuid4().hex}.py"
+    temp_filename = os.path.join(tempfile.gettempdir(), f"python_exec_{uuid.uuid4().hex}.py")
 
     try:
         with open(temp_filename, "w") as f:
@@ -506,10 +504,7 @@ def run_bash_script():
         return jsonify({"status": "error", "message": "Script not supplied!"}), 400
 
     # Generate unique filename
-    if platform_name == "Windows":
-        temp_filename = os.path.join(tempfile.gettempdir(), f"bash_exec_{uuid.uuid4().hex}.sh")
-    else:
-        temp_filename = f"/tmp/bash_exec_{uuid.uuid4().hex}.sh"
+    temp_filename = os.path.join(tempfile.gettempdir(), f"bash_exec_{uuid.uuid4().hex}.sh")
 
     try:
         # Wrap script with conda activation if needed
@@ -908,8 +903,13 @@ def upload_file():
         # Ensure directory exists
         os.makedirs(target_path, exist_ok=True)
 
+        # Sanitize filename to prevent path traversal
+        safe_filename = os.path.basename(file.filename)
+        if not safe_filename:
+            return jsonify({"status": "error", "message": "Invalid filename"}), 400
+
         # Save file
-        file_path = os.path.join(target_path, file.filename)
+        file_path = os.path.join(target_path, safe_filename)
         file.save(file_path)
 
         logger.info(f"File uploaded successfully: {file_path}")
