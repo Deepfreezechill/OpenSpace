@@ -10,7 +10,7 @@ if _TYPE_CHECKING:
     from openspace.tool_layer import OpenSpace as OpenSpace
     from openspace.tool_layer import OpenSpaceConfig as OpenSpaceConfig
 
-__version__ = "0.1.0"
+__version__ = "2.0.0"
 
 __all__ = [
     # Version

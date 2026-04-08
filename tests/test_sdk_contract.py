@@ -351,7 +351,7 @@ class TestHealthContract:
     def test_health_fields(self) -> None:
         health = HealthStatus(
             status="healthy",
-            version="0.1.0",
+            version="2.0.0",
             initialized=True,
             backends=["shell", "mcp"],
         )

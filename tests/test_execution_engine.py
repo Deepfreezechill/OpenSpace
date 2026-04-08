@@ -71,7 +71,11 @@ def mock_recording_manager():
     rm.recording_status = False
     rm.trajectory_dir = "/tmp/traj"
     rm.task_id = ""
-    rm.start = AsyncMock()
+
+    async def _start():
+        rm.recording_status = True
+
+    rm.start = AsyncMock(side_effect=_start)
     rm.stop = AsyncMock()
     rm.add_metadata = AsyncMock()
     rm.save_execution_outcome = AsyncMock()

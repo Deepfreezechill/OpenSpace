@@ -1,16 +1,15 @@
 # 🔒 Phase Gate Enforcement Architecture
 
 > **Classification:** Security-Critical Infrastructure
-> **Status:** DRAFT — Pending /8eyes Security Audit
-> **Author:** /collab Security & Enforcement Lead
-> **Pattern Lineage:** eight-eyes/circuit_breaker → squad-audit/label-enforce → openspace/phase-gates
+> **Status:** Stable
+> **Pattern Lineage:** circuit_breaker → label-enforce → openspace/phase-gates
 
 ---
 
 ## Executive Summary
 
 A **fail-closed enforcement system** that makes it **technically impossible** to merge
-out-of-phase code into the openspace-upgrade repository without explicit, audited admin override.
+out-of-phase code into the OpenSpace repository without explicit, audited admin override.
 
 **Key guarantee:** If the enforcement system crashes, is misconfigured, or encounters any
 unexpected state — the merge is BLOCKED, not allowed.
@@ -293,7 +292,7 @@ branches. The enforcement Action provides equivalent protection with zero branch
 
 ## 6. Failure Mode Analysis
 
-Inspired by eight-eyes circuit breaker: every failure mode is enumerated and handled.
+Inspired by the circuit breaker pattern: every failure mode is enumerated and handled.
 
 | Failure | Category | System Behavior | Recovery |
 |---------|----------|-----------------|----------|
@@ -308,9 +307,9 @@ Inspired by eight-eyes circuit breaker: every failure mode is enumerated and han
 | Circular dependency in config | Config | FAIL: "circular dep detected" | Fix config |
 | New phase added, config not updated | Config | FAIL: "milestone X not in config" | Update config |
 
-**Key insight from eight-eyes:** The circuit breaker pattern (HEALTHY → RETRY → CIRCUIT_OPEN)
+**Key insight from circuit breaker design:** The circuit breaker pattern (HEALTHY → RETRY → CIRCUIT_OPEN)
 maps to our GitHub Actions retry strategy. We retry API calls 3x with backoff before failing.
-But unlike eight-eyes, we don't need AWAITING_USER because the "user" (developer) is already
+Unlike a full circuit breaker, we don't need AWAITING_USER because the "user" (developer) is already
 present — they see the failed check and can re-run it.
 
 ## 7. Security Considerations

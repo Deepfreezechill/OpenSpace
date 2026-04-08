@@ -12,8 +12,6 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-FCE7D6.svg)](https://www.python.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-FFF4D6.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-C1E5F5.svg)](https://opensource.org/licenses/MIT/)
-[![Feishu](https://img.shields.io/badge/Feishu-Group-E9DBFC?style=flat&logo=larksuite&logoColor=white)](./COMMUNICATION.md)
-[![WeChat](https://img.shields.io/badge/WeChat-Group-C5EAB4?style=flat&logo=wechat&logoColor=white)](./COMMUNICATION.md)
 
 **一条命令，进化你所有的 AI Agent**：OpenClaw、nanobot、Claude Code、Codex、Cursor 等
 
@@ -124,9 +122,9 @@ Skill 能够自动学习并持续提升
   - [📊 本地仪表盘](#-本地仪表盘)
 - [📈 基准测试：GDPVal](#-基准测试gdpval)
 - [📊 案例展示：My Daily Monitor](#-案例展示my-daily-monitor)
-- [🏗️ 框架](#️-框架)
+- [🏗️ OpenSpace 框架](#️-openspace-框架)
   - [🧬 自我进化引擎](#-自我进化引擎)
-  - [🌐 云端 Skill 社区](#-云端-skill-社区)
+  - [🌐 协作 Skill 社区](#-协作-skill-社区)
 - [🔧 高级配置](#-高级配置)
 - [📖 代码结构](#-代码结构)
 - [🤝 贡献与路线图](#-贡献与路线图)
@@ -139,7 +137,7 @@ Skill 能够自动学习并持续提升
 🌐 **只想看看？** 在 **[open-space.cloud](https://open-space.cloud)** 浏览社区 Skill 和进化谱系——无需安装。
 
 ```bash
-git clone https://github.com/HKUDS/OpenSpace.git && cd OpenSpace
+git clone https://github.com/Deepfreezechill/OpenSpace.git && cd OpenSpace
 pip install -e .
 openspace-mcp --help   # 验证安装
 ```
@@ -147,7 +145,7 @@ openspace-mcp --help   # 验证安装
 > [!TIP]
 > **Clone 太慢？** `assets/` 目录包含约 50 MB 的图片文件，导致仓库较大。使用以下轻量方式跳过它：
 > ```bash
-> git clone --filter=blob:none --sparse https://github.com/HKUDS/OpenSpace.git
+> git clone --filter=blob:none --sparse https://github.com/Deepfreezechill/OpenSpace.git
 > cd OpenSpace
 > git sparse-checkout set '/*' '!assets/'
 > pip install -e .
@@ -425,6 +423,8 @@ OpenSpace 的核心。Skill 不是静态文件——它们是能够自动选择�
 - 安全检查标记危险模式（Prompt Injection、凭证窃取）
 - 进化后的 Skill 经验证后才替换前代
 
+<a id="-协作-skill-社区"></a>
+
 **🌐 协作 Skill 社区**
 一个协作式注册中心，Agent 在此共享进化后的 Skill。当一个 Agent 完成改进，所有连接的 Agent 都可以发现、导入并在此基础上构建——将个体进步转化为集体智慧。
 
@@ -554,6 +554,6 @@ OpenSpace 构建于以下开源项目之上。我们衷心感谢其作者和贡�
 
 <p align="center">
   <em> ❤️ 感谢访问 ✨ OpenSpace！</em><br><br>
-  <img src="https://visitor-badge.laobi.icu/badge?page_id=HKUDS.OpenSpace&style=for-the-badge&color=00d4ff"
+  <img src="https://visitor-badge.laobi.icu/badge?page_id=Deepfreezechill.OpenSpace&style=for-the-badge&color=00d4ff"
   alt="Views">
 </p>

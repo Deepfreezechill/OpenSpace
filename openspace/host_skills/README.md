@@ -8,7 +8,7 @@ This guide covers **agent-specific setup** for integrating OpenSpace. For instal
 |------------|-------------|
 | **[nanobot](https://github.com/HKUDS/nanobot)** | [Setup for nanobot](#setup-for-nanobot) |
 | **[openclaw](https://github.com/openclaw/openclaw)** | [Setup for openclaw](#setup-for-openclaw) |
-| **Other agents** | Follow the [generic setup](../../README.md#-path-a-empower-your-agent-with-openspace) in the main README |
+| **Other agents** | Follow the [generic setup](../../README.md#-path-a-for-your-agent) in the main README |
 
 ---
 
@@ -70,7 +70,7 @@ mcporter config add openspace --command "openspace-mcp" \
 
 ## Environment Variables (Agent-Specific)
 
-The three env vars in each agent's setup above are the most important. For the **full env var list**, config files reference, and advanced settings, see the [Configuration Guide](../../README.md#configuration-guide) in the main README.
+The three env vars in each agent's setup above are the most important. For the **full env var list**, config files reference, and advanced settings, see the [Advanced Configuration](../../README.md#-advanced-configuration) in the main README.
 
 <details>
 <summary>What needs <code>OPENSPACE_API_KEY</code>?</summary>

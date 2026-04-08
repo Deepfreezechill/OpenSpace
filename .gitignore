@@ -78,3 +78,12 @@ frontend/node_modules
 .coverage
 htmlcov/
 coverage.xml
+
+# Dev artifacts (PR diffs, scratch files, Windows NUL)
+pr-*-diff*.txt
+NUL.txt
+scratch_*/
+
+# Internal agent workflow docs (not user-facing)
+.github/AGENTS.md
+RUNBOOK.yaml

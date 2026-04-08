@@ -1,4 +1,4 @@
-[![CI](https://github.com/Deepfreezechill/openspace-upgrade/actions/workflows/ci.yml/badge.svg)](https://github.com/Deepfreezechill/openspace-upgrade/actions/workflows/ci.yml)
+[![CI](https://github.com/Deepfreezechill/OpenSpace/actions/workflows/ci.yml/badge.svg)](https://github.com/Deepfreezechill/OpenSpace/actions/workflows/ci.yml)
 
 <div align="center">
 
@@ -13,8 +13,6 @@
 [![Agents](https://img.shields.io/badge/Agents-Claude_Code%20%7C%20Codex%20%7C%20OpenClaw%20%7C%20nanobot%20%7C%20...-99C9BF.svg)](https://modelcontextprotocol.io/)
 [![Python](https://img.shields.io/badge/Python-3.12+-FCE7D6.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-C1E5F5.svg)](https://opensource.org/licenses/MIT/)
-[![Feishu](https://img.shields.io/badge/Feishu-Group-E9DBFC?style=flat&logo=larksuite&logoColor=white)](./COMMUNICATION.md)
-[![WeChat](https://img.shields.io/badge/WeChat-Group-C5EAB4?style=flat&logo=wechat&logoColor=white)](./COMMUNICATION.md)
 [![中文文档](https://img.shields.io/badge/文档-中文版-F5C6C6?style=flat)](./README_CN.md)
 
 **One Command to Evolve All Your AI Agents**: OpenClaw, nanobot, Claude Code, Codex, Cursor and etc.
@@ -126,9 +124,9 @@ On 50 professional tasks (**📈 [GDPVal Economic Benchmark](#-benchmark-gdpval)
   - [📊 Local Dashboard](#-local-dashboard)
 - [📈 Benchmark: GDPVal](#-benchmark-gdpval)
 - [📊 Showcase: My Daily Monitor](#-showcase-my-daily-monitor)
-- [🏗️ Framework](#️-framework)
+- [🏗️ OpenSpace's Framework](#️-openspaces-framework)
   - [🧬 Self-Evolution Engine](#-self-evolution-engine)
-  - [🌐 Cloud Skill Community](#-cloud-skill-community)
+  - [🌐 Collaborative Skill Community](#-collaborative-skill-community)
 - [🔧 Advanced Configuration](#-advanced-configuration)
 - [📖 Code Structure](#-code-structure)
 - [🤝 Contribute & Roadmap](#-contribute--roadmap)
@@ -141,7 +139,7 @@ On 50 professional tasks (**📈 [GDPVal Economic Benchmark](#-benchmark-gdpval)
 🌐 **Just want to explore?** Browse community skills, evolution lineage at **[open-space.cloud](https://open-space.cloud)** — no installation needed.
 
 ```bash
-git clone https://github.com/HKUDS/OpenSpace.git && cd OpenSpace
+git clone https://github.com/Deepfreezechill/OpenSpace.git && cd OpenSpace
 pip install -e .
 openspace-mcp --help   # verify installation
 ```
@@ -149,11 +147,19 @@ openspace-mcp --help   # verify installation
 > [!TIP]
 > **Slow clone?** The `assets/` folder (~50 MB of images) makes the default clone large. Use this lightweight alternative to skip it:
 > ```bash
-> git clone --filter=blob:none --sparse https://github.com/HKUDS/OpenSpace.git
+> git clone --filter=blob:none --sparse https://github.com/Deepfreezechill/OpenSpace.git
 > cd OpenSpace
 > git sparse-checkout set '/*' '!assets/'
 > pip install -e .
 > ```
+
+> [!NOTE]
+> **Windows users:** If `pip install` fails with a path-length error, enable long paths:
+> ```powershell
+> # Run PowerShell as Administrator, then restart your terminal
+> New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+> ```
+> This is a one-time Windows configuration. Linux and macOS are unaffected.
 
 **Choose your path:**
 - **[Path A](#-path-a-for-your-agent)** — Plug OpenSpace into your agent
@@ -427,6 +433,8 @@ Multi-Layer Tracking: Quality monitoring covers the entire execution stack — f
 - Safety checks flag dangerous patterns (prompt injection, credential exfiltration)
 - Evolved skills are validated before replacing predecessors
 
+<a id="-collaborative-skill-community"></a>
+
 **🌐 Collaborative Skill Community**
 A collaborative registry where agents share evolved skills. When one agent evolves an improvement, every connected agent can discover, import, and build on it — turning individual progress into collective intelligence.
 
@@ -551,11 +559,11 @@ OpenSpace builds upon the following open-source projects. We sincerely thank the
 If you find OpenSpace helpful, please consider giving us a star! ⭐
 
 <div align="center">
-  <a href="https://star-history.com/#HKUDS/OpenSpace&Date">
+  <a href="https://star-history.com/#Deepfreezechill/OpenSpace&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=HKUDS/OpenSpace&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=HKUDS/OpenSpace&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=HKUDS/OpenSpace&type=Date" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Deepfreezechill/OpenSpace&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Deepfreezechill/OpenSpace&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Deepfreezechill/OpenSpace&type=Date" />
     </picture>
   </a>
 </div>
@@ -568,6 +576,6 @@ If you find OpenSpace helpful, please consider giving us a star! ⭐
 
 <p align="center">
   <em> ❤️ Thanks for visiting ✨ OpenSpace!</em><br><br>
-  <img src="https://visitor-badge.laobi.icu/badge?page_id=HKUDS.OpenSpace&style=for-the-badge&color=00d4ff"
+  <img src="https://visitor-badge.laobi.icu/badge?page_id=Deepfreezechill.OpenSpace&style=for-the-badge&color=00d4ff"
   alt="Views">
 </p>

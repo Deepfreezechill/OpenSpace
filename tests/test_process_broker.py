@@ -648,7 +648,7 @@ class TestSecurityRegressions:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# R1 Review Fixes — /8eyes + /collab findings
+# R1 Review Fixes — security audit findings
 # ═══════════════════════════════════════════════════════════════════════
 
 
@@ -828,7 +828,7 @@ class TestR1MissingShells:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# R2 Review Fixes — /8eyes + Sonnet findings
+# R2 Review Fixes — adversarial review findings
 # ═══════════════════════════════════════════════════════════════════════
 
 
@@ -934,7 +934,7 @@ class TestR2ConcatenatedBlockedArgs:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# R3 Review Fixes — /collab findings
+# R3 Review Fixes — peer review findings
 # ═══════════════════════════════════════════════════════════════════════
 
 

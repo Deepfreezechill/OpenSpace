@@ -81,7 +81,7 @@ jobs:
     name: Dependency Audit (pip-audit)
     runs-on: ubuntu-latest
     # SECURITY: pip-audit MUST block merge on known vulnerabilities.
-    # Removed continue-on-error per /8eyes security audit finding.
+    # Removed continue-on-error per security audit finding.
     steps:
       - uses: actions/checkout@v4
 

@@ -6,7 +6,7 @@
 # It re-exports the core deps from pyproject.toml.
 # ──────────────────────────────────────────────────────
 
-litellm>=1.70.0,<1.82.7
+litellm>=1.83.0,<2
 python-dotenv>=1.0.0,<2
 openai>=1.0.0,<3
 jsonschema>=4.25.0,<5

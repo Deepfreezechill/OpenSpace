@@ -66,11 +66,11 @@ class TestDependencyPinning:
         self._check_deps(deps, "windows")
 
     def test_litellm_has_security_cap(self, pyproject):
-        """litellm must keep <1.82.7 cap (PYSEC-2026-2)."""
+        """litellm must pin >=1.83.0 (fixes CVE-2026-35029/35030, skips PYSEC-2026-2)."""
         deps = pyproject["project"]["dependencies"]
         litellm_specs = [d for d in deps if d.startswith("litellm")]
         assert len(litellm_specs) == 1
-        assert "<1.82.7" in litellm_specs[0]
+        assert ">=1.83.0" in litellm_specs[0]
 
 
 # ---------------------------------------------------------------------------

@@ -169,7 +169,7 @@ def health_check():
         {
             "status": "ok",
             "service": "OpenSpace Desktop Server",
-            "version": "1.0.0",
+            "version": "2.0.0",
             "platform": platform_name,
             "features": features,
             "timestamp": datetime.now().isoformat(),
