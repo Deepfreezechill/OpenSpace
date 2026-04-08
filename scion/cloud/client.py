@@ -334,6 +334,7 @@ class ScionClient:
         self,
         skill_id: str,
         target_dir: Path,
+        force: bool = False,
     ) -> Dict[str, Any]:
         """Download a cloud skill and extract to a local directory.
 
@@ -344,16 +345,31 @@ class ScionClient:
         record_data = self.fetch_record(skill_id)
         skill_name = record_data.get("name", skill_id)
 
-        skill_dir = target_dir / skill_name
+        # Sanitize: strip path components to prevent traversal
+        safe_name = Path(skill_name).name or skill_id.replace("/", "_").replace("\\", "_")
+        resolved_base = target_dir.resolve()
+        base_prefix = str(resolved_base)
+        if not base_prefix.endswith(os.sep):
+            base_prefix += os.sep
+        skill_dir = (target_dir / safe_name).resolve()
+        # Guard: must be a proper child (os.sep prevents prefix confusion,
+        # identity check prevents Windows dot/space names resolving to base)
+        if skill_dir == resolved_base or not str(skill_dir).startswith(base_prefix):
+            raise ValueError(f"Skill name {skill_name!r} resolves outside target directory")
 
         # Check if already exists locally
         if skill_dir.exists() and (skill_dir / SKILL_FILENAME).exists():
-            return {
-                "status": "already_exists",
-                "skill_id": skill_id,
-                "name": skill_name,
-                "local_path": str(skill_dir),
-            }
+            if force:
+                import shutil
+                shutil.rmtree(skill_dir)
+                logger.info(f"import_skill: --force removed existing {skill_dir}")
+            else:
+                return {
+                    "status": "already_exists",
+                    "skill_id": skill_id,
+                    "name": skill_name,
+                    "local_path": str(skill_dir),
+                }
 
         # 2. Download artifact
         logger.info(f"import_skill: downloading artifact for {skill_id}")
@@ -399,6 +415,10 @@ class ScionClient:
     def _extract_zip(zip_data: bytes, target_dir: Path) -> List[str]:
         """Extract zip bytes to target directory with path traversal protection."""
         extracted: List[str] = []
+        resolved_base = target_dir.resolve()
+        base_prefix = str(resolved_base)
+        if not base_prefix.endswith(os.sep):
+            base_prefix += os.sep
         try:
             with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
                 for info in zf.infolist():
@@ -407,7 +427,9 @@ class ScionClient:
                     clean_name = Path(info.filename).as_posix()
                     if clean_name.startswith("..") or clean_name.startswith("/"):
                         continue
-                    target_path = target_dir / clean_name
+                    target_path = (target_dir / clean_name).resolve()
+                    if not str(target_path).startswith(base_prefix):
+                        continue  # zip entry escapes target — ZipSlip protection
                     target_path.parent.mkdir(parents=True, exist_ok=True)
                     target_path.write_bytes(zf.read(info))
                     extracted.append(clean_name)
@@ -424,8 +446,11 @@ class ScionClient:
                 for info in zf.infolist():
                     if info.is_dir() or info.filename == SKILL_ID_FILENAME:
                         continue
+                    name = Path(info.filename).as_posix()
+                    if name.startswith("..") or name.startswith("/"):
+                        continue
                     try:
-                        files[info.filename] = zf.read(info).decode("utf-8")
+                        files[name] = zf.read(info).decode("utf-8")
                     except (UnicodeDecodeError, KeyError):
                         pass
         except zipfile.BadZipFile:

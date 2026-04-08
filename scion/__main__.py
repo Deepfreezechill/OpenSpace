@@ -457,6 +457,11 @@ async def main():
 
 def run_main():
     """Run main function"""
+    # Ensure UTF-8 output on Windows (prevents charmap codec errors with Unicode chars)
+    if sys.platform == "win32":
+        for stream in (sys.stdout, sys.stderr):
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(encoding="utf-8", errors="replace")
     try:
         exit_code = asyncio.run(main())
         sys.exit(exit_code)

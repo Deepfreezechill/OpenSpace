@@ -36,7 +36,7 @@ def main() -> None:
 
     try:
         client = ScionClient(headers, api_base)
-        result = client.import_skill(args.skill_id, output_base)
+        result = client.import_skill(args.skill_id, output_base, force=args.force)
     except CloudError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)

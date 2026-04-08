@@ -190,6 +190,56 @@ Works with any agent that supports skills (`SKILL.md`) — [Claude Code](https:/
 > [!TIP]
 > Credentials (API key, model) are **auto-detected** from your agent's config; you usually don't need to set them manually.
 
+<details>
+<summary><strong>📋 Agent-Specific Config Locations</strong></summary>
+
+**Claude Code** — Add to `~/.claude/claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "scion": {
+      "command": "scion-mcp",
+      "env": {
+        "SCION_HOST_SKILL_DIRS": "/path/to/your/agent/skills",
+        "SCION_WORKSPACE": "/path/to/Scion"
+      }
+    }
+  }
+}
+```
+
+**GitHub Copilot CLI** — Add to `~/.copilot/mcp-config.json`:
+```json
+{
+  "mcpServers": {
+    "scion": {
+      "command": "scion-mcp",
+      "env": {
+        "SCION_HOST_SKILL_DIRS": "/path/to/your/agent/skills",
+        "SCION_WORKSPACE": "/path/to/Scion"
+      }
+    }
+  }
+}
+```
+
+**OpenAI Codex** — Add to your Codex agent config:
+```json
+{
+  "mcpServers": {
+    "scion": {
+      "command": "scion-mcp",
+      "toolTimeout": 600,
+      "env": {
+        "SCION_HOST_SKILL_DIRS": "/path/to/your/agent/skills",
+        "SCION_WORKSPACE": "/path/to/Scion"
+      }
+    }
+  }
+}
+```
+</details>
+
 **② Copy skills** into your agent's skills directory:
 
 ```bash

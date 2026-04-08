@@ -86,6 +86,7 @@ _LOG_DIR = Path(__file__).resolve().parent.parent.parent / "logs"
 _LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 _real_stdout = sys.stdout
+_real_stderr = sys.stderr  # Save before any redirection
 
 # Windows pipe buffers are small. When using stdio MCP transport,
 # the parent process only reads stdout for MCP messages and does NOT
@@ -289,7 +290,10 @@ def run_mcp_server(mcp=None) -> None:
     # Load config from environment, then allow CLI overrides
     deploy_cfg = DeployConfig.from_env()
 
+    # Use real stderr for argparse so --help/--version output is visible
+    # (sys.stdout is redirected for MCP protocol at module level)
     parser = _build_arg_parser(deploy_cfg)
+    parser._print_message = lambda msg, file=None: _real_stderr.write(msg) if msg else None
     args = parser.parse_args()
 
     # Pre-flight checks: validate environment before starting

@@ -7,7 +7,11 @@ try:
     import pyautogui
 except (ImportError, Exception):
     pyautogui = None
-from PIL import Image
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +48,9 @@ class ScreenshotHelper:
                 # Use platform-specific method to capture screenshot (with cursor)
                 return self.adapter.capture_screenshot_with_cursor(output_path)
             else:
-                # Use pyautogui to capture screenshot (without cursor)
+                if pyautogui is None:
+                    logger.warning("pyautogui not installed — cannot capture screenshot")
+                    return False
                 screenshot = pyautogui.screenshot()
                 screenshot.save(output_path)
                 logger.info(f"Screenshot successfully (without cursor): {output_path}")
@@ -71,6 +77,9 @@ class ScreenshotHelper:
         try:
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
+            if pyautogui is None:
+                logger.warning("pyautogui not installed — cannot capture region screenshot")
+                return False
             screenshot = pyautogui.screenshot(region=(x, y, width, height))
             screenshot.save(output_path)
             logger.info(f"Region screenshot successfully: {output_path}")
@@ -88,6 +97,9 @@ class ScreenshotHelper:
             (width, height)
         """
         try:
+            if pyautogui is None:
+                logger.warning("pyautogui not installed — cannot get screen size")
+                return (1920, 1080)
             size = pyautogui.size()
             return (size.width, size.height)
         except Exception as e:
@@ -102,6 +114,9 @@ class ScreenshotHelper:
             (x, y)
         """
         try:
+            if pyautogui is None:
+                logger.warning("pyautogui not installed — cannot get cursor position")
+                return (0, 0)
             pos = pyautogui.position()
             return (pos.x, pos.y)
         except Exception as e:
@@ -162,6 +177,10 @@ class ScreenshotHelper:
             import operator
             from functools import reduce
 
+            if Image is None:
+                logger.warning("Pillow not installed — cannot compare screenshots")
+                return 0.0
+
             from PIL import ImageChops
 
             img1 = Image.open(path1)
@@ -206,6 +225,10 @@ class ScreenshotHelper:
             Whether successful
         """
         try:
+            if Image is None:
+                logger.warning("Pillow not installed — cannot annotate screenshots")
+                return False
+
             from PIL import ImageDraw, ImageFont
 
             img = Image.open(input_path)
