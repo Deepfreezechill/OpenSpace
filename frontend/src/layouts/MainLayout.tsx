@@ -10,7 +10,7 @@ export default function MainLayout() {
     <div className="h-screen min-w-[1180px] relative flex flex-col overflow-x-auto overflow-y-hidden bg-bg-page text-ink">
       <nav className="relative z-10 flex justify-between items-center px-4 py-3 border-b border-[color:var(--color-border)] bg-bg-page">
         <div className="flex items-center gap-8">
-          <div className="font-bold text-3xl tracking-tighter font-serif">OpenSpace</div>
+          <div className="font-bold text-3xl tracking-tighter font-serif">Scion</div>
           <div className="flex gap-4 text-sm">
             <NavLink to="/dashboard" className={linkClass}>
               Dashboard

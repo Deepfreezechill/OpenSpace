@@ -50,7 +50,7 @@ export default function DashboardPage() {
       <section className="metrics-row">
         <MetricCard label="Total Skills" value={data.skills.summary.total_skills_all} hint={`Active: ${data.skills.summary.total_skills}`} />
         <MetricCard label="Average Skill Score" value={data.skills.average_score.toFixed(1)} hint="Primary metric = effective rate × 100" />
-        <MetricCard label="Workflow Sessions" value={data.workflows.total} hint={`Recorded under ${data.health.db_path.includes('.openspace') ? 'local repo' : 'workspace'}`} />
+        <MetricCard label="Workflow Sessions" value={data.workflows.total} hint={`Recorded under ${data.health.db_path.includes('.scion') ? 'local repo' : 'workspace'}`} />
         <MetricCard label="Workflow Success" value={`${data.workflows.average_success_rate.toFixed(1)}%`} hint="Average session success rate" />
       </section>
 
@@ -76,7 +76,7 @@ export default function DashboardPage() {
             <h2 className="text-2xl font-bold font-serif mt-1">Top scored skills</h2>
           </div>
           {data.skills.top.length === 0 ? (
-            <EmptyState title="No skills yet" description="Run OpenSpace tasks or sync skills into the local registry first." />
+            <EmptyState title="No skills yet" description="Run Scion tasks or sync skills into the local registry first." />
           ) : (
             <div className="space-y-3">
               {data.skills.top.map((skill) => (

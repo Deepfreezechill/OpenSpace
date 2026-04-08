@@ -38,7 +38,7 @@ FROM python:3.13-slim AS runtime
 
 LABEL org.opencontainers.image.title="Scion" \
       org.opencontainers.image.description="Self-Evolving AI Skill Engine with MCP Server" \
-      org.opencontainers.image.source="https://github.com/Deepfreezechill/OpenSpace"
+      org.opencontainers.image.source="https://github.com/Deepfreezechill/scion"
 
 # Create non-root user
 RUN groupadd --gid 1001 scion && \

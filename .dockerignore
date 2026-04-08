@@ -58,10 +58,9 @@ scion_skills.egg-info/
 
 # Benchmarks and external
 gdpval_bench/
-scion/
 
 # Local state
-.openspace/
+.scion/
 
 # Logs
 logs/

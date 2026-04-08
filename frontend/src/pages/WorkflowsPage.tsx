@@ -83,7 +83,7 @@ export default function WorkflowsPage() {
       {error ? <div className="text-sm text-danger">{error}</div> : null}
 
       {!loading && !error && filtered.length === 0 ? (
-        <EmptyState title="No workflow sessions" description="Run `openspace` with recording enabled, then refresh this page." />
+        <EmptyState title="No workflow sessions" description="Run `scion` with recording enabled, then refresh this page." />
       ) : null}
 
       {!loading && !error && filtered.length > 0 ? (

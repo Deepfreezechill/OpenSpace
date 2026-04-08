@@ -29,7 +29,7 @@ build/
 !.env.example
 
 # MCP files
-openspace/config/config_mcp.json
+scion/config/config_mcp.json
 
 # Logs
 logs/
@@ -39,13 +39,14 @@ gdpval_bench/ref_cache/
 
 # Embedding cache - root level fully ignored
 /.openspace/
+/.scion/
 # Showcase db - only ignore temp files, keep .db
-showcase/.openspace/*
-!showcase/.openspace/*.db
+showcase/.scion/*
+!showcase/.scion/*.db
 
 # GDPVal benchmark cache
-gdpval_bench/.openspace/*
-!gdpval_bench/.openspace/*.db
+gdpval_bench/.scion/*
+!gdpval_bench/.scion/*.db
 
 # Embedding cache
 embedding_cache/
@@ -56,18 +57,18 @@ mcp_tool_cache.json
 mcp_tool_cache_sanitized.json
 
 # Config files
-openspace/config/config_dev.json
+scion/config/config_dev.json
 
 # LLM keys
-openspace/llm/remote_client/
+scion/llm/remote_client/
 
 # Local server temp files
-openspace/local_server/temp/
+scion/local_server/temp/
 
 examples/
 # Skills
-openspace/skills/*
-!openspace/skills/README.md
+scion/skills/*
+!scion/skills/README.md
 
 # Frontend dependencies
 node_modules/
