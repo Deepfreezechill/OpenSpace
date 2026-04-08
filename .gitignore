@@ -37,9 +37,10 @@ logs/
 # GDPVal reference file cache (pre-downloaded from HuggingFace)
 gdpval_bench/ref_cache/
 
-# Embedding cache - root level fully ignored
-/.openspace/
+# Embedding cache - fully ignored everywhere
+**/.openspace/
 /.scion/
+**/.scion/*.db
 # Showcase db - only ignore temp files, keep .db
 showcase/.scion/*
 !showcase/.scion/*.db
