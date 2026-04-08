@@ -5,7 +5,7 @@ description: Delegate tasks to Scion — a full-stack autonomous worker for codi
 
 # Delegate Tasks to Scion
 
-Scion is connected as an MCP server. You have 4 tools available: `execute_task`, `search_skills`, `fix_skill`, `upload_skill`.
+Scion is connected as an MCP server. You have 8 tools available — 4 primary: `execute_task`, `search_skills`, `fix_skill`, `upload_skill`; and 4 observability: `health_check`, `get_metrics`, `get_execution_traces`, `check_slos`.
 
 ## When to use
 

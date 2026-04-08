@@ -1,0 +1,14 @@
+OK  scion_core
+OK  exec_engine
+OK  tool_reg
+OK  exceptions
+OK  cloud
+OK  ui
+OK  mcp
+OK  dashboard
+OK  store
+OK  registry
+FAIL security: No module named 'scion.security.validator'
+OK  sandbox
+---
+11/12 passed

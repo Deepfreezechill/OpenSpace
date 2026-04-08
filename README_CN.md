@@ -137,7 +137,7 @@ Skill 能够自动学习并持续提升
 🌐 **只想看看？** 在 **[scion-skills.dev](https://scion-skills.dev)** 浏览社区 Skill 和进化谱系——无需安装。
 
 ```bash
-git clone https://github.com/Deepfreezechill/scion.git && cd Scion
+git clone https://github.com/Deepfreezechill/scion.git && cd scion
 pip install -e .
 scion-mcp --help   # 验证安装
 ```
@@ -146,7 +146,7 @@ scion-mcp --help   # 验证安装
 > **Clone 太慢？** `assets/` 目录包含约 50 MB 的图片文件，导致仓库较大。使用以下轻量方式跳过它：
 > ```bash
 > git clone --filter=blob:none --sparse https://github.com/Deepfreezechill/scion.git
-> cd Scion
+> cd scion
 > git sparse-checkout set '/*' '!assets/'
 > pip install -e .
 > ```
@@ -169,7 +169,7 @@ scion-mcp --help   # 验证安装
       "toolTimeout": 600,
       "env": {
         "SCION_HOST_SKILL_DIRS": "/path/to/your/agent/skills",
-        "SCION_WORKSPACE": "/path/to/Scion",
+        "SCION_WORKSPACE": "/path/to/scion",
         "SCION_API_KEY": "sk-xxx (可选，用于云端)"
       }
     }
@@ -183,8 +183,8 @@ scion-mcp --help   # 验证安装
 **② 将 Skill 复制**到你的 Agent Skill 目录：
 
 ```bash
-cp -r Scion/scion/host_skills/delegate-task/ /path/to/your/agent/skills/
-cp -r Scion/scion/host_skills/skill-discovery/ /path/to/your/agent/skills/
+cp -r scion/host_skills/delegate-task/ /path/to/your/agent/skills/
+cp -r scion/host_skills/skill-discovery/ /path/to/your/agent/skills/
 ```
 
 完成。这两项 Skill 会教你的 Agent 何时以及如何使用 Scion——无需额外提示。你的 Agent 现在可以自我进化 Skill、执行复杂任务、访问云端 Skill 社区。你也可以添加自定义 Skill——参见 [`scion/skills/README.md`](scion/skills/README.md)。
@@ -316,12 +316,12 @@ npm run dev
 
 | 类别 | 收入变化 | Token 变化 | 原因 |
 |---|---|---|---|
-| **📝 文档与通信** (7) | 71→74% (+3.3pp) | −56% | 规范的正式输出——加州隐私法备忘录、监控调查报告、子女抚养案例报告。`document-gen-fallback` Skill 族历经 13 个版本进化，使结构化输出和错误恢复接近全自动。 |
-| **📋 合规与表单** (11) | 51→70% (+18.5pp) | −51% | 结构化 PDF——从 15 份源文档生成纳税申报表、药房合规检查清单、临床交接模板。PDF Skill 链（检查清单逻辑 → reportlab 排版 → 验证）只需进化一次，所有表单任务即可复用完整流水线。 |
-| **🎬 媒体制作** (3) | 53→58% (+5.8pp) | −46% | 通过 Python 和 ffmpeg 处理音视频——根据鼓点参考生成巴萨诺瓦器乐、从 5 轨中编辑低音分轨、从 13 段源视频制作 CGI 集锦。进化的 Skill 编码了可用的 ffmpeg 参数和编解码器回退策略，消除了沙箱中的反复试错。 |
-| **🛠️ 工程** (4) | 70→78% (+8.7pp) | −43% | 多交付物技术项目——Web3 全栈（Solidity + React + 测试）、CNC 工作站安全系统（报告 + 布局图 + 硬件表）、航空航天 CFD 报告。协调类 Skill 在这些多样化任务之间通用迁移。 |
-| **📊 电子表格** (15) | 63→70% (+7.3pp) | −37% | 功能性 .xlsx 工具——根据工会合同构建工资计算器、基于历史数据预测销售、含竞品对标的定价模型。电子表格模式（公式、合并单元格、数据验证）在各领域完全通用。 |
-| **📈 战略与分析** (10) | 88→89% (+1.0pp) | −32% | 战略建议——供应商谈判策略、非营利项目评估、3 亿美元交易台的能源交易分析。质量已处最高水平（88%）；节省来自于文档结构和多文件编排的复用。 |
+| **📝 文档与通信** (7) | 71→74% (+3.3pp) | -56% | 规范的正式输出——加州隐私法备忘录、监控调查报告、子女抚养案例报告。`document-gen-fallback` Skill 族历经 13 个版本进化，使结构化输出和错误恢复接近全自动。 |
+| **📋 合规与表单** (11) | 51→70% (+18.5pp) | -51% | 结构化 PDF——从 15 份源文档生成纳税申报表、药房合规检查清单、临床交接模板。PDF Skill 链（检查清单逻辑 → reportlab 排版 → 验证）只需进化一次，所有表单任务即可复用完整流水线。 |
+| **🎬 媒体制作** (3) | 53→58% (+5.8pp) | -46% | 通过 Python 和 ffmpeg 处理音视频——根据鼓点参考生成巴萨诺瓦器乐、从 5 轨中编辑低音分轨、从 13 段源视频制作 CGI 集锦。进化的 Skill 编码了可用的 ffmpeg 参数和编解码器回退策略，消除了沙箱中的反复试错。 |
+| **🛠️ 工程** (4) | 70→78% (+8.7pp) | -43% | 多交付物技术项目——Web3 全栈（Solidity + React + 测试）、CNC 工作站安全系统（报告 + 布局图 + 硬件表）、航空航天 CFD 报告。协调类 Skill 在这些多样化任务之间通用迁移。 |
+| **📊 电子表格** (15) | 63→70% (+7.3pp) | -37% | 功能性 .xlsx 工具——根据工会合同构建工资计算器、基于历史数据预测销售、含竞品对标的定价模型。电子表格模式（公式、合并单元格、数据验证）在各领域完全通用。 |
+| **📈 战略与分析** (10) | 88→89% (+1.0pp) | -32% | 战略建议——供应商谈判策略、非营利项目评估、3 亿美元交易台的能源交易分析。质量已处最高水平（88%）；节省来自于文档结构和多文件编排的复用。 |
 
 ### 进化产出了什么？（165 项 Skill）
 
@@ -374,7 +374,7 @@ npm run dev
 <img src="assets/my_daily_monitor_evograph.png" width="90%" alt="Skill 进化图谱" />
 </div>
 
-> 每个节点代表 Scion 学习、提取或精炼的一项 Skill。完整的进化历史已在 [`showcase/.scion/scion.db`](showcase/.scion/scion.db) 中开源——可用任意 SQLite 浏览器加载，探索谱系、差异和质量指标。
+> 每个节点代表 Scion 学习、提取或精炼的一项 Skill。完整的进化历史存储在 `.scion/scion.db`（首次运行时生成）——可用任意 SQLite 浏览器加载，探索谱系、差异和质量指标。
 
 **完整详情**：[`showcase/README.md`](showcase/README.md)
 
@@ -447,10 +447,10 @@ Scion 的核心。Skill 不是静态文件——它们是能够自动选择、�
 > **图例**：⚡ 核心模块 &nbsp;|&nbsp; 🧬 Skill 进化 &nbsp;|&nbsp; 🌐 云端 &nbsp;|&nbsp; 🔧 支撑模块
 
 ```
-Scion/
+scion/                                       # ← git clone 后的仓库根目录
 ├── scion/
 │   ├── tool_layer.py                     # Scion 主类 & ScionConfig
-│   ├── mcp_server.py                     # MCP 服务器（为你的 Agent 提供 4 个工具）
+│   ├── mcp_server.py                     # MCP 服务器（为你的 Agent 提供 8 个工具）
 │   ├── __main__.py                       # CLI 入口（python -m scion）
 │   ├── dashboard_server.py               # Web 仪表盘 API 服务器
 │   │
@@ -539,6 +539,14 @@ Scion 构建于以下开源项目之上。我们衷心感谢其作者和贡献�
 - **[AnyTool](https://github.com/HKUDS/AnyTool)** — 面向任意 AI Agent 的即插即用通用工具层
 - **[ClawWork](https://github.com/HKUDS/ClawWork)** — 将 AI 助手转变为真正的 AI 同事
 - **[WorldMonitor](https://github.com/koala73/worldmonitor)** — 实时全球情报仪表盘
+
+---
+
+<div align="center">
+
+📖 [贡献指南](CONTRIBUTING.md) · 📋 [变更日志](CHANGELOG.md) · 🔒 [安全策略](SECURITY.md) · 🤝 [行为准则](CODE_OF_CONDUCT.md) · 📜 [许可证 (MIT)](LICENSE)
+
+</div>
 
 ---
 

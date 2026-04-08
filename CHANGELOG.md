@@ -5,6 +5,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [2.0.0] — 2026-04-07
 
+### 🔄 Renamed: OpenSpace → Scion
+
+This release renames the project from **OpenSpace** to **Scion** across all 251+ files, CLI entry points, package metadata, and documentation. If you were using OpenSpace, this is the same project with a new identity reflecting the significant architectural changes below.
+
 ### Overview
 
 Scion v2.0.0 is a ground-up architectural overhaul of the self-evolving skill engine for AI agents. Across 8 phases (P0–P7) and 50+ epics, the project was hardened, decomposed, and extended from a monolithic prototype into a production-grade, security-first platform. The codebase grew from ~500 tests to **2,174 tests with zero failures**. Every epic underwent multi-agent adversarial code review before merge.

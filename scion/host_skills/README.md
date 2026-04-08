@@ -17,8 +17,9 @@ This guide covers **agent-specific setup** for integrating Scion. For installati
 ### 1. Copy host skills
 
 ```bash
-cp -r host_skills/skill-discovery/ /path/to/nanobot/nanobot/skills/
-cp -r host_skills/delegate-task/ /path/to/nanobot/nanobot/skills/
+# From the repo root (scion/)
+cp -r scion/host_skills/skill-discovery/ /path/to/nanobot/nanobot/skills/
+cp -r scion/host_skills/delegate-task/ /path/to/nanobot/nanobot/skills/
 ```
 
 ### 2. Add MCP server to `~/.nanobot/config.json`
@@ -32,7 +33,7 @@ cp -r host_skills/delegate-task/ /path/to/nanobot/nanobot/skills/
         "toolTimeout": 1200,
         "env": {
           "SCION_HOST_SKILL_DIRS": "/path/to/nanobot/nanobot/skills",
-          "SCION_WORKSPACE": "/path/to/Scion",
+          "SCION_WORKSPACE": "/path/to/scion",
           "SCION_API_KEY": "sk-xxx"
         }
       }
@@ -51,8 +52,9 @@ cp -r host_skills/delegate-task/ /path/to/nanobot/nanobot/skills/
 ### 1. Copy host skills
 
 ```bash
-cp -r host_skills/skill-discovery/ /path/to/openclaw/skills/
-cp -r host_skills/delegate-task/ /path/to/openclaw/skills/
+# From the repo root (scion/)
+cp -r scion/host_skills/skill-discovery/ /path/to/openclaw/skills/
+cp -r scion/host_skills/delegate-task/ /path/to/openclaw/skills/
 ```
 
 ### 2. Register MCP server with env vars
@@ -62,7 +64,7 @@ openclaw uses [mcporter](https://github.com/steipete/mcporter) as its MCP runtim
 ```bash
 mcporter config add scion --command "scion-mcp" \
   --env SCION_HOST_SKILL_DIRS=/path/to/openclaw/skills \
-  --env SCION_WORKSPACE=/path/to/Scion \
+  --env SCION_WORKSPACE=/path/to/scion \
   --env SCION_API_KEY=sk-xxx
 ```
 
@@ -95,11 +97,15 @@ Your Agent (nanobot / openclaw / ...)
   │
   │  MCP protocol (stdio)
   ▼
-scion-mcp              ← 4 tools exposed
+scion-mcp              ← 8 tools exposed
   ├── execute_task           ← multi-step grounding agent loop
   ├── search_skills          ← local + cloud skill search
   ├── fix_skill              ← repair a broken SKILL.md
-  └── upload_skill           ← push skill to cloud community
+  ├── upload_skill           ← push skill to cloud community
+  ├── health_check           ← system health probes
+  ├── get_metrics            ← runtime metrics & counters
+  ├── get_execution_traces   ← execution trace history
+  └── check_slos             ← SLO compliance status
 ```
 
 The two host skills teach the agent **when and how** to call these tools:

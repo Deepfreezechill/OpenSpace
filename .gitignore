@@ -18,6 +18,9 @@ Desktop.ini
 .idea/
 .pytest_cache/
 
+# Scratch / experiment directories
+scratch-*/
+
 # Distribution / packaging
 dist/
 build/

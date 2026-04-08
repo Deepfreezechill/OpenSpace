@@ -1,21 +1,21 @@
-[![CI](https://github.com/Deepfreezechill/scion/actions/workflows/ci.yml/badge.svg)](https://github.com/Deepfreezechill/scion/actions/workflows/ci.yml)
-
 <div align="center">
+
+[![CI](https://github.com/Deepfreezechill/scion/actions/workflows/ci.yml/badge.svg)](https://github.com/Deepfreezechill/scion/actions/workflows/ci.yml)
 
 <picture>
     <img src="assets/logo.png" width="320px" style="border: none; box-shadow: none;" alt="Scion Logo">
 </picture>
 
-## ✨ Scion: Make Your Agents: Smarter, Low-Cost, Self-Evolving ✨
+## ✨ Scion: Make Your Agents Smarter, Low-Cost, Self-Evolving ✨
 
-| 🔋 **46% Fewer Tokens** | **💰 $11K earned in 6 Hours** | 🧬 **Self-Evolving Skills** | 🌐 **Agents Experience Sharing** |
+| 🔋 **46% Fewer Tokens** | **💰 $11K Benchmark Value in 6 Hours** | 🧬 **Self-Evolving Skills** | 🌐 **Agents Experience Sharing** |
 
 [![Agents](https://img.shields.io/badge/Agents-Claude_Code%20%7C%20Codex%20%7C%20OpenClaw%20%7C%20nanobot%20%7C%20...-99C9BF.svg)](https://modelcontextprotocol.io/)
 [![Python](https://img.shields.io/badge/Python-3.12+-FCE7D6.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-C1E5F5.svg)](https://opensource.org/licenses/MIT/)
 [![中文文档](https://img.shields.io/badge/文档-中文版-F5C6C6?style=flat)](./README_CN.md)
 
-**One Command to Evolve All Your AI Agents**: OpenClaw, nanobot, Claude Code, Codex, Cursor and etc.
+**One Command to Evolve All Your AI Agents**: OpenClaw, nanobot, Claude Code, Codex, Cursor etc.
 
 <img src="assets/cli-typing.gif" width="500px" alt="scion --query your task">
 
@@ -120,11 +120,11 @@ On 50 professional tasks (**📈 [GDPVal Economic Benchmark](#-benchmark-gdpval)
 
 - [⚡ Quick Start](#-quick-start)
   - [🤖 Path A: For Your Agent](#-path-a-for-your-agent)
-  - [👤 Path B: As Your Co-Worker](#-path-b-as-your-co-worker)
+  - [👤 Path B: As Your Coworker](#-path-b-as-your-coworker)
   - [📊 Local Dashboard](#-local-dashboard)
 - [📈 Benchmark: GDPVal](#-benchmark-gdpval)
 - [📊 Showcase: My Daily Monitor](#-showcase-my-daily-monitor)
-- [🏗️ Scion's Framework](#️-scions-framework)
+- [🏗️ Scion's Framework](#%EF%B8%8F-scions-framework)
   - [🧬 Self-Evolution Engine](#-self-evolution-engine)
   - [🌐 Collaborative Skill Community](#-collaborative-skill-community)
 - [🔧 Advanced Configuration](#-advanced-configuration)
@@ -136,10 +136,13 @@ On 50 professional tasks (**📈 [GDPVal Economic Benchmark](#-benchmark-gdpval)
 
 ## ⚡ Quick Start
 
+> [!IMPORTANT]
+> **Scion is installed from source** (not yet on PyPI). You need **Python 3.12+** and **Git**.
+
 🌐 **Just want to explore?** Browse community skills, evolution lineage at **[scion-skills.dev](https://scion-skills.dev)** — no installation needed.
 
 ```bash
-git clone https://github.com/Deepfreezechill/scion.git && cd Scion
+git clone https://github.com/Deepfreezechill/scion.git && cd scion
 pip install -e .
 scion-mcp --help   # verify installation
 ```
@@ -148,7 +151,7 @@ scion-mcp --help   # verify installation
 > **Slow clone?** The `assets/` folder (~50 MB of images) makes the default clone large. Use this lightweight alternative to skip it:
 > ```bash
 > git clone --filter=blob:none --sparse https://github.com/Deepfreezechill/scion.git
-> cd Scion
+> cd scion
 > git sparse-checkout set '/*' '!assets/'
 > pip install -e .
 > ```
@@ -163,7 +166,7 @@ scion-mcp --help   # verify installation
 
 **Choose your path:**
 - **[Path A](#-path-a-for-your-agent)** — Plug Scion into your agent
-- **[Path B](#-path-b-as-your-co-worker)** — Use Scion directly as your AI co-worker
+- **[Path B](#-path-b-as-your-coworker)** — Use Scion directly as your AI coworker
 
 ### 🤖 Path A: For Your Agent
 
@@ -179,7 +182,7 @@ Works with any agent that supports skills (`SKILL.md`) — [Claude Code](https:/
       "toolTimeout": 600,
       "env": {
         "SCION_HOST_SKILL_DIRS": "/path/to/your/agent/skills",
-        "SCION_WORKSPACE": "/path/to/Scion",
+        "SCION_WORKSPACE": "/path/to/scion",
         "SCION_API_KEY": "sk-xxx (optional, for cloud)"
       }
     }
@@ -193,7 +196,7 @@ Works with any agent that supports skills (`SKILL.md`) — [Claude Code](https:/
 <details>
 <summary><strong>📋 Agent-Specific Config Locations</strong></summary>
 
-**Claude Code** — Add to `~/.claude/claude_desktop_config.json`:
+**Claude Code** — Add to `~/.claude/settings.json` (or project-level `.mcp.json`):
 ```json
 {
   "mcpServers": {
@@ -202,7 +205,7 @@ Works with any agent that supports skills (`SKILL.md`) — [Claude Code](https:/
       "toolTimeout": 600,
       "env": {
         "SCION_HOST_SKILL_DIRS": "/path/to/your/agent/skills",
-        "SCION_WORKSPACE": "/path/to/Scion"
+        "SCION_WORKSPACE": "/path/to/scion"
       }
     }
   }
@@ -218,14 +221,14 @@ Works with any agent that supports skills (`SKILL.md`) — [Claude Code](https:/
       "toolTimeout": 600,
       "env": {
         "SCION_HOST_SKILL_DIRS": "/path/to/your/agent/skills",
-        "SCION_WORKSPACE": "/path/to/Scion"
+        "SCION_WORKSPACE": "/path/to/scion"
       }
     }
   }
 }
 ```
 
-**OpenAI Codex** — Add to `~/.codex/config.json`:
+**OpenAI Codex CLI** — Add to `~/.codex/config.json` (or set `CODEX_MCP_CONFIG`):
 ```json
 {
   "mcpServers": {
@@ -234,7 +237,7 @@ Works with any agent that supports skills (`SKILL.md`) — [Claude Code](https:/
       "toolTimeout": 600,
       "env": {
         "SCION_HOST_SKILL_DIRS": "/path/to/your/agent/skills",
-        "SCION_WORKSPACE": "/path/to/Scion"
+        "SCION_WORKSPACE": "/path/to/scion"
       }
     }
   }
@@ -242,15 +245,15 @@ Works with any agent that supports skills (`SKILL.md`) — [Claude Code](https:/
 ```
 
 > [!NOTE]
-> If `scion-mcp` is not found, use the full path from `which scion-mcp` (Mac/Linux) or `where scion-mcp` (Windows), or use `"command": "python", "args": ["-m", "scion.mcp"]` as a fallback.
+> If `scion-mcp` is not found, use the full path from `which scion-mcp` (Mac/Linux) or `where.exe scion-mcp` (Windows PowerShell), or use `"command": "python", "args": ["-m", "scion.mcp"]` as a fallback.
 
 </details>
 
 **② Copy skills** into your agent's skills directory:
 
 ```bash
-cp -r Scion/scion/host_skills/delegate-task/ /path/to/your/agent/skills/
-cp -r Scion/scion/host_skills/skill-discovery/ /path/to/your/agent/skills/
+cp -r scion/host_skills/delegate-task/ /path/to/your/agent/skills/
+cp -r scion/host_skills/skill-discovery/ /path/to/your/agent/skills/
 ```
 
 Done. These two skills teach your agent when and how to use Scion — no additional prompting needed. Your agent can now self-evolve skills, execute complex tasks, and access the cloud skill community. You can also add your own custom skills — see [`scion/skills/README.md`](scion/skills/README.md).
@@ -260,7 +263,7 @@ Done. These two skills teach your agent when and how to use Scion — no additio
 
 📖 Per-agent config (OpenClaw / nanobot), all env vars, advanced settings: [`scion/host_skills/README.md`](scion/host_skills/README.md)
 
-### 👤 Path B: As Your Co-Worker
+### 👤 Path B: As Your Coworker
 
 Use Scion directly — coding, search, tool use, and more — with self-evolving skills and cloud community built in.
 
@@ -360,7 +363,7 @@ Real Economic Value: Tasks range from building payroll calculators to preparing 
 - **4.2× Higher Income** vs ClawWork with the same backbone LLM (Qwen 3.5-Plus)
 - **72.8% Value Capture** — $11,484 earned out of $15,764 task value, outperforming all agents
 - **70.8% Average Quality** — +30pp above the best ClawWork agent (40.8%)
-− **45.9% Token Usage** in Phase 2 vs Phase 1 — better results with dramatically lower costs
+- **45.9% Token Usage** in Phase 2 vs Phase 1 — better results with dramatically lower costs
 
 <div align="center">
 <img src="assets/benchmark_quality_tokens.png" width="100%" alt="GDPVal Benchmark — Quality & Token Efficiency" />
@@ -382,12 +385,12 @@ Income Capture = actual payment earned ÷ maximum possible task value
 
 | Category | Income Δ | Token Δ | Why |
 |---|---|---|---|
-| **📝 Documents & Correspondence** (7) | 71→74% (+3.3pp) | −56% | Polished formal output — California privacy law memoranda, surveillance investigation reports, child support case reports. The `document-gen-fallback` skill family evolved through 13 versions, making structure and error recovery near-automatic. |
-| **📋 Compliance & Form** (11) | 51→70% (+18.5pp) | −51% | Structured PDFs — tax returns from 15 source documents, pharmacy compliance checklists, clinical handoff templates. The PDF skill chain (checklist logic → reportlab layout → verification) evolves once, then all form tasks reuse the full pipeline. |
-| **🎬 Media Production** (3) | 53→58% (+5.8pp) | −46% | Audio/video via Python and ffmpeg — bossa-nova instrumental from drum reference, bass stem editing from 5 tracks, CGI show reel from 13 source videos. Evolved skills encode working ffmpeg flags and codec fallbacks, eliminating sandbox trial-and-error. |
-| **🛠️ Engineering** (4) | 70→78% (+8.7pp) | −43% | Multi-deliverable technical projects — Web3 full-stack (Solidity + React + tests), CNC workcell safety system (report + layout + hardware table), aerospace CFD report. Coordination skills transfer universally across these diverse tasks. |
-| **📊 Spreadsheets** (15) | 63→70% (+7.3pp) | −37% | Functional .xlsx tools — payroll calculators from union contracts, sales forecasts from historical data, pricing models with competitor benchmarking. Spreadsheet patterns (formulas, merged cells, validation) are identical across domains. |
-| **📈 Strategy & Analysis** (10) | 88→89% (+1.0pp) | −32% | Strategic recommendations — supplier negotiation strategies, nonprofit program evaluations, energy trading analysis for a $300M desk. Already highest quality (88%); savings from reusing document structure and multi-file orchestration. |
+| **📝 Documents & Correspondence** (7) | 71→74% (+3.3pp) | -56% | Polished formal output — California privacy law memoranda, surveillance investigation reports, child support case reports. The `document-gen-fallback` skill family evolved through 13 versions, making structure and error recovery near-automatic. |
+| **📋 Compliance & Form** (11) | 51→70% (+18.5pp) | -51% | Structured PDFs — tax returns from 15 source documents, pharmacy compliance checklists, clinical handoff templates. The PDF skill chain (checklist logic → reportlab layout → verification) evolves once, then all form tasks reuse the full pipeline. |
+| **🎬 Media Production** (3) | 53→58% (+5.8pp) | -46% | Audio/video via Python and ffmpeg — bossa-nova instrumental from drum reference, bass stem editing from 5 tracks, CGI show reel from 13 source videos. Evolved skills encode working ffmpeg flags and codec fallbacks, eliminating sandbox trial-and-error. |
+| **🛠️ Engineering** (4) | 70→78% (+8.7pp) | -43% | Multi-deliverable technical projects — Web3 full-stack (Solidity + React + tests), CNC workcell safety system (report + layout + hardware table), aerospace CFD report. Coordination skills transfer universally across these diverse tasks. |
+| **📊 Spreadsheets** (15) | 63→70% (+7.3pp) | -37% | Functional .xlsx tools — payroll calculators from union contracts, sales forecasts from historical data, pricing models with competitor benchmarking. Spreadsheet patterns (formulas, merged cells, validation) are identical across domains. |
+| **📈 Strategy & Analysis** (10) | 88→89% (+1.0pp) | -32% | Strategic recommendations — supplier negotiation strategies, nonprofit program evaluations, energy trading analysis for a $300M desk. Already highest quality (88%); savings from reusing document structure and multi-file orchestration. |
 
 ### What Did Evolution Produce? (165 Skills)
 
@@ -440,7 +443,7 @@ Across 50 Phase 1 tasks, Scion autonomously evolved **165 skills**. The breakthr
 <img src="assets/my_daily_monitor_evograph.png" width="90%" alt="Skill Evolution Graph" />
 </div>
 
-> Each node is a skill that Scion learned, extracted, or refined. The full evolution history is open-sourced in [`showcase/.scion/scion.db`](showcase/.scion/scion.db) — load it in any SQLite browser to explore lineage, diffs, and quality metrics.
+> Each node is a skill that Scion learned, extracted, or refined. The full evolution history is stored in `.scion/scion.db` (generated on first run) — load it in any SQLite browser to explore lineage, diffs, and quality metrics.
 
 **Full details**: [`showcase/README.md`](showcase/README.md)
 
@@ -542,7 +545,7 @@ For most users, [Quick Start](#-quick-start) is all you need. For execution mode
 > **Legend**: ⚡ Core modules &nbsp;|&nbsp; 🧬 Skill evolution &nbsp;|&nbsp; 🌐 Cloud &nbsp;|&nbsp; 🔧 Supporting modules
 
 ```
-Scion/
+scion/                                       # ← repo root after `git clone`
 ├── scion/
 │   ├── tool_layer.py                     # Scion main class & ScionConfig
 │   ├── mcp_server.py                     # MCP Server (8 tools for your agent)
@@ -616,7 +619,11 @@ Scion/
 
 ## 🤝 Contribute & Roadmap
 
-We welcome contributions! Scion today evolves *how to do X*. The next frontier: **evolving how agents organize doing X together**. 
+We welcome contributions! See [**CONTRIBUTING.md**](CONTRIBUTING.md) for setup, code style, and PR guidelines.
+
+📋 [Changelog](CHANGELOG.md) · 🔒 [Security Policy](SECURITY.md) · 🤝 [Code of Conduct](CODE_OF_CONDUCT.md) · 📜 [License (MIT)](LICENSE)
+
+Scion today evolves *how to do X*. The next frontier: **evolving how agents organize doing X together**.
 
 Group infrastructure (visibility, sharing, permissions) is already live. What comes next:
 
@@ -653,7 +660,7 @@ If you find Scion helpful, please consider giving us a star! ⭐
   </a>
 </div>
 
-**🧬 Make You Agent Self-Evolve · 🌐 A Community That Grows Together · 💰 Fewer Tokens, Smarter Agents**
+**🧬 Make Your Agent Self-Evolve · 🌐 A Community That Grows Together · 💰 Fewer Tokens, Smarter Agents**
 
 </div>
 

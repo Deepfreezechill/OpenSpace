@@ -11,7 +11,7 @@ Evaluation uses [ClawWork](https://github.com/HKUDS/ClawWork)'s LLM evaluator (s
 
 ```
 parent/
-├── Scion/                   ← this repo
+├── scion/                   ← this repo
 │   └── gdpval_bench/            ← this directory
 └── ClawWork/                    ← required
     ├── eval/meta_prompts/       ← evaluation rubrics

@@ -7,8 +7,8 @@ Thank you for your interest in contributing to Scion! This document provides gui
 1. **Fork** the repository on GitHub
 2. **Clone** your fork locally:
    ```bash
-   git clone https://github.com/<your-username>/Scion.git
-   cd Scion
+   git clone https://github.com/<your-username>/scion.git
+   cd scion
    ```
 3. **Install** in development mode:
    ```bash

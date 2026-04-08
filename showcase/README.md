@@ -183,7 +183,7 @@ Through iterative evolution, Scion accumulated **60+ skills** spanning multiple 
 - **Infrastructure**: `refresh-scheduler`, `api-proxy-endpoint`, `project-scaffold`, ...
 - **Reliability**: `typescript-compile-check-resilient`, `unicode-safe-file-writing`, `idempotent-file-replace`, ...
 
-The full evolution history — every skill version, derivation chain, and quality score — is stored in the open-sourced [`showcase/.scion/scion.db`](.scion/scion.db) SQLite database.
+The full evolution history — every skill version, derivation chain, and quality score — is stored in `.scion/scion.db` (generated on first run). Load it in any SQLite browser to explore.
 
 ---
 
