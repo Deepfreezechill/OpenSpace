@@ -137,7 +137,7 @@ Skill 能够自动学习并持续提升
 🌐 **只想看看？** 在 **[open-space.cloud](https://open-space.cloud)** 浏览社区 Skill 和进化谱系——无需安装。
 
 ```bash
-git clone https://github.com/HKUDS/OpenSpace.git && cd OpenSpace
+git clone https://github.com/Deepfreezechill/OpenSpace.git && cd OpenSpace
 pip install -e .
 openspace-mcp --help   # 验证安装
 ```
@@ -145,7 +145,7 @@ openspace-mcp --help   # 验证安装
 > [!TIP]
 > **Clone 太慢？** `assets/` 目录包含约 50 MB 的图片文件，导致仓库较大。使用以下轻量方式跳过它：
 > ```bash
-> git clone --filter=blob:none --sparse https://github.com/HKUDS/OpenSpace.git
+> git clone --filter=blob:none --sparse https://github.com/Deepfreezechill/OpenSpace.git
 > cd OpenSpace
 > git sparse-checkout set '/*' '!assets/'
 > pip install -e .

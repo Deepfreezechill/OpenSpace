@@ -41,7 +41,7 @@ jobs:
 
             const report = `# 📊 OpenSpace Upgrade — Progress Dashboard
 
-> Auto-generated: ${new Date().toISOString().split('T')[0]} | [View Project Board](https://github.com/users/Deepfreezechill/projects/1)
+> Auto-generated: ${new Date().toISOString().split('T')[0]} | [View Project Board](https://github.com/Deepfreezechill/OpenSpace/projects)
 
 ## Overall: ${overallPct}% Complete
 \`\`\`

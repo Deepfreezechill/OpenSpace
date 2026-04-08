@@ -4,10 +4,10 @@
 
 ### **Your Entire Day on One Live Screen — with an AI Agent That Works for You**
 
-**Fully generated & evolved by [OpenSpace](https://github.com/HKUDS/OpenSpace) — zero human code**
+**Fully generated & evolved by [OpenSpace](https://github.com/Deepfreezechill/OpenSpace) — zero human code**
 
 <p>
-<a href="https://github.com/HKUDS/OpenSpace"><img src="https://img.shields.io/badge/Built_with-OpenSpace-99C9BF.svg" alt="Built with OpenSpace" /></a>
+<a href="https://github.com/Deepfreezechill/OpenSpace"><img src="https://img.shields.io/badge/Built_with-OpenSpace-99C9BF.svg" alt="Built with OpenSpace" /></a>
 <img src="https://img.shields.io/badge/TypeScript-Vanilla_TS-FCE7D6.svg" alt="TypeScript" />
 <img src="https://img.shields.io/badge/Bundler-Vite-C1E5F5.svg" alt="Vite" />
 </p>
@@ -145,7 +145,7 @@ Open the dashboard and click **⚙ Settings** in the top-right corner. Add your 
 
 ## 🧬 How Was It Generated? — OpenSpace Skill Evolution
 
-> **Zero human code was written.** The entire project — every panel, service, style, and API route — was generated and iteratively evolved by [OpenSpace](https://github.com/HKUDS/OpenSpace) with no manual coding involved.
+> **Zero human code was written.** The entire project — every panel, service, style, and API route — was generated and iteratively evolved by [OpenSpace](https://github.com/Deepfreezechill/OpenSpace) with no manual coding involved.
 
 ### The Process
 
@@ -230,5 +230,5 @@ my-daily-monitor/
 
 ## 🔗 Related
 
-- **[OpenSpace](https://github.com/HKUDS/OpenSpace)** — Self-evolving skill worker & community for AI agents, the engine that generated this entire project.
+- **[OpenSpace](https://github.com/Deepfreezechill/OpenSpace)** — Self-evolving skill worker & community for AI agents, the engine that generated this entire project.
 - **[WorldMonitor](https://github.com/koala73/worldmonitor)** — Real-time global intelligence dashboard that served as the seed reference for initial skills extraction.

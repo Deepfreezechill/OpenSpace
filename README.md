@@ -1,4 +1,4 @@
-[![CI](https://github.com/Deepfreezechill/openspace-upgrade/actions/workflows/ci.yml/badge.svg)](https://github.com/Deepfreezechill/openspace-upgrade/actions/workflows/ci.yml)
+[![CI](https://github.com/Deepfreezechill/OpenSpace/actions/workflows/ci.yml/badge.svg)](https://github.com/Deepfreezechill/OpenSpace/actions/workflows/ci.yml)
 
 <div align="center">
 
@@ -139,7 +139,7 @@ On 50 professional tasks (**📈 [GDPVal Economic Benchmark](#-benchmark-gdpval)
 🌐 **Just want to explore?** Browse community skills, evolution lineage at **[open-space.cloud](https://open-space.cloud)** — no installation needed.
 
 ```bash
-git clone https://github.com/HKUDS/OpenSpace.git && cd OpenSpace
+git clone https://github.com/Deepfreezechill/OpenSpace.git && cd OpenSpace
 pip install -e .
 openspace-mcp --help   # verify installation
 ```
@@ -147,11 +147,19 @@ openspace-mcp --help   # verify installation
 > [!TIP]
 > **Slow clone?** The `assets/` folder (~50 MB of images) makes the default clone large. Use this lightweight alternative to skip it:
 > ```bash
-> git clone --filter=blob:none --sparse https://github.com/HKUDS/OpenSpace.git
+> git clone --filter=blob:none --sparse https://github.com/Deepfreezechill/OpenSpace.git
 > cd OpenSpace
 > git sparse-checkout set '/*' '!assets/'
 > pip install -e .
 > ```
+
+> [!NOTE]
+> **Windows users:** If `pip install` fails with a path-length error, enable long paths:
+> ```powershell
+> # Run PowerShell as Administrator, then restart your terminal
+> New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+> ```
+> This is a one-time Windows configuration. Linux and macOS are unaffected.
 
 **Choose your path:**
 - **[Path A](#-path-a-for-your-agent)** — Plug OpenSpace into your agent
@@ -549,11 +557,11 @@ OpenSpace builds upon the following open-source projects. We sincerely thank the
 If you find OpenSpace helpful, please consider giving us a star! ⭐
 
 <div align="center">
-  <a href="https://star-history.com/#HKUDS/OpenSpace&Date">
+  <a href="https://star-history.com/#Deepfreezechill/OpenSpace&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=HKUDS/OpenSpace&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=HKUDS/OpenSpace&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=HKUDS/OpenSpace&type=Date" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Deepfreezechill/OpenSpace&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Deepfreezechill/OpenSpace&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Deepfreezechill/OpenSpace&type=Date" />
     </picture>
   </a>
 </div>
@@ -566,6 +574,6 @@ If you find OpenSpace helpful, please consider giving us a star! ⭐
 
 <p align="center">
   <em> ❤️ Thanks for visiting ✨ OpenSpace!</em><br><br>
-  <img src="https://visitor-badge.laobi.icu/badge?page_id=HKUDS.OpenSpace&style=for-the-badge&color=00d4ff"
+  <img src="https://visitor-badge.laobi.icu/badge?page_id=Deepfreezechill.OpenSpace&style=for-the-badge&color=00d4ff"
   alt="Views">
 </p>
